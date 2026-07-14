@@ -701,6 +701,14 @@ export default function Home() {
           {/* GD Session View */}
           {view === "gd-session" && activeSession && (
             <div className="space-y-4">
+              {/* Motivational Quote */}
+              {gdQuote && (
+                <div className="rounded-xl backdrop-blur-xl bg-white/[0.08] border border-amber-500/30 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-5 text-center">
+                  <p className="text-sm text-amber-300/80 mb-1">Motivational Quote</p>
+                  <p className="text-base font-medium text-white italic">"{gdQuote.quote}"</p>
+                  <p className="text-sm text-amber-300/60 mt-1">— {gdQuote.author}</p>
+                </div>
+              )}
               <div className={`rounded-xl backdrop-blur-xl border transition-colors duration-500 bg-white/[0.08] border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6`}>
                 <div className="flex items-center justify-between mb-4">
                   <div>
