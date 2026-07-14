@@ -110,14 +110,4 @@ INSERT IGNORE INTO gd_topics (id, topic, category) VALUES
 (4, 'Social Media Influence on Youth', 'society'),
 (5, 'Online Education vs Traditional Education', 'education');
 
-INSERT IGNORE INTO users (register_number, name, email, password_hash, role) VALUES
-('911724205001', 'Aadithya', 'aadithya@mzgd.edu', '$2b$12$PlaceholderHashABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890abcdef', 'student'),
-('911724205002', 'Afra nasrin', 'afra@mzgd.edu', '$2b$12$PlaceholderHashABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890abcdef', 'student'),
-('911724205003', 'Anbu Selvam V', 'anbuselvamv@mzgd.edu', '$2b$12$PlaceholderHashABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890abcdef', 'student'),
-('911724205004', 'Anbu selvan . G', 'anbuselvang@mzgd.edu', '$2b$12$PlaceholderHashABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890abcdef', 'student'),
-('911724205005', 'Avineshwaran', 'avinesh@mzgd.edu', '$2b$12$PlaceholderHashABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890abcdef', 'student'),
-('911724205006', 'Bala murugan', 'balamurugan@mzgd.edu', '$2b$12$PlaceholderHashABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890abcdef', 'student'),
-('911724205007', 'Benazir', 'benazir@mzgd.edu', '$2b$12$PlaceholderHashABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890abcdef', 'student'),
-('911724205008', 'Bharanidharan', 'bharanidharan@mzgd.edu', '$2b$12$PlaceholderHashABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890abcdef', 'student'),
-('911724205009', 'Bharathi', 'bharathi@mzgd.edu', '$2b$12$PlaceholderHashABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890abcdef', 'student'),
-('911724205010', 'Bhavishna', 'bhavishna@mzgd.edu', '$2b$12$PlaceholderHashABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890abcdef', 'student');
+-- Students are seeded via backend/seed.py with proper bcrypt hashes
