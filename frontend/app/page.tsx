@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircle, Award, Clock, LogOut, MessageSquare, Mic, MicOff, RefreshCw, Trophy, Users, Zap, Loader2, Copy, Check, Target, TrendingUp, ArrowUp, ArrowDown, PanelLeftClose, PanelLeft, Sparkles } from "lucide-react";
+import { AlertCircle, Award, Clock, LogOut, MessageSquare, Mic, MicOff, RefreshCw, Trophy, Users, Zap, Loader2, Copy, Check, Target, TrendingUp, ArrowUp, ArrowDown, PanelLeftClose, PanelLeft, Sparkles, Share2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Bar, BarChart, CartesianGrid, Cell, Legend, PolarAngleAxis, PolarGrid, Radar, RadarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
@@ -34,9 +34,11 @@ export default function Home() {
   const [sessionCodeInput, setSessionCodeInput] = useState("");
   const [lastCreatedCode, setLastCreatedCode] = useState("");
   const [copied, setCopied] = useState(false);
+  const [copiedCopyCode, setCopiedCopyCode] = useState("");
   const [allUsers, setAllUsers] = useState<{ id: number; name: string; register_number: string }[]>([]);
   const [selectedUserIds, setSelectedUserIds] = useState<number[]>([]);
   const [inviteMessage, setInviteMessage] = useState("");
+  const [inviteTarget, setInviteTarget] = useState(""); // session_code being invited to
 
   // Solo Practice state
   const [soloSession, setSoloSession] = useState<SoloStartResponse | null>(null);
@@ -149,16 +151,19 @@ export default function Home() {
     finally { setLoading(false); }
   }
 
-  async function inviteSelectedUsers() {
-    if (!lastCreatedCode || selectedUserIds.length === 0) return;
+  async function inviteSelectedUsers(targetCode?: string) {
+    const code = targetCode || lastCreatedCode;
+    if (!code || selectedUserIds.length === 0) return;
     setLoading(true);
     try {
       const res = await apiRequest<{ message: string; invited_count: number }>(
-        `/gd/sessions/${lastCreatedCode}/invite`, { method: "POST", body: JSON.stringify({ user_ids: selectedUserIds }) }, token
+        `/gd/sessions/${code}/invite`, { method: "POST", body: JSON.stringify({ user_ids: selectedUserIds }) }, token
       );
       setInviteMessage(res.message);
       setSuccess(res.message);
       setSelectedUserIds([]);
+      setInviteTarget("");
+      await loadSessions();
     } catch (err: any) { setMessage(err.message); }
     finally { setLoading(false); }
   }
@@ -261,7 +266,8 @@ export default function Home() {
   function copyCode(code: string) {
     navigator.clipboard.writeText(code);
     setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    setCopiedCopyCode(code);
+    setTimeout(() => { setCopied(false); setCopiedCopyCode(""); }, 2000);
   }
 
   async function toggleRecording() {
@@ -549,12 +555,45 @@ export default function Home() {
                 {sessions.length === 0 && <p className="text-slate-400 text-sm">No sessions yet. Create or join one!</p>}
                 <div className="space-y-2">
                   {sessions.slice(0, 10).map((s) => (
-                    <div key={s.session_code} className="flex items-center justify-between p-3 rounded-lg backdrop-blur-sm bg-white/[0.06] hover:bg-white/[0.12] transition cursor-pointer" onClick={() => openSession(s)}>
-                      <div>
-                        <p className="text-sm font-medium text-white">{s.topic}</p>
-                        <p className="text-xs text-slate-400">Code: {s.session_code} · {s.status} · {s.member_count}/{s.team_size} members</p>
+                    <div key={s.session_code}>
+                      <div className="flex items-center justify-between p-3 rounded-lg backdrop-blur-sm bg-white/[0.06] hover:bg-white/[0.12] transition cursor-pointer" onClick={() => openSession(s)}>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-white truncate">{s.topic}</p>
+                          <p className="text-xs text-slate-400">Code: {s.session_code} · {s.status} · {s.member_count}/{s.team_size} members</p>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {s.status === "waiting" && (
+                            <button onClick={(e) => { e.stopPropagation(); setInviteTarget(inviteTarget === s.session_code ? "" : s.session_code); setSelectedUserIds([]); }} className="p-1.5 rounded-md hover:bg-white/10 text-amber-400" title="Share / Invite">
+                              <Share2 className="h-4 w-4" />
+                            </button>
+                          )}
+                          <span className={`text-xs px-2 py-1 rounded-full ${s.status === "completed" ? "bg-emerald-500/20 text-emerald-300" : s.status === "waiting" ? "bg-amber-500/20 text-amber-300" : "bg-blue-500/20 text-blue-300"}`}>{s.status}</span>
+                        </div>
                       </div>
-                      <span className={`text-xs px-2 py-1 rounded-full ${s.status === "completed" ? "bg-emerald-500/20 text-emerald-300" : s.status === "waiting" ? "bg-amber-500/20 text-amber-300" : "bg-blue-500/20 text-blue-300"}`}>{s.status}</span>
+                      {inviteTarget === s.session_code && (
+                        <div className="ml-4 mt-2 mb-2 p-3 rounded-lg backdrop-blur-sm bg-white/[0.04] border border-white/10">
+                          <div className="flex items-center justify-between gap-2 mb-2">
+                            <p className="text-xs font-medium text-amber-300/90">Share session code: <code className="text-white font-mono">{s.session_code}</code></p>
+                            <button onClick={() => { copyCode(s.session_code); }} className="p-1 rounded hover:bg-white/10 text-emerald-300">
+                              {copiedCopyCode === s.session_code ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                            </button>
+                          </div>
+                          <div className="flex items-center justify-between gap-2 mb-2">
+                            <p className="text-xs font-medium text-amber-300/90 flex items-center gap-1"><Users className="w-3 h-3" /> Invite teammates</p>
+                          </div>
+                          <div className="max-h-32 overflow-y-auto space-y-1 mb-2 rounded-lg border border-white/5 p-1">
+                            {allUsers.map(u => (
+                              <label key={u.id} className={`flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer transition ${selectedUserIds.includes(u.id) ? "bg-amber-500/20 border border-amber-500/30" : "bg-white/[0.04] hover:bg-white/[0.08]"}`}>
+                                <input type="checkbox" checked={selectedUserIds.includes(u.id)} onChange={() => setSelectedUserIds(prev => prev.includes(u.id) ? prev.filter(id => id !== u.id) : [...prev, u.id])} className="accent-amber-500" />
+                                <span className="text-xs text-white truncate">{u.name}</span>
+                              </label>
+                            ))}
+                          </div>
+                          <button onClick={() => inviteSelectedUsers(s.session_code)} disabled={loading || selectedUserIds.length === 0} className="w-full text-xs py-1.5 rounded-lg bg-gradient-to-r from-emerald-500 to-green-600 text-white disabled:opacity-50">
+                            {loading ? <Loader2 className="h-3 w-3 inline animate-spin mr-1" /> : <Users className="h-3 w-3 inline mr-1" />} Send Invite ({selectedUserIds.length})
+                          </button>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
