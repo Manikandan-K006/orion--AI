@@ -34,6 +34,9 @@ export default function Home() {
   const [sessionCodeInput, setSessionCodeInput] = useState("");
   const [lastCreatedCode, setLastCreatedCode] = useState("");
   const [copied, setCopied] = useState(false);
+  const [allUsers, setAllUsers] = useState<{ id: number; name: string; register_number: string }[]>([]);
+  const [selectedUserIds, setSelectedUserIds] = useState<number[]>([]);
+  const [inviteMessage, setInviteMessage] = useState("");
 
   // Solo Practice state
   const [soloSession, setSoloSession] = useState<SoloStartResponse | null>(null);
@@ -131,8 +134,26 @@ export default function Home() {
       );
       setLastCreatedCode(res.session_code);
       setSuccess(`Session created! Code: ${res.session_code}`);
+      setSelectedUserIds([]);
+      setInviteMessage("");
       const s = await apiRequest<GDSession[]>("/gd/sessions", {}, token);
       setSessions(s);
+      const users = await apiRequest<{ id: number; name: string; register_number: string }[]>("/users", {}, token);
+      setAllUsers(users.filter(u => u.id !== user?.id));
+    } catch (err: any) { setMessage(err.message); }
+    finally { setLoading(false); }
+  }
+
+  async function inviteSelectedUsers() {
+    if (!lastCreatedCode || selectedUserIds.length === 0) return;
+    setLoading(true);
+    try {
+      const res = await apiRequest<{ message: string; invited_count: number }>(
+        `/gd/sessions/${lastCreatedCode}/invite`, { method: "POST", body: JSON.stringify({ user_ids: selectedUserIds }) }, token
+      );
+      setInviteMessage(res.message);
+      setSuccess(res.message);
+      setSelectedUserIds([]);
     } catch (err: any) { setMessage(err.message); }
     finally { setLoading(false); }
   }
@@ -561,7 +582,26 @@ export default function Home() {
                           {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                         </button>
                       </div>
-                      <p className="text-xs text-slate-400 mt-1">Share this code with your team to join</p>
+                    </div>
+                  )}
+                  {lastCreatedCode && allUsers.length > 0 && (
+                    <div className="pt-2">
+                      <p className="text-xs text-slate-400 mb-2">Invite teammates:</p>
+                      <div className="max-h-40 overflow-y-auto space-y-1 mb-2 scrollbar-thin">
+                        {allUsers.map(u => (
+                          <label key={u.id} className={`flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition ${selectedUserIds.includes(u.id) ? "bg-amber-500/20 border border-amber-500/30" : "bg-white/[0.04] hover:bg-white/[0.08]"}`}>
+                            <input type="checkbox" checked={selectedUserIds.includes(u.id)} onChange={() => setSelectedUserIds(prev => prev.includes(u.id) ? prev.filter(id => id !== u.id) : [...prev, u.id])} className="accent-amber-500" />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm text-white truncate">{u.name}</p>
+                              <p className="text-xs text-slate-400">{u.register_number}</p>
+                            </div>
+                          </label>
+                        ))}
+                      </div>
+                      <Button onClick={inviteSelectedUsers} disabled={loading || selectedUserIds.length === 0} className="w-full bg-gradient-to-r from-emerald-500 to-green-600 border-0 text-sm">
+                        {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Users className="h-4 w-4" />} Send Invite ({selectedUserIds.length})
+                      </Button>
+                      {inviteMessage && <p className="text-xs text-emerald-300 mt-1">{inviteMessage}</p>}
                     </div>
                   )}
                   <Button onClick={createSession} disabled={loading || !currentTopic} className="w-full bg-gradient-to-r from-amber-500 to-orange-600 border-0">
