@@ -374,44 +374,36 @@ export default function Home() {
 
   if (!user) {
     return (
-      <div data-theme={isDarkMode ? "dark" : "light"} className="min-h-screen flex items-center justify-center relative overflow-hidden">
+      <div className="min-h-screen flex items-center justify-center relative overflow-hidden">
         <div className="absolute inset-0">
           <img src="/college_image.jpeg" alt="" className="w-full h-full object-cover animate-ken-burns" />
-          <div className={`absolute inset-0 transition-colors duration-500 ${isDarkMode ? "bg-black/60" : "bg-white/40"}`} />
+          <div className="absolute inset-0 bg-black/60" />
         </div>
-        {/* Theme toggle on login page */}
-        <button
-          onClick={() => setIsDarkMode(!isDarkMode)}
-          className="absolute top-5 right-5 z-20 p-2.5 rounded-xl transition-all duration-300 hover:scale-110"
-          style={{ background: isDarkMode ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)", backdropFilter: "blur(8px)" }}
-        >
-          {isDarkMode ? <Sun className="w-5 h-5 text-amber-300" /> : <Moon className="w-5 h-5 text-slate-700" />}
-        </button>
         <div className="relative z-10 w-full max-w-md mx-4">
           <div className="text-center mb-8">
             <img src="/MZ_logo_DB.webp" alt="Mount Zion Logo" className="w-24 h-24 rounded-2xl mx-auto mb-4 shadow-lg shadow-purple-500/30 object-cover animate-float" />
-            <h1 className={`text-4xl font-bold mb-2 transition-colors duration-500 ${isDarkMode ? "text-white" : "text-slate-900"}`}>Mount Zion GD</h1>
-            <p className={`transition-colors duration-500 ${isDarkMode ? "text-purple-200/80" : "text-slate-600"}`}>Group Discussion Assessment Platform</p>
+            <h1 className="text-4xl font-bold mb-2 text-white">Mount Zion GD</h1>
+            <p className="text-purple-200/80">Group Discussion Assessment Platform</p>
           </div>
-          <div className={`rounded-2xl p-8 shadow-2xl border transition-colors duration-500 ${isDarkMode ? "bg-white/10 backdrop-blur-xl border-white/20" : "bg-white/90 backdrop-blur-xl border-slate-200"}`}>
+          <div className="bg-white/10 backdrop-blur-xl rounded-2xl p-8 shadow-2xl border border-white/20">
             <div className="space-y-4">
               <div>
-                <label className={`block text-sm font-medium mb-1 transition-colors duration-500 ${isDarkMode ? "text-purple-200" : "text-slate-700"}`}>Register Number</label>
+                <label className="block text-sm font-medium mb-1 text-purple-200">Register Number</label>
                 <Input
                   placeholder="911724205001"
                   value={registerNumber}
                   onChange={(e) => setRegisterNumber(e.target.value)}
-                  className={`transition-colors duration-500 ${isDarkMode ? "bg-white/5 border-white/20 text-white placeholder:text-white/40" : "bg-white border-slate-300 text-slate-900 placeholder:text-slate-400"}`}
+                  className="bg-white/5 border-white/20 text-white placeholder:text-white/40"
                 />
               </div>
               <div>
-                <label className={`block text-sm font-medium mb-1 transition-colors duration-500 ${isDarkMode ? "text-purple-200" : "text-slate-700"}`}>Password</label>
+                <label className="block text-sm font-medium mb-1 text-purple-200">Password</label>
                 <Input
                   type="password"
                   placeholder="Default: Password123"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className={`transition-colors duration-500 ${isDarkMode ? "bg-white/5 border-white/20 text-white placeholder:text-white/40" : "bg-white border-slate-300 text-slate-900 placeholder:text-slate-400"}`}
+                  className="bg-white/5 border-white/20 text-white placeholder:text-white/40"
                 />
               </div>
               <Button
@@ -430,7 +422,7 @@ export default function Home() {
                 )}
               </Button>
               {message && (
-                <div className={`flex items-center gap-2 rounded-lg p-3 text-sm transition-colors duration-500 ${isDarkMode ? "bg-red-500/20 text-red-200" : "bg-red-100 text-red-700"}`}>
+                <div className="flex items-center gap-2 rounded-lg p-3 text-sm bg-red-500/20 text-red-200">
                   <AlertCircle className="h-4 w-4 shrink-0" /> {message}
                 </div>
               )}
@@ -442,22 +434,21 @@ export default function Home() {
   }
 
   return (
-    <div data-theme={isDarkMode ? "dark" : "light"} className={`min-h-screen flex relative overflow-hidden transition-colors duration-500`}>
-      {/* Animated backgrounds */}
+    <div className="min-h-screen flex relative overflow-hidden">
+      {/* Animated background */}
       <div className="absolute inset-0">
-        <img src="/college_image.jpeg" alt="" className="w-full h-full object-cover animate-ken-burns opacity-60" />
-        <img src="/animated_gd_bg.jpeg" alt="" className="absolute inset-0 w-full h-full object-cover animate-ken-burns opacity-40" style={{ animationDirection: "reverse", animationDuration: "25s" }} />
-        <div className={`absolute inset-0 transition-colors duration-500 ${isDarkMode ? "bg-black/60" : "bg-white/40"}`} />
+        <img src="/animated_gd_bg.jpeg" alt="" className="w-full h-full object-cover animate-ken-burns" />
+        <div className="absolute inset-0 bg-black/60" />
       </div>
       <div className="relative z-10 flex flex-1">
       {/* Sidebar */}
-      <aside className={`transition-all duration-300 ease-in-out flex flex-col shrink-0 border-r ${isDarkMode ? "bg-slate-900/80 border-white/10" : "bg-white/90 border-slate-200"}`} style={{ width: sidebarOpen ? "16rem" : "0", overflow: "hidden", minWidth: sidebarOpen ? "16rem" : "0" }}>
-        <div className={`p-5 border-b transition-colors duration-500 ${isDarkMode ? "border-white/10" : "border-slate-200"}`}>
+      <aside className="bg-slate-900/80 border-r border-white/10 transition-all duration-300 ease-in-out flex flex-col shrink-0" style={{ width: sidebarOpen ? "16rem" : "0", overflow: "hidden", minWidth: sidebarOpen ? "16rem" : "0" }}>
+        <div className="p-5 border-b border-white/10">
           <div className="flex items-center gap-3">
             <img src="/MZ_logo_DB.webp" alt="Mount Zion Logo" className="w-10 h-10 rounded-xl object-cover shadow-lg shrink-0" />
             <div className="truncate">
-              <p className={`text-sm font-bold transition-colors duration-500 ${isDarkMode ? "text-white" : "text-slate-900"}`}>Mount Zion GD</p>
-              <p className={`text-xs transition-colors duration-500 ${isDarkMode ? "text-purple-300/60" : "text-slate-500"}`}>{user.name}</p>
+              <p className="text-sm font-bold text-white">Mount Zion GD</p>
+              <p className="text-xs text-purple-300/60">{user.name}</p>
             </div>
           </div>
         </div>
@@ -476,7 +467,7 @@ export default function Home() {
                 else if (item.view === "solo-practice") startSoloPractice();
                 else setView(item.view);
               }}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all whitespace-nowrap ${view === item.view ? (isDarkMode ? "bg-amber-500/20 text-amber-300 border border-amber-500/30" : "bg-amber-100 text-amber-700 border border-amber-300") : isDarkMode ? "text-slate-300 hover:bg-white/5 hover:text-white" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"}`}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all whitespace-nowrap ${view === item.view ? "bg-amber-500/20 text-amber-300 border border-amber-500/30" : "text-slate-300 hover:bg-white/5 hover:text-white"}`}
             >
               {item.icon}
               <span>{item.label}</span>
@@ -484,13 +475,8 @@ export default function Home() {
             </button>
           ))}
         </nav>
-        <div className={`p-3 border-t transition-colors duration-500 space-y-2 ${isDarkMode ? "border-white/10" : "border-slate-200"}`}>
-          {/* Theme toggle */}
-          <button onClick={() => setIsDarkMode(!isDarkMode)} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all whitespace-nowrap ${isDarkMode ? "text-amber-300 hover:bg-white/5" : "text-amber-600 hover:bg-slate-100"}`}>
-            {isDarkMode ? <Sun className="w-5 h-5 shrink-0" /> : <Moon className="w-5 h-5 shrink-0" />}
-            <span>{isDarkMode ? "Light Mode" : "Dark Mode"}</span>
-          </button>
-          <button onClick={logout} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all whitespace-nowrap ${isDarkMode ? "text-red-300 hover:bg-red-500/10" : "text-red-600 hover:bg-red-50"}`}>
+        <div className="p-3 border-t border-white/10 space-y-2">
+          <button onClick={logout} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all whitespace-nowrap text-red-300 hover:bg-red-500/10">
             <LogOut className="w-5 h-5 shrink-0" /> Sign Out
           </button>
         </div>
@@ -971,3 +957,4 @@ export default function Home() {
     </div>
   );
 }
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     
