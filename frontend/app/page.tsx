@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircle, Award, Clock, LogOut, MessageSquare, Mic, MicOff, RefreshCw, Trophy, Users, Zap, Loader2, Copy, Check, Target, TrendingUp, ArrowUp, ArrowDown, Sun, Moon, PanelLeftClose, PanelLeft, Sparkles } from "lucide-react";
+import { AlertCircle, Award, Clock, LogOut, MessageSquare, Mic, MicOff, RefreshCw, Trophy, Users, Zap, Loader2, Copy, Check, Target, TrendingUp, ArrowUp, ArrowDown, PanelLeftClose, PanelLeft, Sparkles } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Bar, BarChart, CartesianGrid, Cell, Legend, PolarAngleAxis, PolarGrid, Radar, RadarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
@@ -54,20 +54,7 @@ export default function Home() {
   const audioChunksRef = useRef<Blob[]>([]);
   const [liveDetectedText, setLiveDetectedText] = useState("");
 
-  // Theme + Sidebar state
-  const [isDarkMode, setIsDarkMode] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(true);
-
-  useEffect(() => {
-    const saved = localStorage.getItem("mzgd_theme");
-    if (saved) setIsDarkMode(saved === "dark");
-    document.documentElement.classList.toggle("light", saved === "light");
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem("mzgd_theme", isDarkMode ? "dark" : "light");
-    document.documentElement.classList.toggle("light", !isDarkMode);
-  }, [isDarkMode]);
 
   useEffect(() => {
     const savedToken = localStorage.getItem("mzgd_token");
