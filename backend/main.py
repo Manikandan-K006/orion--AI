@@ -3,13 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-<<<<<<< HEAD
 from backend.api import auth, gd, interviews, progress, questions, reports
 from backend.config import get_settings
-=======
-from api import auth, interviews, progress, questions, reports
-from config import get_settings
->>>>>>> cf216151426460888960e213add7d81f628676d6
 
 settings = get_settings()
 
