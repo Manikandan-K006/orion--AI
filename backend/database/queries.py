@@ -250,7 +250,7 @@ def is_member_of_gd(connection: MySQLConnection, session_code: str, user_id: int
 
 
 def update_gd_status(connection: MySQLConnection, session_code: str, status: str) -> int:
-    completed = "', completed_at = CURRENT_TIMESTAMP" if status == "completed" else ""
+    completed = ", completed_at = CURRENT_TIMESTAMP" if status == "completed" else ""
     return execute(connection, f"UPDATE gd_sessions SET status = %s{completed} WHERE session_code = %s",
                    (status, session_code))
 
