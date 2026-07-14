@@ -516,8 +516,8 @@ export default function Home() {
       )}
 
       {/* Sidebar */}
-      <aside className={`fixed md:relative z-30 h-full bg-slate-900/95 md:bg-slate-900/80 border-r border-white/10 transition-all duration-300 ease-in-out flex flex-col shrink-0 ${sidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}`} style={{ width: sidebarOpen ? "16rem" : "0", overflow: "hidden", minWidth: sidebarOpen ? "16rem" : "0" }}>
-        <div className="p-4 md:p-5 border-b border-white/10">
+      <aside className={`fixed md:relative z-30 h-full bg-slate-900/95 md:bg-slate-900/80 border-r border-white/10 transition-transform duration-300 ease-in-out flex flex-col shrink-0 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"} md:translate-x-0`} style={{ width: "16rem" }}>
+        <div className="flex items-center justify-between p-4 md:p-5 border-b border-white/10">
           <div className="flex items-center gap-3">
             <img src="/MZ_logo_DB.webp" alt="Mount Zion Logo" className="w-10 h-10 rounded-xl object-cover shadow-lg shrink-0" />
             <div className="truncate">
@@ -525,6 +525,7 @@ export default function Home() {
               <p className="text-xs text-purple-300/60">{user.name}</p>
             </div>
           </div>
+          <button className="md:hidden p-1 text-white/60 hover:text-white" onClick={() => setSidebarOpen(false)}><PanelLeftClose className="w-5 h-5" /></button>
         </div>
         <nav className="flex-1 p-3 space-y-1">
           {[
