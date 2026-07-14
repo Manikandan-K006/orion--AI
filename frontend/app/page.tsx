@@ -105,6 +105,7 @@ export default function Home() {
     setLastCreatedCode("");
     setInviteMessage("");
     setSelectedUserIds([]);
+    await apiRequest("/gd/topics/reset-refreshes", { method: "POST" }, token).catch(() => {});
     const t = await apiRequest<GDTopic[]>("/gd/topics", {}, token);
     setTopics(t);
     await doRefresh();

@@ -30,6 +30,16 @@ def refresh_topic(
     return result
 
 
+@router.post("/topics/reset-refreshes")
+def reset_refreshes(
+    current_user: dict = Depends(get_current_user),
+    connection: MySQLConnection = Depends(get_db),
+) -> dict:
+    """Reset refresh count so user gets 3 fresh refreshes on next login."""
+    queries.reset_topic_refreshes(connection, current_user["id"])
+    return {"message": "Refresh count reset"}
+
+
 @router.post("/sessions", status_code=status.HTTP_201_CREATED)
 def create_gd(
     payload: GDSessionCreate,
