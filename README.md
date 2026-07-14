@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # SpeakSense AI
 
 SpeakSense AI is a college final-year project for interview communication assessment. It uses a FastAPI backend, MySQL database, modular AI analysis files, and a Next.js frontend.
@@ -116,3 +117,6 @@ http://localhost:3000
 - Keep AI logic inside `backend/ai/`.
 - Replace the current text fallback analyzers with full Whisper, Librosa, LanguageTool, and Transformers implementations during Phase 2 hardening.
 - Never deploy with the example JWT secret.
+=======
+# orion--AI
+>>>>>>> a5512fda9a039c44e44a585953a259dad81f3386
