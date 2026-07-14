@@ -364,6 +364,11 @@ def get_random_quote(connection: MySQLConnection, user_id: int) -> dict[str, Any
     return quote
 
 
+def get_random_gd_quote(connection: MySQLConnection) -> dict[str, Any] | None:
+    return fetch_one(connection,
+        "SELECT id, quote, author FROM motivational_quotes ORDER BY RAND() LIMIT 1")
+
+
 def get_last_solo_session(connection: MySQLConnection, user_id: int) -> dict[str, Any] | None:
     return fetch_one(connection,
         "SELECT overall_score, fluency_score, grammar_score, accent_score, delivery_score, weaknesses "

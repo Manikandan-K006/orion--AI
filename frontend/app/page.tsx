@@ -64,6 +64,7 @@ export default function Home() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const [liveDetectedText, setLiveDetectedText] = useState("");
+  const [gdQuote, setGdQuote] = useState<{ quote: string; author: string } | null>(null);
 
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
@@ -209,6 +210,8 @@ export default function Home() {
   async function openSession(session: GDSession) {
     const s = await apiRequest<GDSession>(`/gd/sessions/${session.session_code}`, {}, token);
     setActiveSession(s);
+    // Fetch a unity motivational quote for GD
+    apiRequest<{ quote: string; author: string }>("/gd/quote", {}, token).then(q => setGdQuote(q)).catch(() => {});
     if (s.status === "completed") {
       const lb = await apiRequest<GDLeaderboardEntry[]>(`/gd/sessions/${session.session_code}/leaderboard`, {}, token);
       setLeaderboard(lb);

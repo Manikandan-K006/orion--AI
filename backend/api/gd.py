@@ -12,6 +12,17 @@ from backend.security import get_current_user
 router = APIRouter(prefix="/gd", tags=["Group Discussion"])
 
 
+@router.get("/quote")
+def get_gd_quote(
+    _: dict = Depends(get_current_user),
+    connection: MySQLConnection = Depends(get_db),
+) -> dict:
+    quote = queries.get_random_gd_quote(connection)
+    if not quote:
+        return {"quote": "Together we achieve more!", "author": "Unknown"}
+    return quote
+
+
 @router.get("/topics")
 def list_topics(
     _: dict = Depends(get_current_user),
