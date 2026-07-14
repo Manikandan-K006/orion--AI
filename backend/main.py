@@ -20,11 +20,8 @@ app.add_middleware(
 
 
 @app.exception_handler(Exception)
-async def unhandled_exception_handler(_: Request, exc: Exception) -> JSONResponse:
-    import traceback
-    print("ERROR:", exc)
-    traceback.print_exc()
-    return JSONResponse(status_code=500, content={"detail": f"Internal server error: {str(exc)}"})
+async def unhandled_exception_handler(_: Request, __: Exception) -> JSONResponse:
+    return JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
 
 @app.get("/health", tags=["System"])
