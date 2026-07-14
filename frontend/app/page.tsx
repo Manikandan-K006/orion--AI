@@ -1,15 +1,15 @@
 "use client";
 
-import { AlertCircle, Award, Clock, LogOut, MessageSquare, Mic, MicOff, RefreshCw, Trophy, Users, Zap, Loader2, Copy, Check } from "lucide-react";
+import { AlertCircle, Award, Clock, LogOut, MessageSquare, Mic, MicOff, RefreshCw, Trophy, Users, Zap, Loader2, Copy, Check, Target, TrendingUp, ArrowUp, ArrowDown } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, Cell, Legend, PolarAngleAxis, PolarGrid, Radar, RadarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { GDLeaderboardEntry, GDSession, GDTopic, Progress, User, apiRequest } from "@/lib/api";
+import { GDLeaderboardEntry, GDSession, GDTopic, Progress, SoloQuote, SoloStartResponse, SoloSubmitResponse, User, apiRequest } from "@/lib/api";
 
-type PageView = "login" | "dashboard" | "gd-create" | "gd-session" | "gd-leaderboard";
+type PageView = "login" | "dashboard" | "gd-create" | "gd-session" | "gd-leaderboard" | "solo-practice" | "solo-session" | "solo-result";
 
 export default function Home() {
   const [token, setToken] = useState("");
@@ -35,6 +35,12 @@ export default function Home() {
   const [lastCreatedCode, setLastCreatedCode] = useState("");
   const [copied, setCopied] = useState(false);
 
+  // Solo Practice state
+  const [soloSession, setSoloSession] = useState<SoloStartResponse | null>(null);
+  const [soloQuote, setSoloQuote] = useState<SoloQuote | null>(null);
+  const [soloResult, setSoloResult] = useState<SoloSubmitResponse | null>(null);
+  const [soloHistory, setSoloHistory] = useState<SoloSubmitResponse["last_session"][]>([]);
+
   const [prepSeconds, setPrepSeconds] = useState(0);
   const [speakingSeconds, setSpeakingSeconds] = useState(0);
   const [isPrepPhase, setIsPrepPhase] = useState(false);
@@ -47,18 +53,6 @@ export default function Home() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const [liveDetectedText, setLiveDetectedText] = useState("");
-  const [floaterStyles, setFloaterStyles] = useState<Record<string, string>[]>([]);
-
-  useEffect(() => {
-    setFloaterStyles([...Array(20)].map(() => ({
-      width: `${Math.random() * 200 + 50}px`,
-      height: `${Math.random() * 200 + 50}px`,
-      left: `${Math.random() * 100}%`,
-      top: `${Math.random() * 100}%`,
-      animationDelay: `${Math.random() * 5}s`,
-      animationDuration: `${Math.random() * 5 + 3}s`,
-    })));
-  }, []);
 
   useEffect(() => {
     const savedToken = localStorage.getItem("mzgd_token");
@@ -106,7 +100,6 @@ export default function Home() {
     setLastCreatedCode("");
     const t = await apiRequest<GDTopic[]>("/gd/topics", {}, token);
     setTopics(t);
-    // fetch first random topic via refresh
     await doRefresh();
     setView("gd-create");
   }
@@ -263,7 +256,7 @@ export default function Home() {
         formData.append("file", blob, "recording.webm");
         setRecordingStatus("Transcribing...");
         try {
-          const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/interviews/upload-audio`, {
+          const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001"}/interviews/upload-audio`, {
             method: "POST", headers: { Authorization: `Bearer ${token}` }, body: formData,
           });
           const data = await res.json();
@@ -291,7 +284,91 @@ export default function Home() {
     setUser(null); setToken(""); setView("login");
     setActiveSession(null); setLeaderboard([]);
     setMessage(""); setSuccess("");
+    setSoloSession(null); setSoloResult(null); setSoloQuote(null);
   }
+
+  // ─── Solo Practice Functions ───
+
+  async function startSoloPractice() {
+    setLoading(true);
+    try {
+      const res = await apiRequest<SoloStartResponse>("/solo/start", { method: "POST" }, token);
+      setSoloSession(res);
+      setSoloQuote(res.quote);
+      setSoloResult(null);
+      setTranscript("");
+      setIsPrepPhase(false);
+      setIsSpeakingPhase(false);
+      setPrepSeconds(0);
+      setSpeakingSeconds(0);
+      if (timerRef.current) clearInterval(timerRef.current);
+      setView("solo-practice");
+      setSuccess("");
+    } catch (err: any) { setMessage(err.message); }
+    finally { setLoading(false); }
+  }
+
+  function beginSoloPrep() {
+    if (!soloSession) return;
+    setIsPrepPhase(true);
+    setPrepSeconds(240);
+    setIsSpeakingPhase(false);
+    setSpeakingSeconds(0);
+    setView("solo-session");
+    setSuccess("You have 4 minutes to prepare. Use the notes area below.");
+    if (timerRef.current) clearInterval(timerRef.current);
+    timerRef.current = setInterval(() => {
+      setPrepSeconds(prev => {
+        if (prev <= 1) {
+          clearInterval(timerRef.current!);
+          setIsPrepPhase(false);
+          setIsSpeakingPhase(true);
+          setSpeakingSeconds(600);
+          setSuccess("Preparation time over! Start speaking now. You have 10 minutes.");
+          timerRef.current = setInterval(() => {
+            setSpeakingSeconds(p => {
+              if (p <= 1) { clearInterval(timerRef.current!); return 0; }
+              return p - 1;
+            });
+          }, 1000);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  }
+
+  async function submitSoloPractice() {
+    if (!soloSession || !transcript.trim()) { setMessage("Write your transcript first"); return; }
+    setLoading(true);
+    try {
+      const res = await apiRequest<SoloSubmitResponse>("/solo/submit", {
+        method: "POST",
+        body: JSON.stringify({ session_id: soloSession.session_id, transcript })
+      }, token);
+      setSoloResult(res);
+      if (timerRef.current) clearInterval(timerRef.current);
+      setIsPrepPhase(false);
+      setIsSpeakingPhase(false);
+      setView("solo-result");
+      setSuccess(`${res.message} — Score: ${res.overall_score}`);
+      // Fetch history
+      const history = await apiRequest<SoloSubmitResponse["last_session"][]>("/solo/history", {}, token).catch(() => []);
+      setSoloHistory(history);
+    } catch (err: any) { setMessage(err.message); }
+    finally { setLoading(false); }
+  }
+
+  async function endSoloEarly() {
+    if (!soloSession) return;
+    if (transcript.trim().length < 10) {
+      setMessage("Write at least 10 characters of transcript before ending.");
+      return;
+    }
+    await submitSoloPractice();
+  }
+
+  const scoreColors = ["#f59e0b", "#10b981", "#8b5cf6", "#06b6d4"];
 
   if (!user) {
     return (
@@ -364,6 +441,7 @@ export default function Home() {
           {[
             { icon: <Users className="w-5 h-5" />, label: "Dashboard", view: "dashboard" as PageView },
             { icon: <MessageSquare className="w-5 h-5" />, label: "New GD", view: "gd-create" as PageView },
+            { icon: <Target className="w-5 h-5" />, label: "Solo Practice", view: "solo-practice" as PageView },
             { icon: <Trophy className="w-5 h-5" />, label: "Leaderboard", view: "gd-leaderboard" as PageView, badge: leaderboard.length > 0 ? `${leaderboard.length}` : undefined },
           ].map((item) => (
             <button
@@ -371,6 +449,7 @@ export default function Home() {
               onClick={() => {
                 if (item.view === "gd-leaderboard") { if (activeSession) openSession(activeSession); else setView("dashboard"); }
                 else if (item.view === "gd-create") loadTopics();
+                else if (item.view === "solo-practice") startSoloPractice();
                 else setView(item.view);
               }}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${view === item.view ? "bg-amber-500/20 text-amber-300 border border-amber-500/30" : "text-slate-300 hover:bg-white/5 hover:text-white"}`}
@@ -391,7 +470,6 @@ export default function Home() {
       {/* Main Content */}
       <main className="flex-1 overflow-auto">
         <div className="p-6 max-w-6xl mx-auto">
-          {/* Success/Error Messages */}
           {(success || message) && (
             <div className={`mb-4 flex items-center gap-2 rounded-xl p-4 text-sm ${success ? "bg-emerald-500/20 text-emerald-200 border border-emerald-500/30" : "bg-red-500/20 text-red-200 border border-red-500/30"}`}>
               {success ? <Zap className="h-4 w-4 shrink-0" /> : <AlertCircle className="h-4 w-4 shrink-0" />}
@@ -441,7 +519,6 @@ export default function Home() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="rounded-xl bg-white/5 backdrop-blur-sm border border-white/10 p-6">
                 <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2"><MessageSquare className="w-5 h-5 text-amber-400" /> Create GD Session</h2>
-                {/* Current Topic Display */}
                 {currentTopic && (
                   <div className="mb-4 p-4 rounded-lg bg-gradient-to-r from-amber-500/20 to-orange-600/20 border border-amber-500/30">
                     <p className="text-xs text-amber-300/80 mb-1">Selected Topic</p>
@@ -450,13 +527,8 @@ export default function Home() {
                   </div>
                 )}
                 <div className="space-y-3">
-                  <Button
-                    onClick={doRefresh}
-                    disabled={loading || refreshCount >= 3}
-                    className="w-full bg-white/10 border border-white/20 text-white hover:bg-white/20"
-                  >
-                    <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
-                    Refresh Topic ({3 - refreshCount} left)
+                  <Button onClick={doRefresh} disabled={loading || refreshCount >= 3} className="w-full bg-white/10 border border-white/20 text-white hover:bg-white/20">
+                    <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} /> Refresh Topic ({3 - refreshCount} left)
                   </Button>
                   {lastCreatedCode && (
                     <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/30">
@@ -471,23 +543,16 @@ export default function Home() {
                     </div>
                   )}
                   <Button onClick={createSession} disabled={loading || !currentTopic} className="w-full bg-gradient-to-r from-amber-500 to-orange-600 border-0">
-                    {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
-                    Create Session
+                    {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />} Create Session
                   </Button>
                 </div>
               </div>
               <div className="rounded-xl bg-white/5 backdrop-blur-sm border border-white/10 p-6">
                 <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2"><Users className="w-5 h-5 text-amber-400" /> Join Session</h2>
                 <div className="space-y-3">
-                  <Input
-                    placeholder="Enter Session Code (e.g. A3F9K2B7X1M4)"
-                    value={sessionCodeInput}
-                    onChange={(e) => setSessionCodeInput(e.target.value.toUpperCase())}
-                    className="bg-white/10 border-white/20 text-white placeholder:text-white/40 font-mono tracking-wider"
-                  />
+                  <Input placeholder="Enter Session Code (e.g. A3F9K2B7X1M4)" value={sessionCodeInput} onChange={(e) => setSessionCodeInput(e.target.value.toUpperCase())} className="bg-white/10 border-white/20 text-white placeholder:text-white/40 font-mono tracking-wider" />
                   <Button onClick={joinSession} disabled={loading} className="w-full bg-gradient-to-r from-purple-500 to-pink-600 border-0">
-                    {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Users className="h-4 w-4" />}
-                    Join Session
+                    {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Users className="h-4 w-4" />} Join Session
                   </Button>
                 </div>
               </div>
@@ -506,14 +571,11 @@ export default function Home() {
                   <div className="flex gap-2">
                     {activeSession.status === "waiting" && (
                       <Button onClick={startGd} disabled={loading} className="bg-gradient-to-r from-emerald-500 to-green-600 border-0">
-                        {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
-                        Start GD
+                        {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />} Start GD
                       </Button>
                     )}
                     {activeSession.status !== "completed" && !isGdDone && (
-                      <Button onClick={finishGd} disabled={loading} variant="secondary" className="bg-red-500/20 text-red-300 border-red-500/30 hover:bg-red-500/30">
-                        End GD
-                      </Button>
+                      <Button onClick={finishGd} disabled={loading} variant="secondary" className="bg-red-500/20 text-red-300 border-red-500/30 hover:bg-red-500/30">End GD</Button>
                     )}
                     {isGdDone && (
                       <Button onClick={() => { if (activeSession) openSession(activeSession); }} className="bg-gradient-to-r from-amber-500 to-orange-600 border-0">
@@ -522,7 +584,6 @@ export default function Home() {
                     )}
                   </div>
                 </div>
-                {/* Timer */}
                 {(isPrepPhase || isSpeakingPhase) && (
                   <div className={`rounded-lg p-4 text-center mb-4 ${isPrepPhase ? "bg-blue-500/20 border border-blue-500/30" : "bg-emerald-500/20 border border-emerald-500/30"}`}>
                     <p className="text-sm text-slate-300 mb-1">{isPrepPhase ? "Preparation Phase" : "Speaking Phase"}</p>
@@ -532,7 +593,6 @@ export default function Home() {
                 {activeSession.status === "waiting" && !isPrepPhase && !isSpeakingPhase && (
                   <p className="text-slate-400 text-sm mb-4">Waiting for host to start the GD session.</p>
                 )}
-                {/* Members */}
                 <div className="mb-4">
                   <p className="text-sm font-medium text-slate-300 mb-2">Team Members ({activeSession.members?.length || 0})</p>
                   <div className="flex flex-wrap gap-2">
@@ -541,34 +601,25 @@ export default function Home() {
                     ))}
                   </div>
                 </div>
-                {/* Transcript Input */}
                 {(isPrepPhase || isSpeakingPhase) && (
                   <div className="space-y-3">
                     <div className="flex items-center gap-2">
                       <Button onClick={toggleRecording} className={`border-0 ${isRecording ? "bg-red-500 hover:bg-red-600" : "bg-gradient-to-r from-amber-500 to-orange-600"}`}>
-                        {isRecording ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
-                        {isRecording ? "Stop" : "Record"}
+                        {isRecording ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />} {isRecording ? "Stop" : "Record"}
                       </Button>
                       {recordingStatus && <span className="text-xs text-slate-400">{recordingStatus}</span>}
                     </div>
                     {liveDetectedText && <p className="text-xs text-emerald-300 bg-emerald-500/10 p-2 rounded"><span className="font-medium">Detected:</span> {liveDetectedText}</p>}
-                    <Textarea
-                      placeholder="Type or record your speech contribution here..."
-                      value={transcript}
-                      onChange={(e) => setTranscript(e.target.value)}
-                      className="bg-white/10 border-white/20 text-white placeholder:text-white/40 min-h-[100px]"
-                    />
+                    <Textarea placeholder="Type or record your speech contribution here..." value={transcript} onChange={(e) => setTranscript(e.target.value)} className="bg-white/10 border-white/20 text-white placeholder:text-white/40 min-h-[100px]" />
                     <div className="flex justify-between items-center">
                       <span className="text-xs text-slate-400">{transcript.trim().split(/\s+/).filter(Boolean).length} words</span>
                       <Button onClick={submitTranscriptForEval} disabled={loading || !transcript.trim()} className="bg-gradient-to-r from-amber-500 to-orange-600 border-0">
-                        {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Award className="h-4 w-4" />}
-                        Submit for Evaluation
+                        {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Award className="h-4 w-4" />} Submit for Evaluation
                       </Button>
                     </div>
                   </div>
                 )}
               </div>
-              {/* Submitted transcripts */}
               {Object.keys(gdTranscripts).length > 0 && (
                 <div className="rounded-xl bg-white/5 backdrop-blur-sm border border-white/10 p-4">
                   <p className="text-sm font-medium text-slate-300 mb-2">Submitted Contributions</p>
@@ -597,9 +648,7 @@ export default function Home() {
                     <div className="space-y-2">
                       {leaderboard.map((entry, idx) => (
                         <div key={entry.id} className={`flex items-center gap-4 p-4 rounded-xl ${idx === 0 ? "bg-amber-500/20 border border-amber-500/30" : idx === 1 ? "bg-slate-400/10 border border-slate-400/20" : idx === 2 ? "bg-orange-500/10 border border-orange-500/20" : "bg-white/5"}`}>
-                          <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg font-bold ${idx === 0 ? "bg-amber-500 text-white" : idx === 1 ? "bg-slate-400 text-white" : idx === 2 ? "bg-orange-500 text-white" : "bg-white/10 text-slate-300"}`}>
-                            {entry.rank_position}
-                          </div>
+                          <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg font-bold ${idx === 0 ? "bg-amber-500 text-white" : idx === 1 ? "bg-slate-400 text-white" : idx === 2 ? "bg-orange-500 text-white" : "bg-white/10 text-slate-300"}`}>{entry.rank_position}</div>
                           <div className="flex-1">
                             <p className="text-sm font-semibold text-white">{entry.name}</p>
                             <p className="text-xs text-slate-400">{entry.register_number}</p>
@@ -630,6 +679,254 @@ export default function Home() {
                   )}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* ─── Solo Practice ─── */}
+          {view === "solo-practice" && soloSession && (
+            <div className="space-y-6 animate-in fade-in duration-300">
+              {/* Motivational Quote */}
+              {soloQuote && (
+                <div className="rounded-xl bg-gradient-to-r from-purple-600/30 to-pink-600/30 border border-purple-500/30 p-6 text-center">
+                  <p className="text-sm text-purple-300/80 mb-2">Motivational Quote</p>
+                  <p className="text-lg font-medium text-white italic">"{soloQuote.quote}"</p>
+                  <p className="text-sm text-purple-300/60 mt-2">— {soloQuote.author}</p>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="rounded-xl bg-white/5 backdrop-blur-sm border border-white/10 p-6">
+                  <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2"><Target className="w-5 h-5 text-amber-400" /> Solo Practice</h2>
+                  <div className="mb-4 p-4 rounded-lg bg-gradient-to-r from-amber-500/20 to-orange-600/20 border border-amber-500/30">
+                    <p className="text-xs text-amber-300/80 mb-1">Your Topic</p>
+                    <p className="text-sm font-medium text-white">{soloSession.topic}</p>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-slate-400 mb-4">
+                    <Clock className="w-4 h-4" /> Session #{soloSession.session_number} · 4 min prep · 10 min speak
+                  </div>
+                  <Button onClick={beginSoloPrep} className="w-full bg-gradient-to-r from-emerald-500 to-green-600 border-0 h-12 text-lg">
+                    <Zap className="h-5 w-5 mr-2" /> Begin Practice
+                  </Button>
+                </div>
+
+                <div className="rounded-xl bg-white/5 backdrop-blur-sm border border-white/10 p-6">
+                  <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2"><TrendingUp className="w-5 h-5 text-amber-400" /> Your Progress</h2>
+                  {soloSession.is_new_user ? (
+                    <div className="text-center py-6">
+                      <p className="text-white font-medium mb-2">Welcome to Solo Practice!</p>
+                      <p className="text-sm text-slate-400">This is your first session. AI will evaluate your fluency, grammar, accent, and delivery.</p>
+                    </div>
+                  ) : soloSession.last_session ? (
+                    <div className="space-y-3">
+                      <p className="text-sm text-slate-400">Previous Session Scores</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        {[
+                          { label: "Overall", value: soloSession.last_session.overall_score, color: "text-amber-300" },
+                          { label: "Fluency", value: soloSession.last_session.fluency_score, color: "text-emerald-300" },
+                          { label: "Grammar", value: soloSession.last_session.grammar_score, color: "text-purple-300" },
+                          { label: "Delivery", value: soloSession.last_session.delivery_score, color: "text-cyan-300" },
+                        ].map(s => (
+                          <div key={s.label} className="bg-white/5 rounded-lg p-3 text-center">
+                            <p className="text-xs text-slate-400">{s.label}</p>
+                            <p className={`text-lg font-bold ${s.color}`}>{s.value}</p>
+                          </div>
+                        ))}
+                      </div>
+                      {soloSession.last_session.weaknesses && (
+                        <div className="bg-red-500/10 rounded-lg p-3">
+                          <p className="text-xs text-red-300 mb-1">Areas to Improve</p>
+                          <p className="text-xs text-slate-300">{soloSession.last_session.weaknesses}</p>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="text-center py-6">
+                      <p className="text-sm text-slate-400">Complete your first session to see progress.</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ─── Solo Session (Prep + Speaking) ─── */}
+          {view === "solo-session" && soloSession && (
+            <div className="max-w-3xl mx-auto space-y-4">
+              <div className="rounded-xl bg-white/5 backdrop-blur-sm border border-white/10 p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h2 className="text-xl font-bold text-white">{soloSession.topic}</h2>
+                    <p className="text-sm text-slate-400">Session #{soloSession.session_number} · Solo Practice</p>
+                  </div>
+                  <div className="flex gap-2">
+                    {isSpeakingPhase && (
+                      <Button onClick={endSoloEarly} disabled={loading} variant="secondary" className="bg-red-500/20 text-red-300 border-red-500/30 hover:bg-red-500/30">
+                        End & Submit
+                      </Button>
+                    )}
+                  </div>
+                </div>
+                {(isPrepPhase || isSpeakingPhase) && (
+                  <div className={`rounded-lg p-4 text-center mb-4 ${isPrepPhase ? "bg-blue-500/20 border border-blue-500/30" : "bg-emerald-500/20 border border-emerald-500/30"}`}>
+                    <p className="text-sm text-slate-300 mb-1">{isPrepPhase ? "Preparation Phase — Think & Take Notes" : "Speaking Phase — Deliver Your Thoughts"}</p>
+                    <p className="text-4xl font-bold text-white font-mono">{formatTime(isPrepPhase ? prepSeconds : speakingSeconds)}</p>
+                  </div>
+                )}
+                <div className="mb-4">
+                  <p className="text-sm font-medium text-slate-300 mb-2">Your Topic</p>
+                  <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                    <p className="text-sm text-white">{soloSession.topic}</p>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Button onClick={toggleRecording} className={`border-0 ${isRecording ? "bg-red-500 hover:bg-red-600" : "bg-gradient-to-r from-amber-500 to-orange-600"}`}>
+                      {isRecording ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />} {isRecording ? "Stop" : "Record"}
+                    </Button>
+                    {recordingStatus && <span className="text-xs text-slate-400">{recordingStatus}</span>}
+                    <span className="ml-auto text-xs text-slate-500">{isPrepPhase ? "Prepare your thoughts..." : "Speak clearly into the mic..."}</span>
+                  </div>
+                  {liveDetectedText && <p className="text-xs text-emerald-300 bg-emerald-500/10 p-2 rounded"><span className="font-medium">Detected:</span> {liveDetectedText}</p>}
+                  <Textarea
+                    placeholder={isPrepPhase ? "Jot down notes and key points for your speech..." : "Type or record your speech here..."}
+                    value={transcript}
+                    onChange={(e) => setTranscript(e.target.value)}
+                    className="bg-white/10 border-white/20 text-white placeholder:text-white/40 min-h-[150px]"
+                  />
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-slate-400">{transcript.trim().split(/\s+/).filter(Boolean).length} words</span>
+                    <div className="flex gap-2">
+                      <Button onClick={() => { setView("solo-practice"); if (timerRef.current) clearInterval(timerRef.current); setIsPrepPhase(false); setIsSpeakingPhase(false); }} variant="secondary" className="bg-white/10 text-white border-white/20">
+                        Cancel
+                      </Button>
+                      <Button onClick={submitSoloPractice} disabled={loading || transcript.trim().length < 10} className="bg-gradient-to-r from-amber-500 to-orange-600 border-0">
+                        {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Award className="h-4 w-4" />} Submit
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ─── Solo Result ─── */}
+          {view === "solo-result" && soloResult && soloSession && (
+            <div className="space-y-6 animate-in fade-in duration-300">
+              {/* Quote */}
+              {soloQuote && (
+                <div className="rounded-xl bg-gradient-to-r from-purple-600/30 to-pink-600/30 border border-purple-500/30 p-4 text-center">
+                  <p className="text-sm text-white/80 italic">"{soloQuote.quote}"</p>
+                  <p className="text-xs text-purple-300/60 mt-1">— {soloQuote.author}</p>
+                </div>
+              )}
+
+              {/* Score Overview */}
+              <div className="rounded-xl bg-white/5 backdrop-blur-sm border border-white/10 p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h2 className="text-xl font-bold text-white flex items-center gap-2"><Target className="w-6 h-6 text-amber-400" /> Practice Results</h2>
+                    <p className="text-sm text-slate-400">{soloSession.topic} · Session #{soloSession.session_number}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-3xl font-bold text-amber-300">{soloResult.overall_score}</p>
+                    <p className="text-xs text-slate-400">Overall Score</p>
+                  </div>
+                </div>
+
+                {/* Radar Chart */}
+                <div className="h-64 mb-4">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <RadarChart data={[
+                      { metric: "Fluency", value: soloResult.fluency_score },
+                      { metric: "Grammar", value: soloResult.grammar_score },
+                      { metric: "Accent", value: soloResult.accent_score },
+                      { metric: "Delivery", value: soloResult.delivery_score },
+                    ]}>
+                      <PolarGrid stroke="#ffffff20" />
+                      <PolarAngleAxis dataKey="metric" tick={{ fontSize: 11, fill: "#94a3b8" }} />
+                      <Radar name="Score" dataKey="value" stroke="#f59e0b" fill="#f59e0b" fillOpacity={0.3} />
+                      <Tooltip contentStyle={{ background: "#1e293b", border: "1px solid #ffffff20", borderRadius: "8px", color: "#fff" }} />
+                    </RadarChart>
+                  </ResponsiveContainer>
+                </div>
+
+                {/* Bar Chart */}
+                <div className="h-48 mb-4">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={[
+                      { name: "Fluency", score: soloResult.fluency_score },
+                      { name: "Grammar", score: soloResult.grammar_score },
+                      { name: "Accent", score: soloResult.accent_score },
+                      { name: "Delivery", score: soloResult.delivery_score },
+                    ]}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#ffffff20" />
+                      <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#94a3b8" }} />
+                      <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: "#94a3b8" }} />
+                      <Tooltip contentStyle={{ background: "#1e293b", border: "1px solid #ffffff20", borderRadius: "8px", color: "#fff" }} />
+                      <Bar dataKey="score" radius={[4, 4, 0, 0]}>
+                        {scoreColors.map((color, i) => <Cell key={i} fill={color} />)}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+
+                {/* Weaknesses & Tips */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="bg-red-500/10 rounded-lg p-4 border border-red-500/20">
+                    <p className="text-sm font-medium text-red-300 mb-2">Areas to Improve</p>
+                    {soloResult.weaknesses.map((w, i) => (
+                      <p key={i} className="text-xs text-slate-300 flex items-start gap-2 mb-1">
+                        <ArrowDown className="w-3 h-3 text-red-400 mt-0.5 shrink-0" /> {w}
+                      </p>
+                    ))}
+                  </div>
+                  <div className="bg-emerald-500/10 rounded-lg p-4 border border-emerald-500/20">
+                    <p className="text-sm font-medium text-emerald-300 mb-2">Improvement Tips</p>
+                    {soloResult.improvement_tips.map((tip, i) => (
+                      <p key={i} className="text-xs text-slate-300 flex items-start gap-2 mb-1">
+                        <ArrowUp className="w-3 h-3 text-emerald-400 mt-0.5 shrink-0" /> {tip}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Improvement Comparison */}
+              {soloResult.last_session && (
+                <div className="rounded-xl bg-white/5 backdrop-blur-sm border border-white/10 p-6">
+                  <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2"><TrendingUp className="w-5 h-5 text-amber-400" /> Improvement from Last Session</h3>
+                  <div className="grid grid-cols-4 gap-3">
+                    {[
+                      { label: "Overall", current: soloResult.overall_score, prev: soloResult.last_session.overall_score },
+                      { label: "Fluency", current: soloResult.fluency_score, prev: soloResult.last_session.fluency_score },
+                      { label: "Grammar", current: soloResult.grammar_score, prev: soloResult.last_session.grammar_score },
+                      { label: "Delivery", current: soloResult.delivery_score, prev: soloResult.last_session.delivery_score },
+                    ].map(s => {
+                      const diff = s.current - s.prev;
+                      return (
+                        <div key={s.label} className="bg-white/5 rounded-lg p-3 text-center">
+                          <p className="text-xs text-slate-400">{s.label}</p>
+                          <p className="text-lg font-bold text-white">{s.current}</p>
+                          <p className={`text-xs flex items-center justify-center gap-1 ${diff >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                            {diff >= 0 ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />}
+                            {Math.abs(diff).toFixed(1)} pts
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex justify-center gap-4">
+                <Button onClick={startSoloPractice} className="bg-gradient-to-r from-amber-500 to-orange-600 border-0">
+                  <Target className="h-4 w-4 mr-2" /> Practice Again
+                </Button>
+                <Button onClick={() => { setView("dashboard"); }} variant="secondary" className="bg-white/10 text-white border-white/20">
+                  Back to Dashboard
+                </Button>
+              </div>
             </div>
           )}
         </div>

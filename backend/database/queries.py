@@ -286,3 +286,86 @@ def get_gd_leaderboard(connection: MySQLConnection, session_code: str) -> list[d
         "SELECT gl.*, u.name, u.register_number FROM gd_leaderboard gl "
         "JOIN users u ON gl.user_id = u.id WHERE gl.session_code = %s ORDER BY gl.rank_position",
         (session_code,))
+
+
+# ──────────────────────────────────────────────
+# Solo Practice
+# ──────────────────────────────────────────────
+
+def create_solo_session(connection: MySQLConnection, user_id: int, topic: str, session_number: int) -> int:
+    return execute(connection,
+        "INSERT INTO solo_practice_sessions (user_id, topic, status, session_number) VALUES (%s, %s, 'preparation', %s)",
+        (user_id, topic, session_number))
+
+
+def get_solo_session(connection: MySQLConnection, session_id: int) -> dict[str, Any] | None:
+    return fetch_one(connection, "SELECT * FROM solo_practice_sessions WHERE id = %s", (session_id,))
+
+
+def complete_solo_session(connection: MySQLConnection, session_id: int, transcript: str,
+                          overall: float, fluency: float, grammar: float, accent: float,
+                          delivery: float, weaknesses: str, tips: str) -> int:
+    return execute(connection,
+        "UPDATE solo_practice_sessions SET status='completed', transcript=%s, overall_score=%s, "
+        "fluency_score=%s, grammar_score=%s, accent_score=%s, delivery_score=%s, "
+        "weaknesses=%s, improvement_tips=%s, completed_at=CURRENT_TIMESTAMP WHERE id=%s",
+        (transcript, overall, fluency, grammar, accent, delivery, weaknesses, tips, session_id))
+
+
+def get_solo_history(connection: MySQLConnection, user_id: int) -> list[dict[str, Any]]:
+    return fetch_all(connection,
+        "SELECT * FROM solo_practice_sessions WHERE user_id=%s ORDER BY created_at DESC",
+        (user_id,))
+
+
+def get_solo_stats(connection: MySQLConnection, user_id: int) -> dict[str, Any]:
+    row = fetch_one(connection, "SELECT * FROM solo_practice_usage WHERE user_id=%s", (user_id,))
+    if not row:
+        return {"total_sessions": 0, "is_new": True}
+    return {**row, "is_new": False}
+
+
+def upsert_solo_usage(connection: MySQLConnection, user_id: int) -> int:
+    return execute(connection,
+        "INSERT INTO solo_practice_usage (user_id, total_sessions) VALUES (%s, 1) "
+        "ON DUPLICATE KEY UPDATE total_sessions = total_sessions + 1",
+        (user_id,))
+
+
+def get_random_quote(connection: MySQLConnection, user_id: int) -> dict[str, Any] | None:
+    usage = fetch_one(connection, "SELECT seen_quote_ids FROM solo_practice_usage WHERE user_id=%s", (user_id,))
+    seen = set()
+    if usage and usage["seen_quote_ids"]:
+        seen = set(int(x) for x in usage["seen_quote_ids"].split(",") if x)
+
+    if seen:
+        placeholders = ",".join(["%s"] * len(seen))
+        quote = fetch_one(connection,
+            f"SELECT id, quote, author FROM motivational_quotes WHERE id NOT IN ({placeholders}) ORDER BY RAND() LIMIT 1",
+            tuple(seen))
+    else:
+        quote = fetch_one(connection,
+            "SELECT id, quote, author FROM motivational_quotes ORDER BY RAND() LIMIT 1")
+
+    if not quote:
+        # all seen, reset
+        quote = fetch_one(connection,
+            "SELECT id, quote, author FROM motivational_quotes ORDER BY RAND() LIMIT 1")
+        new_seen = str(quote["id"])
+    else:
+        seen.add(quote["id"])
+        new_seen = ",".join(str(x) for x in sorted(seen))
+
+    execute(connection,
+        "INSERT INTO solo_practice_usage (user_id, total_sessions, seen_quote_ids) VALUES (%s, 0, %s) "
+        "ON DUPLICATE KEY UPDATE seen_quote_ids = %s",
+        (user_id, new_seen, new_seen))
+
+    return quote
+
+
+def get_last_solo_session(connection: MySQLConnection, user_id: int) -> dict[str, Any] | None:
+    return fetch_one(connection,
+        "SELECT overall_score, fluency_score, grammar_score, accent_score, delivery_score, weaknesses "
+        "FROM solo_practice_sessions WHERE user_id=%s AND status='completed' ORDER BY created_at DESC LIMIT 1",
+        (user_id,))

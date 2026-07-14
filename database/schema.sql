@@ -170,4 +170,66 @@ INSERT IGNORE INTO gd_topics (id, topic, category) VALUES
 (14, 'Should Plastic Bags Be Banned Completely?', 'environment'),
 (15, 'Women in Leadership Roles', 'society');
 
+-- Solo Practice Sessions
+CREATE TABLE IF NOT EXISTS solo_practice_sessions (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    topic TEXT NOT NULL,
+    status ENUM('preparation', 'speaking', 'completed') NOT NULL DEFAULT 'preparation',
+    transcript TEXT,
+    overall_score DECIMAL(5,2),
+    fluency_score DECIMAL(5,2),
+    grammar_score DECIMAL(5,2),
+    accent_score DECIMAL(5,2),
+    delivery_score DECIMAL(5,2),
+    weaknesses TEXT,
+    improvement_tips TEXT,
+    session_number INT NOT NULL DEFAULT 1,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    completed_at TIMESTAMP NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS solo_practice_usage (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL UNIQUE,
+    total_sessions INT NOT NULL DEFAULT 0,
+    seen_quote_ids TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS motivational_quotes (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    quote TEXT NOT NULL,
+    author VARCHAR(100) NOT NULL DEFAULT 'Unknown'
+);
+
+INSERT IGNORE INTO motivational_quotes (id, quote, author) VALUES
+(1, 'The only way to do great work is to love what you do.', 'Steve Jobs'),
+(2, 'Believe you can and you are halfway there.', 'Theodore Roosevelt'),
+(3, 'Your limitation—it is only your imagination.', 'Unknown'),
+(4, 'Push yourself because no one else is going to do it for you.', 'Unknown'),
+(5, 'Great things never come from comfort zones.', 'Unknown'),
+(6, 'Dream it. Wish it. Do it.', 'Unknown'),
+(7, 'Success is not final, failure is not fatal: it is the courage to continue that counts.', 'Winston Churchill'),
+(8, 'The future depends on what you do today.', 'Mahatma Gandhi'),
+(9, 'It always seems impossible until it is done.', 'Nelson Mandela'),
+(10, 'You are braver than you believe, stronger than you seem, and smarter than you think.', 'A.A. Milne'),
+(11, 'The only person you are destined to become is the person you decide to be.', 'Ralph Waldo Emerson'),
+(12, 'Everything you have ever wanted is on the other side of fear.', 'George Addair'),
+(13, 'Success usually comes to those who are too busy to be looking for it.', 'Henry David Thoreau'),
+(14, 'Don’t watch the clock; do what it does. Keep going.', 'Sam Levenson'),
+(15, 'The secret of getting ahead is getting started.', 'Mark Twain'),
+(16, 'You miss 100% of the shots you don\'t take.', 'Wayne Gretzky'),
+(17, 'Act as if what you do makes a difference. It does.', 'William James'),
+(18, 'What lies behind us and what lies before us are tiny matters compared to what lies within us.', 'Ralph Waldo Emerson'),
+(19, 'The best time to plant a tree was 20 years ago. The second best time is now.', 'Chinese Proverb'),
+(20, 'Hardships often prepare ordinary people for an extraordinary destiny.', 'C.S. Lewis'),
+(21, 'Believe in yourself and all that you are. Know that there is something inside you that is greater than any obstacle.', 'Christian D. Larson'),
+(22, 'The mind is everything. What you think you become.', 'Buddha'),
+(23, 'Strive not to be a success, but rather to be of value.', 'Albert Einstein'),
+(24, 'Do what you can, with what you have, where you are.', 'Theodore Roosevelt'),
+(25, 'The only impossible journey is the one you never begin.', 'Tony Robbins');
+
 -- Students are seeded via backend/seed.py with proper bcrypt hashes

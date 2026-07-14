@@ -2,8 +2,11 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from mysql.connector import MySQLConnection
 
+
 from backend.database.db import get_db
 from backend.database import queries
+from backend.database import queries
+from backend.database.db import get_db
 from backend.models.schemas import LoginRequest, RegisterNumberLogin, RegisterRequest, TokenResponse, UserResponse
 from backend.security import create_access_token, get_current_user, hash_password, verify_password
 
