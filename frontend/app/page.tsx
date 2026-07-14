@@ -1,8 +1,7 @@
 "use client";
 
-import { AlertCircle, Award, Clock, LogOut, MessageSquare, Mic, MicOff, RefreshCw, Trophy, Users, Zap, Loader2, Copy, Check, Target, TrendingUp, ArrowUp, ArrowDown, PanelLeftClose, PanelLeft, Share2, Sparkles, ArrowRight } from "lucide-react";
+import { AlertCircle, Award, Clock, LogOut, MessageSquare, Mic, MicOff, RefreshCw, Trophy, Users, Zap, Loader2, Copy, Check, Target, TrendingUp, ArrowUp, ArrowDown, PanelLeftClose, PanelLeft, Share2, Sparkles } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
 import { Bar, BarChart, CartesianGrid, Cell, Legend, PolarAngleAxis, PolarGrid, Radar, RadarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 import { Button } from "@/components/ui/button";
@@ -22,7 +21,6 @@ export default function Home() {
 
   const [registerNumber, setRegisterNumber] = useState("");
   const [password, setPassword] = useState("");
-  const [loginSuccess, setLoginSuccess] = useState(false);
 
   const [topics, setTopics] = useState<GDTopic[]>([]);
   const [currentTopic, setCurrentTopic] = useState<GDTopic | null>(null);
@@ -103,20 +101,18 @@ export default function Home() {
 
   async function handleLogin() {
     if (!registerNumber.trim()) { setMessage("Enter your register number"); return; }
-    setLoading(true); setMessage(""); setSuccess(""); setLoginSuccess(false);
+    setLoading(true); setMessage(""); setSuccess("");
     try {
       const res = await apiRequest<{ access_token: string; user: User }>("/login/register-number", {
         method: "POST",
         body: JSON.stringify({ register_number: registerNumber, password: password || "Password123" })
       });
-      setLoginSuccess(true);
-      await new Promise(r => setTimeout(r, 800));
       localStorage.setItem("mzgd_token", res.access_token);
       setToken(res.access_token);
       await loadProfile(res.access_token);
     } catch (err: any) {
       setMessage(err.message || "Login failed");
-    } finally { setLoading(false); setLoginSuccess(false); }
+    } finally { setLoading(false); }
   }
 
   async function loadTopics() {
@@ -470,73 +466,21 @@ export default function Home() {
                   className="bg-white/5 border-white/20 text-white placeholder:text-white/40"
                 />
               </div>
-              <motion.button
-                className="relative w-full h-[60px] rounded-2xl text-white font-bold text-base overflow-hidden cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent disabled:opacity-60 disabled:cursor-not-allowed"
-                style={{
-                  background: "linear-gradient(135deg,#8B5CF6 0%,#6366F1 45%,#2563EB 100%)",
-                  boxShadow: "0 10px 30px rgba(37,99,235,0.25), 0 0 18px rgba(139,92,246,0.35)",
-                  border: "1px solid rgba(255,255,255,0.12)",
-                }}
+              <Button
+                className="group relative w-full bg-gradient-to-r from-amber-500 via-orange-500 to-amber-500 hover:from-amber-600 hover:via-orange-600 hover:to-amber-600 text-white border-0 h-12 text-lg font-semibold shadow-lg shadow-orange-500/30 overflow-hidden rounded-xl transition-all duration-300 hover:shadow-orange-400/40 hover:scale-[1.02] active:scale-95"
                 onClick={handleLogin}
-                disabled={loading || loginSuccess}
-                whileHover={!loading && !loginSuccess ? { y: -2, scale: 1.02, boxShadow: "0 14px 40px rgba(37,99,235,0.35), 0 0 25px rgba(139,92,246,0.45)" } : {}}
-                whileTap={!loading && !loginSuccess ? { scale: 0.98, boxShadow: "0 6px 20px rgba(37,99,235,0.2), 0 0 12px rgba(139,92,246,0.3)" } : {}}
-                transition={{ duration: 0.3, ease: "easeOut" }}
-                aria-label="Login to MZ Orator"
+                disabled={loading}
               >
-                {/* Shine animation */}
-                <motion.span
-                  className="absolute inset-0 pointer-events-none"
-                  style={{
-                    background: "linear-gradient(90deg,transparent,rgba(255,255,255,0.15),transparent)",
-                    maskImage: "linear-gradient(90deg,transparent 0%,#000 50%,transparent 100%)",
-                    WebkitMaskImage: "linear-gradient(90deg,transparent 0%,#000 50%,transparent 100%)",
-                  }}
-                  animate={{ x: ["-100%", "300%"] }}
-                  transition={{ duration: 4.5, repeat: Infinity, ease: "linear", delay: 1 }}
-                />
-                {/* Content */}
-                <span className="relative z-10 flex items-center justify-center gap-3 w-full h-full">
-                  <AnimatePresence mode="wait">
-                    {loginSuccess ? (
-                      <motion.span
-                        key="success"
-                        initial={{ scale: 0, opacity: 0 }}
-                        animate={{ scale: 1, opacity: 1 }}
-                        exit={{ scale: 0, opacity: 0 }}
-                        transition={{ duration: 0.25 }}
-                        className="flex items-center gap-2 text-emerald-300"
-                      >
-                        <Check className="w-6 h-6" />
-                        <span>Entered!</span>
-                      </motion.span>
-                    ) : loading ? (
-                      <motion.span
-                        key="loading"
-                        initial={{ opacity: 0, y: 5 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -5 }}
-                        className="flex items-center gap-3"
-                      >
-                        <Loader2 className="w-5 h-5 animate-spin" />
-                        <span>Entering GD Portal...</span>
-                      </motion.span>
-                    ) : (
-                      <motion.span
-                        key="idle"
-                        initial={{ opacity: 0, y: 5 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -5 }}
-                        className="flex items-center gap-3"
-                      >
-                        <Sparkles className="w-5 h-5" />
-                        <span>Enter GD Portal</span>
-                        <ArrowRight className="w-5 h-5" />
-                      </motion.span>
-                    )}
-                  </AnimatePresence>
-                </span>
-              </motion.button>
+                <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700" />
+                {loading ? (
+                  <Loader2 className="h-5 w-5 animate-spin mx-auto" />
+                ) : (
+                  <span className="flex items-center justify-center gap-2">
+                    <Sparkles className="w-5 h-5 animate-shine" />
+                    <span>Enter GD Portal</span>
+                  </span>
+                )}
+              </Button>
               {message && (
                 <div className="flex items-center gap-2 rounded-lg p-3 text-sm bg-red-500/20 text-red-200">
                   <AlertCircle className="h-4 w-4 shrink-0" /> {message}
