@@ -66,7 +66,13 @@ export default function Home() {
   const [liveDetectedText, setLiveDetectedText] = useState("");
   const [gdQuote, setGdQuote] = useState<{ quote: string; author: string } | null>(null);
 
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.innerWidth >= 768) {
+      setSidebarOpen(true);
+    }
+  }, []);
 
   useEffect(() => {
     const savedToken = localStorage.getItem("mzgd_token");
@@ -439,19 +445,19 @@ export default function Home() {
           <img src="/college_image.jpeg" alt="" className="w-full h-full object-cover animate-ken-burns" />
           <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/50 to-black/70" />
         </div>
-        <div className="relative z-10 w-full max-w-md mx-4">
-          <div className="text-center mb-10">
-            <div className="relative inline-block mb-5">
+        <div className="relative z-10 w-full max-w-sm md:max-w-md mx-3 md:mx-4">
+          <div className="text-center mb-6 md:mb-10">
+            <div className="relative inline-block mb-3 md:mb-5">
               <div className="absolute inset-0 bg-gradient-to-r from-purple-500/30 to-blue-500/30 rounded-full blur-3xl animate-pulse" style={{ width: "150%", height: "150%", left: "-25%", top: "-25%" }} />
-              <img src="/MZ_logo_DB.webp" alt="Mount Zion Logo" className="w-28 h-28 rounded-2xl mx-auto shadow-2xl shadow-purple-500/40 object-cover animate-float relative" />
+              <img src="/MZ_logo_DB.webp" alt="Mount Zion Logo" className="w-20 h-20 md:w-28 md:h-28 rounded-2xl mx-auto shadow-2xl shadow-purple-500/40 object-cover animate-float relative" />
             </div>
-            <h1 className="text-4xl font-bold mb-2 text-white drop-shadow-lg">MZ Orator</h1>
-            <p className="text-purple-200/80 drop-shadow">AI Group Discussion Platform</p>
+            <h1 className="text-2xl md:text-4xl font-bold mb-1 md:mb-2 text-white drop-shadow-lg">MZ Orator</h1>
+            <p className="text-xs md:text-base text-purple-200/80 drop-shadow">AI Group Discussion Platform</p>
           </div>
-          <div className="bg-white/10 backdrop-blur-xl rounded-2xl p-8 shadow-2xl border border-white/20">
-            <div className="space-y-5">
+          <div className="bg-white/10 backdrop-blur-xl rounded-2xl p-5 md:p-8 shadow-2xl border border-white/20">
+            <div className="space-y-4 md:space-y-5">
               <div>
-                <label className="block text-sm font-medium mb-1.5 text-purple-200">Register Number</label>
+                <label className="block text-xs md:text-sm font-medium mb-1 md:mb-1.5 text-purple-200">Register Number</label>
                 <Input
                   placeholder="911724205001"
                   value={registerNumber}
@@ -499,14 +505,19 @@ export default function Home() {
   return (
     <div className="min-h-screen flex relative overflow-hidden">
       {/* Animated background */}
-      <div className="absolute inset-0">
+      <div className="fixed inset-0">
         <img src="/animated_gd_bg.jpeg" alt="" className="w-full h-full object-cover animate-ken-burns" />
         <div className="absolute inset-0 bg-black/60" />
       </div>
-      <div className="relative z-10 flex flex-1">
+
+      {/* Mobile backdrop overlay when sidebar open */}
+      {sidebarOpen && (
+        <div className="md:hidden fixed inset-0 z-20 bg-black/50" onClick={() => setSidebarOpen(false)} />
+      )}
+
       {/* Sidebar */}
-      <aside className="bg-slate-900/80 border-r border-white/10 transition-all duration-300 ease-in-out flex flex-col shrink-0" style={{ width: sidebarOpen ? "16rem" : "0", overflow: "hidden", minWidth: sidebarOpen ? "16rem" : "0" }}>
-        <div className="p-5 border-b border-white/10">
+      <aside className={`fixed md:relative z-30 h-full bg-slate-900/95 md:bg-slate-900/80 border-r border-white/10 transition-all duration-300 ease-in-out flex flex-col shrink-0 ${sidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}`} style={{ width: sidebarOpen ? "16rem" : "0", overflow: "hidden", minWidth: sidebarOpen ? "16rem" : "0" }}>
+        <div className="p-4 md:p-5 border-b border-white/10">
           <div className="flex items-center gap-3">
             <img src="/MZ_logo_DB.webp" alt="Mount Zion Logo" className="w-10 h-10 rounded-xl object-cover shadow-lg shrink-0" />
             <div className="truncate">
@@ -529,6 +540,7 @@ export default function Home() {
                 else if (item.view === "gd-create") loadTopics();
                 else if (item.view === "solo-practice") startSoloPractice();
                 else setView(item.view);
+                setSidebarOpen(false);
               }}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all whitespace-nowrap ${view === item.view ? "bg-amber-500/20 text-amber-300 border border-amber-500/30" : "text-slate-300 hover:bg-white/5 hover:text-white"}`}
             >
@@ -546,11 +558,11 @@ export default function Home() {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-auto">
-        <div className="p-6 max-w-6xl mx-auto">
-          {/* Sidebar toggle + theme toggle on top */}
+      <main className="flex-1 overflow-auto min-h-screen">
+        <div className="p-4 md:p-6 max-w-6xl mx-auto">
+          {/* Sidebar toggle on top */}
           <div className="flex items-center justify-between mb-4">
-            <button onClick={() => setSidebarOpen(!sidebarOpen)} className={`p-2 rounded-lg transition-all hover:scale-110 text-white/70 hover:bg-white/10`} title={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}>
+            <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-2 rounded-lg transition-all hover:scale-110 text-white/70 hover:bg-white/10" title={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}>
               {sidebarOpen ? <PanelLeftClose className="w-5 h-5" /> : <PanelLeft className="w-5 h-5" />}
             </button>
             <div className={`text-sm font-medium transition-colors duration-500 text-white/80`}>{view === "dashboard" ? "Dashboard" : view === "gd-create" ? "New GD" : view === "gd-session" ? "GD Session" : view === "gd-leaderboard" ? "Leaderboard" : view === "solo-practice" ? "Solo Practice" : view === "solo-session" ? "Solo Session" : view === "solo-result" ? "Results" : ""}</div>
@@ -840,36 +852,36 @@ export default function Home() {
 
               {/* Ranking Table */}
               {lbData && lbData.rankings.length > 0 && (
-                <div className={`rounded-xl backdrop-blur-xl border transition-colors duration-500 bg-white/[0.08] border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-5 overflow-x-auto`}>
+                <div className="rounded-xl backdrop-blur-xl border transition-colors duration-500 bg-white/[0.08] border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-4 md:p-5 overflow-x-auto">
                   <h3 className="text-sm font-semibold text-white mb-3 flex items-center gap-2"><Award className="w-4 h-4 text-amber-400" /> Rankings</h3>
-                  <table className="w-full text-sm text-left">
+                  <table className="w-full text-xs md:text-sm text-left min-w-[600px]">
                     <thead>
                       <tr className="text-slate-400 text-xs border-b border-white/10">
                         <th className="pb-2 pr-2">Rank</th>
                         <th className="pb-2 pr-2">Name</th>
-                        <th className="pb-2 pr-2">Department</th>
-                        <th className="pb-2 pr-2">Year</th>
-                        <th className="pb-2 pr-2">Overall Score</th>
+                        <th className="pb-2 pr-2 hidden md:table-cell">Department</th>
+                        <th className="pb-2 pr-2 hidden md:table-cell">Year</th>
+                        <th className="pb-2 pr-2">Score</th>
                         <th className="pb-2 pr-2">Grammar</th>
                         <th className="pb-2 pr-2">Fluency</th>
-                        <th className="pb-2 pr-2">Confidence</th>
-                        <th className="pb-2 pr-2">Activity</th>
+                        <th className="pb-2 pr-2 hidden md:table-cell">Confidence</th>
+                        <th className="pb-2 pr-2 hidden md:table-cell">Activity</th>
                       </tr>
                     </thead>
                     <tbody>
                       {lbData.rankings.map((r) => (
                         <tr key={r.id} className={`border-b border-white/5 hover:bg-white/[0.06] transition ${r.rank <= 3 ? "bg-amber-500/10" : ""}`}>
                           <td className="py-3 pr-2">
-                            <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold ${r.rank === 1 ? "bg-amber-500 text-white" : r.rank === 2 ? "bg-slate-400 text-white" : r.rank === 3 ? "bg-orange-500 text-white" : "bg-white/10 text-slate-300"}`}>{r.rank}</span>
+                            <span className={`inline-flex items-center justify-center w-6 h-6 md:w-7 md:h-7 rounded-full text-xs font-bold ${r.rank === 1 ? "bg-amber-500 text-white" : r.rank === 2 ? "bg-slate-400 text-white" : r.rank === 3 ? "bg-orange-500 text-white" : "bg-white/10 text-slate-300"}`}>{r.rank}</span>
                           </td>
-                          <td className="py-3 pr-2 text-white font-medium whitespace-nowrap">{r.name}</td>
-                          <td className="py-3 pr-2 text-slate-300">{r.department}</td>
-                          <td className="py-3 pr-2 text-slate-300">{r.year}</td>
-                          <td className="py-3 pr-2 text-amber-300 font-semibold">{r.total_credits}</td>
-                          <td className="py-3 pr-2 text-emerald-300">{r.grammar.toFixed(1)}</td>
-                          <td className="py-3 pr-2 text-purple-300">{r.fluency.toFixed(1)}</td>
-                          <td className="py-3 pr-2 text-cyan-300">{r.relevance.toFixed(1)}</td>
-                          <td className="py-3 pr-2 text-slate-300">{r.sessions_completed}</td>
+                          <td className="py-3 pr-2 text-white font-medium whitespace-nowrap text-xs md:text-sm">{r.name}</td>
+                          <td className="py-3 pr-2 text-slate-300 text-xs md:text-sm hidden md:table-cell">{r.department}</td>
+                          <td className="py-3 pr-2 text-slate-300 text-xs md:text-sm hidden md:table-cell">{r.year}</td>
+                          <td className="py-3 pr-2 text-amber-300 font-semibold text-xs md:text-sm">{r.total_credits}</td>
+                          <td className="py-3 pr-2 text-emerald-300 text-xs md:text-sm">{r.grammar.toFixed(1)}</td>
+                          <td className="py-3 pr-2 text-purple-300 text-xs md:text-sm">{r.fluency.toFixed(1)}</td>
+                          <td className="py-3 pr-2 text-cyan-300 text-xs md:text-sm hidden md:table-cell">{r.relevance.toFixed(1)}</td>
+                          <td className="py-3 pr-2 text-slate-300 text-xs md:text-sm hidden md:table-cell">{r.sessions_completed}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -1156,7 +1168,6 @@ export default function Home() {
           )}
         </div>
       </main>
-    </div>
     </div>
   );
 }
