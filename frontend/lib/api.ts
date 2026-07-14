@@ -117,6 +117,49 @@ export type GDLeaderboardEntry = {
   register_number: string;
 };
 
+export type LeaderboardRanking = {
+  rank: number;
+  id: number;
+  name: string;
+  register_number: string;
+  department: string;
+  year: string;
+  overall_score: number;
+  grammar: number;
+  fluency: number;
+  accent: number;
+  relevance: number;
+  content_quality: number;
+  total_credits: number;
+  sessions_completed: number;
+};
+
+export type LeaderboardStats = {
+  top_score: number;
+  active_participants: number;
+  average_score: number;
+  total_interviews: number;
+};
+
+export type AllTimeAchiever = {
+  rank: number;
+  id: number;
+  name: string;
+  register_number: string;
+  department: string;
+  year: string;
+  total_credits: number;
+  sessions_completed: number;
+};
+
+export type ComprehensiveLeaderboard = {
+  departments: string[];
+  years: string[];
+  stats: LeaderboardStats;
+  rankings: LeaderboardRanking[];
+  all_time_achievers: AllTimeAchiever[];
+};
+
 export async function apiRequest<T>(path: string, options: RequestInit = {}, token?: string): Promise<T> {
   const response = await fetch(`${API_URL}${path}`, {
     ...options,

@@ -7,7 +7,7 @@ import { Bar, BarChart, CartesianGrid, Cell, Legend, PolarAngleAxis, PolarGrid, 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { GDLeaderboardEntry, GDSession, GDTopic, Progress, SoloQuote, SoloStartResponse, SoloSubmitResponse, User, apiRequest } from "@/lib/api";
+import { AllTimeAchiever, ComprehensiveLeaderboard, GDLeaderboardEntry, GDSession, GDTopic, LeaderboardRanking, LeaderboardStats, Progress, SoloQuote, SoloStartResponse, SoloSubmitResponse, User, apiRequest } from "@/lib/api";
 
 type PageView = "login" | "dashboard" | "gd-create" | "gd-session" | "gd-leaderboard" | "solo-practice" | "solo-session" | "solo-result";
 
@@ -39,6 +39,12 @@ export default function Home() {
   const [selectedUserIds, setSelectedUserIds] = useState<number[]>([]);
   const [inviteMessage, setInviteMessage] = useState("");
   const [inviteTarget, setInviteTarget] = useState(""); // session_code being invited to
+
+  // Comprehensive leaderboard state
+  const [lbData, setLbData] = useState<ComprehensiveLeaderboard | null>(null);
+  const [lbDepartment, setLbDepartment] = useState("ALL");
+  const [lbYear, setLbYear] = useState("ALL");
+  const [lbTimeframe, setLbTimeframe] = useState("all");
 
   // Solo Practice state
   const [soloSession, setSoloSession] = useState<SoloStartResponse | null>(null);
@@ -85,6 +91,13 @@ export default function Home() {
     } catch { localStorage.removeItem("mzgd_token"); setView("login"); }
   }
 
+  async function refreshSessions() {
+    try {
+      const s = await apiRequest<GDSession[]>("/gd/sessions", {}, token).catch(() => []);
+      setSessions(s);
+    } catch {}
+  }
+
   async function handleLogin() {
     if (!registerNumber.trim()) { setMessage("Enter your register number"); return; }
     setLoading(true); setMessage(""); setSuccess("");
@@ -114,6 +127,18 @@ export default function Home() {
     const users = await apiRequest<{ id: number; name: string; register_number: string }[]>("/users", {}, token).catch(() => []);
     setAllUsers(users.filter(u => u.id !== user?.id));
     setView("gd-create");
+  }
+
+  async function loadLeaderboard(department = lbDepartment, year = lbYear, timeframe = lbTimeframe) {
+    try {
+      const params = new URLSearchParams({ department, year, timeframe });
+      const data = await apiRequest<ComprehensiveLeaderboard>(`/gd/leaderboard/comprehensive?${params}`, {}, token);
+      setLbData(data);
+      setLbDepartment(department);
+      setLbYear(year);
+      setLbTimeframe(timeframe);
+      setView("gd-leaderboard");
+    } catch (err: any) { setMessage(err.message); }
   }
 
   async function doRefresh() {
@@ -163,6 +188,7 @@ export default function Home() {
       setSuccess(res.message);
       setSelectedUserIds([]);
       setInviteTarget("");
+      await refreshSessions();
     } catch (err: any) { setMessage(err.message); }
     finally { setLoading(false); }
   }
@@ -488,12 +514,12 @@ export default function Home() {
             { icon: <Users className="w-5 h-5 shrink-0" />, label: "Dashboard", view: "dashboard" as PageView },
             { icon: <MessageSquare className="w-5 h-5 shrink-0" />, label: "GD", view: "gd-create" as PageView },
             { icon: <Target className="w-5 h-5 shrink-0" />, label: "Solo Practice", view: "solo-practice" as PageView },
-            { icon: <Trophy className="w-5 h-5 shrink-0" />, label: "Leaderboard", view: "gd-leaderboard" as PageView, badge: leaderboard.length > 0 ? `${leaderboard.length}` : undefined },
-          ].map((item) => (
+            { icon: <Trophy className="w-5 h-5 shrink-0" />, label: "Leaderboard", view: "gd-leaderboard" as PageView },
+          ].map((item: { icon: React.ReactNode; label: string; view: PageView; badge?: string }) => (
             <button
               key={item.label}
               onClick={() => {
-                if (item.view === "gd-leaderboard") { if (activeSession) openSession(activeSession); else setView("dashboard"); }
+                if (item.view === "gd-leaderboard") { loadLeaderboard(); }
                 else if (item.view === "gd-create") loadTopics();
                 else if (item.view === "solo-practice") startSoloPractice();
                 else setView(item.view);
@@ -588,7 +614,7 @@ export default function Home() {
                               </label>
                             ))}
                           </div>
-                          <button onClick={() => inviteSelectedUsers(s.session_code)} disabled={loading || selectedUserIds.length === 0} className="w-full text-xs py-1.5 rounded-lg bg-gradient-to-r from-emerald-500 to-green-600 text-white disabled:opacity-50">
+                          <button onClick={(e) => { e.stopPropagation(); inviteSelectedUsers(s.session_code); }} disabled={loading || selectedUserIds.length === 0} className="w-full text-xs py-1.5 rounded-lg bg-gradient-to-r from-emerald-500 to-green-600 text-white disabled:opacity-50">
                             {loading ? <Loader2 className="h-3 w-3 inline animate-spin mr-1" /> : <Users className="h-3 w-3 inline mr-1" />} Send Invite ({selectedUserIds.length})
                           </button>
                         </div>
@@ -642,7 +668,7 @@ export default function Home() {
                         ))}
                       </div>
                       <div className="flex gap-2">
-                        <Button onClick={inviteSelectedUsers} disabled={loading || selectedUserIds.length === 0} className="flex-1 bg-gradient-to-r from-emerald-500 to-green-600 border-0 text-sm">
+                        <Button onClick={() => inviteSelectedUsers()} disabled={loading || selectedUserIds.length === 0} className="flex-1 bg-gradient-to-r from-emerald-500 to-green-600 border-0 text-sm">
                           {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Users className="h-4 w-4" />} Send Invite ({selectedUserIds.length})
                         </Button>
                         <Button onClick={() => copyCode(lastCreatedCode)} className="bg-white/10 border border-white/20 text-white hover:bg-white/20 text-sm">
@@ -676,7 +702,13 @@ export default function Home() {
                 <div className="flex items-center justify-between mb-4">
                   <div>
                     <h2 className="text-xl font-bold text-white">{activeSession.topic}</h2>
-                    <p className="text-sm text-slate-400">Code: {activeSession.session_code} · {activeSession.status}</p>
+                    <p className="text-sm text-slate-400 flex items-center gap-1.5">
+                      Code: <code className="font-mono text-white/80">{activeSession.session_code}</code>
+                      <button onClick={() => copyCode(activeSession.session_code)} className="p-0.5 rounded hover:bg-white/10 text-emerald-300 transition" title="Copy code">
+                        {copiedCopyCode === activeSession.session_code ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                      </button>
+                      · {activeSession.status}
+                    </p>
                   </div>
                   <div className="flex gap-2">
                     {activeSession.status === "waiting" && (
@@ -744,49 +776,118 @@ export default function Home() {
           {/* Leaderboard View */}
           {view === "gd-leaderboard" && (
             <div className="space-y-6">
-              {activeSession && (
-                <div className={`rounded-xl backdrop-blur-xl border transition-colors duration-500 bg-white/[0.08] border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-5`}>
-                  <div className="flex items-center justify-between mb-4">
-                    <div>
-                      <h2 className="text-xl font-bold text-white flex items-center gap-2"><Trophy className="w-6 h-6 text-amber-400" /> Leaderboard</h2>
-                      <p className="text-sm text-slate-400">{activeSession.topic} · Code: {activeSession.session_code}</p>
+              {/* Header */}
+              <div className={`rounded-xl backdrop-blur-xl border transition-colors duration-500 bg-white/[0.08] border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6`}>
+                <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+                  <h2 className="text-xl font-bold text-white flex items-center gap-2"><Trophy className="w-6 h-6 text-amber-400" /> Leaderboard</h2>
+                  <Button onClick={() => setView("dashboard")} variant="secondary" className="bg-white/10 text-white border-white/20 text-sm">Back</Button>
+                </div>
+                {/* Filter Pills */}
+                <div className="flex flex-wrap gap-2 mb-2">
+                  <span className="text-xs text-slate-400 mr-1 self-center">Department:</span>
+                  {(lbData?.departments || ["ALL"]).map(d => (
+                    <button key={d} onClick={() => loadLeaderboard(d, lbYear, lbTimeframe)}
+                      className={`text-xs px-3 py-1 rounded-full border transition ${lbDepartment === d ? "bg-amber-500/30 border-amber-500/50 text-amber-200" : "bg-white/5 border-white/10 text-slate-300 hover:bg-white/10"}`}>{d}</button>
+                  ))}
+                </div>
+                <div className="flex flex-wrap gap-2 mb-2">
+                  <span className="text-xs text-slate-400 mr-1 self-center">Year:</span>
+                  {(lbData?.years || ["ALL"]).map(y => (
+                    <button key={y} onClick={() => loadLeaderboard(lbDepartment, y, lbTimeframe)}
+                      className={`text-xs px-3 py-1 rounded-full border transition ${lbYear === y ? "bg-amber-500/30 border-amber-500/50 text-amber-200" : "bg-white/5 border-white/10 text-slate-300 hover:bg-white/10"}`}>{y}</button>
+                  ))}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <span className="text-xs text-slate-400 mr-1 self-center">Time:</span>
+                  {[{ v: "all", l: "All Time" }, { v: "this_month", l: "This Month" }, { v: "past_month", l: "Past Month" }].map(t => (
+                    <button key={t.v} onClick={() => loadLeaderboard(lbDepartment, lbYear, t.v)}
+                      className={`text-xs px-3 py-1 rounded-full border transition ${lbTimeframe === t.v ? "bg-amber-500/30 border-amber-500/50 text-amber-200" : "bg-white/5 border-white/10 text-slate-300 hover:bg-white/10"}`}>{t.l}</button>
+                  ))}
+                  <span className="text-xs text-slate-400 ml-auto self-center">Overall Score by Credit Points</span>
+                </div>
+              </div>
+
+              {/* Stats Cards */}
+              {lbData && (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {[
+                    { label: "Top Score", value: lbData.stats.top_score, icon: <Trophy className="w-5 h-5" />, color: "text-amber-400" },
+                    { label: "Active Participants", value: lbData.stats.active_participants, icon: <Users className="w-5 h-5" />, color: "text-emerald-400" },
+                    { label: "Average Score", value: lbData.stats.average_score, icon: <TrendingUp className="w-5 h-5" />, color: "text-purple-400" },
+                    { label: "Total Interviews Today", value: lbData.stats.total_interviews, icon: <MessageSquare className="w-5 h-5" />, color: "text-cyan-400" },
+                  ].map(c => (
+                    <div key={c.label} className="rounded-xl backdrop-blur-xl bg-white/[0.08] border border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-4">
+                      <div className="flex items-center gap-2 text-slate-400 text-xs mb-2">{c.icon} {c.label}</div>
+                      <p className={`text-2xl font-bold ${c.color}`}>{typeof c.value === "number" && c.label !== "Active Participants" && c.label !== "Total Interviews Today" ? c.value.toFixed(1) : c.value}</p>
                     </div>
-                    <Button onClick={() => { setView("dashboard"); }} variant="secondary" className={`transition-colors duration-500 bg-white/10 text-white border-white/20`}>Back</Button>
-                  </div>
-                  {leaderboard.length === 0 && <p className="text-slate-400 text-sm">Leaderboard not ready yet. Finish the GD first.</p>}
-                  {leaderboard.length > 0 && (
-                    <div className="space-y-2">
-                      {leaderboard.map((entry, idx) => (
-                        <div key={entry.id} className={`flex items-center gap-4 p-4 rounded-xl ${idx === 0 ? "bg-amber-500/20 border border-amber-500/30" : idx === 1 ? "bg-slate-400/10 border border-slate-400/20" : idx === 2 ? "bg-orange-500/10 border border-orange-500/20" : "bg-white/5"}`}>
-                          <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg font-bold ${idx === 0 ? "bg-amber-500 text-white" : idx === 1 ? "bg-slate-400 text-white" : idx === 2 ? "bg-orange-500 text-white" : "bg-white/10 text-slate-300"}`}>{entry.rank_position}</div>
-                          <div className="flex-1">
-                            <p className="text-sm font-semibold text-white">{entry.name}</p>
-                            <p className="text-xs text-slate-400">{entry.register_number}</p>
-                          </div>
-                          <div className="text-right">
-                            <p className="text-lg font-bold text-amber-300">{entry.overall_score}</p>
-                            <p className="text-xs text-emerald-400">{entry.credential_points} pts</p>
-                          </div>
-                        </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Ranking Table */}
+              {lbData && lbData.rankings.length > 0 && (
+                <div className={`rounded-xl backdrop-blur-xl border transition-colors duration-500 bg-white/[0.08] border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-5 overflow-x-auto`}>
+                  <h3 className="text-sm font-semibold text-white mb-3 flex items-center gap-2"><Award className="w-4 h-4 text-amber-400" /> Rankings</h3>
+                  <table className="w-full text-sm text-left">
+                    <thead>
+                      <tr className="text-slate-400 text-xs border-b border-white/10">
+                        <th className="pb-2 pr-2">Rank</th>
+                        <th className="pb-2 pr-2">Name</th>
+                        <th className="pb-2 pr-2">Department</th>
+                        <th className="pb-2 pr-2">Year</th>
+                        <th className="pb-2 pr-2">Overall Score</th>
+                        <th className="pb-2 pr-2">Grammar</th>
+                        <th className="pb-2 pr-2">Fluency</th>
+                        <th className="pb-2 pr-2">Confidence</th>
+                        <th className="pb-2 pr-2">Activity</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {lbData.rankings.map((r) => (
+                        <tr key={r.id} className={`border-b border-white/5 hover:bg-white/[0.06] transition ${r.rank <= 3 ? "bg-amber-500/10" : ""}`}>
+                          <td className="py-3 pr-2">
+                            <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold ${r.rank === 1 ? "bg-amber-500 text-white" : r.rank === 2 ? "bg-slate-400 text-white" : r.rank === 3 ? "bg-orange-500 text-white" : "bg-white/10 text-slate-300"}`}>{r.rank}</span>
+                          </td>
+                          <td className="py-3 pr-2 text-white font-medium whitespace-nowrap">{r.name}</td>
+                          <td className="py-3 pr-2 text-slate-300">{r.department}</td>
+                          <td className="py-3 pr-2 text-slate-300">{r.year}</td>
+                          <td className="py-3 pr-2 text-amber-300 font-semibold">{r.total_credits}</td>
+                          <td className="py-3 pr-2 text-emerald-300">{r.grammar.toFixed(1)}</td>
+                          <td className="py-3 pr-2 text-purple-300">{r.fluency.toFixed(1)}</td>
+                          <td className="py-3 pr-2 text-cyan-300">{r.relevance.toFixed(1)}</td>
+                          <td className="py-3 pr-2 text-slate-300">{r.sessions_completed}</td>
+                        </tr>
                       ))}
-                    </div>
-                  )}
-                  {leaderboard.length > 0 && (
-                    <div className="mt-4 rounded-lg bg-white/5 p-4">
-                      <p className="text-sm font-medium text-slate-300 mb-3">Score Breakdown</p>
-                      <div className="h-48">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <BarChart data={leaderboard.map(e => ({ name: e.name.split(" ")[0], score: e.overall_score, points: e.credential_points }))}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#ffffff20" />
-                            <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#94a3b8" }} />
-                            <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: "#94a3b8" }} />
-                            <Tooltip contentStyle={{ background: "#1e293b", border: "1px solid #ffffff20", borderRadius: "8px", color: "#fff" }} />
-                            <Bar dataKey="score" fill="#f59e0b" radius={[4, 4, 0, 0]} />
-                          </BarChart>
-                        </ResponsiveContainer>
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {lbData && lbData.rankings.length === 0 && (
+                <div className={`rounded-xl backdrop-blur-xl border transition-colors duration-500 bg-white/[0.08] border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6 text-center`}>
+                  <p className="text-slate-400 text-sm">No evaluations found for the selected filters.</p>
+                </div>
+              )}
+
+              {/* All Time Achievers */}
+              {lbData && lbData.all_time_achievers.length > 0 && (
+                <div className={`rounded-xl backdrop-blur-xl border transition-colors duration-500 bg-white/[0.08] border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-5`}>
+                  <h3 className="text-sm font-semibold text-white mb-3 flex items-center gap-2"><Award className="w-4 h-4 text-amber-400" /> All Time Achievers</h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {lbData.all_time_achievers.map((a) => (
+                      <div key={a.id} className={`flex items-center gap-3 p-3 rounded-xl ${a.rank === 1 ? "bg-gradient-to-r from-amber-500/20 to-orange-600/10 border border-amber-500/30" : "bg-white/[0.06] border border-white/10"}`}>
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg font-bold shrink-0 ${a.rank === 1 ? "bg-amber-500 text-white" : a.rank === 2 ? "bg-slate-400 text-white" : a.rank === 3 ? "bg-orange-500 text-white" : "bg-white/10 text-slate-300"}`}>{a.rank}</div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-white truncate">{a.name}</p>
+                          <p className="text-xs text-slate-400">{a.department} · {a.year}</p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="text-sm font-bold text-emerald-300">{a.total_credits}</p>
+                          <p className="text-xs text-slate-400">{a.sessions_completed} sessions</p>
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    ))}
+                  </div>
                 </div>
               )}
             </div>

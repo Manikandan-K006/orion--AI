@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from datetime import datetime, timedelta
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from mysql.connector import MySQLConnection
 
 from backend.ai.evaluation import evaluate_transcript
@@ -221,3 +223,56 @@ def get_leaderboard(
     connection: MySQLConnection = Depends(get_db),
 ) -> list[dict]:
     return queries.get_gd_leaderboard(connection, session_code)
+
+
+DEPARTMENTS = ["ALL", "IT", "AIDS", "CSE", "ECE", "EEE", "MECH", "CIVIL"]
+YEARS = ["ALL", "1st Year", "2nd Year", "3rd Year", "4th Year"]
+
+
+@router.get("/leaderboard/comprehensive")
+def get_comprehensive_leaderboard(
+    department: str = Query("ALL"),
+    year: str = Query("ALL"),
+    timeframe: str = Query("all"),
+    _: dict = Depends(get_current_user),
+    connection: MySQLConnection = Depends(get_db),
+) -> dict:
+    if department not in DEPARTMENTS:
+        raise HTTPException(status_code=400, detail=f"Invalid department. Choose from {DEPARTMENTS}")
+    if year not in YEARS:
+        raise HTTPException(status_code=400, detail=f"Invalid year. Choose from {YEARS}")
+
+    start_date = None
+    end_date = None
+    now = datetime.utcnow()
+    if timeframe == "this_month":
+        start_date = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0).isoformat()
+        end_date = None
+    elif timeframe == "past_month":
+        first_of_this = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        last_month_end = first_of_this - timedelta(seconds=1)
+        last_month_start = last_month_end.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        start_date = last_month_start.isoformat()
+        end_date = first_of_this.isoformat()
+
+    rankings = queries.get_comprehensive_leaderboard(connection, department, year, start_date, end_date)
+    stats = queries.get_leaderboard_stats(connection, department, year, start_date, end_date)
+    achievers = queries.get_all_time_achievers(connection)
+
+    # Add rank to rankings
+    for i, r in enumerate(rankings, 1):
+        r["rank"] = i
+        for col in ("overall_score", "grammar", "fluency", "accent", "relevance", "content_quality", "total_credits"):
+            r[col] = round(float(r[col]), 2)
+
+    for i, a in enumerate(achievers, 1):
+        a["rank"] = i
+        a["total_credits"] = round(float(a["total_credits"]), 2)
+
+    return {
+        "departments": DEPARTMENTS,
+        "years": YEARS,
+        "stats": stats,
+        "rankings": rankings,
+        "all_time_achievers": achievers,
+    }
