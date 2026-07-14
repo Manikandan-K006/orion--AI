@@ -178,7 +178,7 @@ export default function Home() {
     if (!activeSession) return;
     setLoading(true);
     try {
-      const res = await apiRequest(`/gd/sessions/${activeSession.session_code}/start`, { method: "POST" }, token);
+      const res = await apiRequest<{ message: string; topic: string; preparation_minutes: number; speaking_minutes: number }>(`/gd/sessions/${activeSession.session_code}/start`, { method: "POST" }, token);
       setSuccess(res.message);
       setIsPrepPhase(true);
       setPrepSeconds(240);
@@ -210,7 +210,7 @@ export default function Home() {
     if (!activeSession || !transcript.trim()) { setMessage("Write your transcript first"); return; }
     setLoading(true);
     try {
-      const res = await apiRequest(`/gd/sessions/${activeSession.session_code}/submit`, {
+      const res = await apiRequest<{ message: string; overall_score: number; credential_points: number }>(`/gd/sessions/${activeSession.session_code}/submit`, {
         method: "POST", body: JSON.stringify({ transcript })
       }, token);
       setSuccess(`${res.message} — Score: ${res.overall_score}, Points: ${res.credential_points}`);
