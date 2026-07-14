@@ -8,8 +8,8 @@
 
 body {
   margin: 0;
-  background: #f7f9fb;
-  color: #17202a;
+  background: #0f172a;
+  color: #ffffff;
 }
 
 button,
@@ -17,4 +17,45 @@ input,
 textarea,
 select {
   font: inherit;
+}
+
+/* ─── Theme System ─── */
+[data-theme="light"] .text-white,
+[data-theme="light"] .text-white\/80,
+[data-theme="light"] .text-white\/50 {
+  color: #1e293b !important;
+}
+[data-theme="light"] .text-slate-400,
+[data-theme="light"] .text-slate-300,
+[data-theme="light"] .text-slate-200 {
+  color: #64748b !important;
+}
+[data-theme="light"] .bg-white\/5,
+[data-theme="light"] .bg-white\/10 {
+  background-color: rgba(255, 255, 255, 0.85) !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+}
+[data-theme="light"] .border-white\/10,
+[data-theme="light"] .border-white\/20 {
+  border-color: rgba(0, 0, 0, 0.1) !important;
+}
+[data-theme="light"] .placeholder\:text-white\/40::placeholder {
+  color: #94a3b8 !important;
+}
+
+/* ─── Animations ─── */
+@keyframes shine {
+  0%, 100% { filter: brightness(1) drop-shadow(0 0 4px #f59e0b); }
+  50% { filter: brightness(1.5) drop-shadow(0 0 20px #f59e0b); }
+}
+
+@keyframes ken-burns {
+  0% { transform: scale(1) translate(0, 0); }
+  50% { transform: scale(1.08) translate(-1%, -1%); }
+  100% { transform: scale(1.04) translate(1%, 1%); }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
 }

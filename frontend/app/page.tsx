@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircle, Award, Clock, LogOut, MessageSquare, Mic, MicOff, RefreshCw, Trophy, Users, Zap, Loader2, Copy, Check, Target, TrendingUp, ArrowUp, ArrowDown } from "lucide-react";
+import { AlertCircle, Award, Clock, LogOut, MessageSquare, Mic, MicOff, RefreshCw, Trophy, Users, Zap, Loader2, Copy, Check, Target, TrendingUp, ArrowUp, ArrowDown, Sun, Moon, PanelLeftClose, PanelLeft, Sparkles } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Bar, BarChart, CartesianGrid, Cell, Legend, PolarAngleAxis, PolarGrid, Radar, RadarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
@@ -53,6 +53,21 @@ export default function Home() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const [liveDetectedText, setLiveDetectedText] = useState("");
+
+  // Theme + Sidebar state
+  const [isDarkMode, setIsDarkMode] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+
+  useEffect(() => {
+    const saved = localStorage.getItem("mzgd_theme");
+    if (saved) setIsDarkMode(saved === "dark");
+    document.documentElement.classList.toggle("light", saved === "light");
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem("mzgd_theme", isDarkMode ? "dark" : "light");
+    document.documentElement.classList.toggle("light", !isDarkMode);
+  }, [isDarkMode]);
 
   useEffect(() => {
     const savedToken = localStorage.getItem("mzgd_token");
@@ -372,48 +387,63 @@ export default function Home() {
 
   if (!user) {
     return (
-      <div className="min-h-screen flex items-center justify-center relative overflow-hidden">
+      <div data-theme={isDarkMode ? "dark" : "light"} className="min-h-screen flex items-center justify-center relative overflow-hidden">
         <div className="absolute inset-0">
-          <img src="/college_image.jpeg" alt="" className="w-full h-full object-cover" />
-          <div className="absolute inset-0 bg-black/60" />
+          <img src="/college_image.jpeg" alt="" className="w-full h-full object-cover animate-ken-burns" />
+          <div className={`absolute inset-0 transition-colors duration-500 ${isDarkMode ? "bg-black/60" : "bg-white/40"}`} />
         </div>
+        {/* Theme toggle on login page */}
+        <button
+          onClick={() => setIsDarkMode(!isDarkMode)}
+          className="absolute top-5 right-5 z-20 p-2.5 rounded-xl transition-all duration-300 hover:scale-110"
+          style={{ background: isDarkMode ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)", backdropFilter: "blur(8px)" }}
+        >
+          {isDarkMode ? <Sun className="w-5 h-5 text-amber-300" /> : <Moon className="w-5 h-5 text-slate-700" />}
+        </button>
         <div className="relative z-10 w-full max-w-md mx-4">
           <div className="text-center mb-8">
-            <img src="/MZ_logo_DB.webp" alt="Mount Zion Logo" className="w-24 h-24 rounded-2xl mx-auto mb-4 shadow-lg shadow-purple-500/30 object-cover animate-bounce-slow" />
-            <h1 className="text-4xl font-bold text-white mb-2">Mount Zion GD</h1>
-            <p className="text-purple-200/80">Group Discussion Assessment Platform</p>
+            <img src="/MZ_logo_DB.webp" alt="Mount Zion Logo" className="w-24 h-24 rounded-2xl mx-auto mb-4 shadow-lg shadow-purple-500/30 object-cover animate-float" />
+            <h1 className={`text-4xl font-bold mb-2 transition-colors duration-500 ${isDarkMode ? "text-white" : "text-slate-900"}`}>Mount Zion GD</h1>
+            <p className={`transition-colors duration-500 ${isDarkMode ? "text-purple-200/80" : "text-slate-600"}`}>Group Discussion Assessment Platform</p>
           </div>
-          <div className="bg-white/10 backdrop-blur-xl rounded-2xl p-8 border border-white/20 shadow-2xl">
+          <div className={`rounded-2xl p-8 shadow-2xl border transition-colors duration-500 ${isDarkMode ? "bg-white/10 backdrop-blur-xl border-white/20" : "bg-white/90 backdrop-blur-xl border-slate-200"}`}>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-purple-200 mb-1">Register Number</label>
+                <label className={`block text-sm font-medium mb-1 transition-colors duration-500 ${isDarkMode ? "text-purple-200" : "text-slate-700"}`}>Register Number</label>
                 <Input
                   placeholder="911724205001"
                   value={registerNumber}
                   onChange={(e) => setRegisterNumber(e.target.value)}
-                  className="bg-white/5 border-white/20 text-white placeholder:text-white/40"
+                  className={`transition-colors duration-500 ${isDarkMode ? "bg-white/5 border-white/20 text-white placeholder:text-white/40" : "bg-white border-slate-300 text-slate-900 placeholder:text-slate-400"}`}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-purple-200 mb-1">Password</label>
+                <label className={`block text-sm font-medium mb-1 transition-colors duration-500 ${isDarkMode ? "text-purple-200" : "text-slate-700"}`}>Password</label>
                 <Input
                   type="password"
                   placeholder="Default: Password123"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="bg-white/5 border-white/20 text-white placeholder:text-white/40"
+                  className={`transition-colors duration-500 ${isDarkMode ? "bg-white/5 border-white/20 text-white placeholder:text-white/40" : "bg-white border-slate-300 text-slate-900 placeholder:text-slate-400"}`}
                 />
               </div>
               <Button
-                className="w-full bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white border-0 h-12 text-lg font-semibold shadow-lg shadow-orange-500/30"
+                className="group relative w-full bg-gradient-to-r from-amber-500 via-orange-500 to-amber-500 hover:from-amber-600 hover:via-orange-600 hover:to-amber-600 text-white border-0 h-12 text-lg font-semibold shadow-lg shadow-orange-500/30 overflow-hidden rounded-xl transition-all duration-300 hover:shadow-orange-400/40 hover:scale-[1.02] active:scale-95"
                 onClick={handleLogin}
                 disabled={loading}
               >
-                {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Zap className="h-5 w-5" />}
-                Enter GD Portal
+                <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700" />
+                {loading ? (
+                  <Loader2 className="h-5 w-5 animate-spin mx-auto" />
+                ) : (
+                  <span className="flex items-center justify-center gap-2">
+                    <Sparkles className="w-5 h-5 animate-shine" />
+                    <span>Enter GD Portal</span>
+                  </span>
+                )}
               </Button>
               {message && (
-                <div className="flex items-center gap-2 rounded-lg bg-red-500/20 p-3 text-sm text-red-200">
+                <div className={`flex items-center gap-2 rounded-lg p-3 text-sm transition-colors duration-500 ${isDarkMode ? "bg-red-500/20 text-red-200" : "bg-red-100 text-red-700"}`}>
                   <AlertCircle className="h-4 w-4 shrink-0" /> {message}
                 </div>
               )}
@@ -425,29 +455,31 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen flex relative overflow-hidden">
+    <div data-theme={isDarkMode ? "dark" : "light"} className={`min-h-screen flex relative overflow-hidden transition-colors duration-500`}>
+      {/* Animated backgrounds */}
       <div className="absolute inset-0">
-        <img src="/college_image.jpeg" alt="" className="w-full h-full object-cover" />
-        <div className="absolute inset-0 bg-black/60" />
+        <img src="/college_image.jpeg" alt="" className="w-full h-full object-cover animate-ken-burns opacity-60" />
+        <img src="/animated_gd_bg.jpeg" alt="" className="absolute inset-0 w-full h-full object-cover animate-ken-burns opacity-40" style={{ animationDirection: "reverse", animationDuration: "25s" }} />
+        <div className={`absolute inset-0 transition-colors duration-500 ${isDarkMode ? "bg-black/60" : "bg-white/40"}`} />
       </div>
       <div className="relative z-10 flex flex-1">
       {/* Sidebar */}
-      <aside className="w-64 bg-slate-900/80 border-r border-white/10 flex flex-col shrink-0">
-        <div className="p-5 border-b border-white/10">
+      <aside className={`transition-all duration-300 ease-in-out flex flex-col shrink-0 border-r ${isDarkMode ? "bg-slate-900/80 border-white/10" : "bg-white/90 border-slate-200"}`} style={{ width: sidebarOpen ? "16rem" : "0", overflow: "hidden", minWidth: sidebarOpen ? "16rem" : "0" }}>
+        <div className={`p-5 border-b transition-colors duration-500 ${isDarkMode ? "border-white/10" : "border-slate-200"}`}>
           <div className="flex items-center gap-3">
-            <img src="/MZ_logo_DB.webp" alt="Mount Zion Logo" className="w-10 h-10 rounded-xl object-cover shadow-lg" />
-            <div>
-              <p className="text-sm font-bold text-white">Mount Zion GD</p>
-              <p className="text-xs text-purple-300/60">{user.name}</p>
+            <img src="/MZ_logo_DB.webp" alt="Mount Zion Logo" className="w-10 h-10 rounded-xl object-cover shadow-lg shrink-0" />
+            <div className="truncate">
+              <p className={`text-sm font-bold transition-colors duration-500 ${isDarkMode ? "text-white" : "text-slate-900"}`}>Mount Zion GD</p>
+              <p className={`text-xs transition-colors duration-500 ${isDarkMode ? "text-purple-300/60" : "text-slate-500"}`}>{user.name}</p>
             </div>
           </div>
         </div>
         <nav className="flex-1 p-3 space-y-1">
           {[
-            { icon: <Users className="w-5 h-5" />, label: "Dashboard", view: "dashboard" as PageView },
-            { icon: <MessageSquare className="w-5 h-5" />, label: "New GD", view: "gd-create" as PageView },
-            { icon: <Target className="w-5 h-5" />, label: "Solo Practice", view: "solo-practice" as PageView },
-            { icon: <Trophy className="w-5 h-5" />, label: "Leaderboard", view: "gd-leaderboard" as PageView, badge: leaderboard.length > 0 ? `${leaderboard.length}` : undefined },
+            { icon: <Users className="w-5 h-5 shrink-0" />, label: "Dashboard", view: "dashboard" as PageView },
+            { icon: <MessageSquare className="w-5 h-5 shrink-0" />, label: "New GD", view: "gd-create" as PageView },
+            { icon: <Target className="w-5 h-5 shrink-0" />, label: "Solo Practice", view: "solo-practice" as PageView },
+            { icon: <Trophy className="w-5 h-5 shrink-0" />, label: "Leaderboard", view: "gd-leaderboard" as PageView, badge: leaderboard.length > 0 ? `${leaderboard.length}` : undefined },
           ].map((item) => (
             <button
               key={item.label}
@@ -457,7 +489,7 @@ export default function Home() {
                 else if (item.view === "solo-practice") startSoloPractice();
                 else setView(item.view);
               }}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${view === item.view ? "bg-amber-500/20 text-amber-300 border border-amber-500/30" : "text-slate-300 hover:bg-white/5 hover:text-white"}`}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all whitespace-nowrap ${view === item.view ? (isDarkMode ? "bg-amber-500/20 text-amber-300 border border-amber-500/30" : "bg-amber-100 text-amber-700 border border-amber-300") : isDarkMode ? "text-slate-300 hover:bg-white/5 hover:text-white" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"}`}
             >
               {item.icon}
               <span>{item.label}</span>
@@ -465,9 +497,14 @@ export default function Home() {
             </button>
           ))}
         </nav>
-        <div className="p-3 border-t border-white/10">
-          <button onClick={logout} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-red-300 hover:bg-red-500/10 transition-all">
-            <LogOut className="w-5 h-5" /> Sign Out
+        <div className={`p-3 border-t transition-colors duration-500 space-y-2 ${isDarkMode ? "border-white/10" : "border-slate-200"}`}>
+          {/* Theme toggle */}
+          <button onClick={() => setIsDarkMode(!isDarkMode)} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all whitespace-nowrap ${isDarkMode ? "text-amber-300 hover:bg-white/5" : "text-amber-600 hover:bg-slate-100"}`}>
+            {isDarkMode ? <Sun className="w-5 h-5 shrink-0" /> : <Moon className="w-5 h-5 shrink-0" />}
+            <span>{isDarkMode ? "Light Mode" : "Dark Mode"}</span>
+          </button>
+          <button onClick={logout} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all whitespace-nowrap ${isDarkMode ? "text-red-300 hover:bg-red-500/10" : "text-red-600 hover:bg-red-50"}`}>
+            <LogOut className="w-5 h-5 shrink-0" /> Sign Out
           </button>
         </div>
       </aside>
@@ -475,8 +512,15 @@ export default function Home() {
       {/* Main Content */}
       <main className="flex-1 overflow-auto">
         <div className="p-6 max-w-6xl mx-auto">
+          {/* Sidebar toggle + theme toggle on top */}
+          <div className="flex items-center justify-between mb-4">
+            <button onClick={() => setSidebarOpen(!sidebarOpen)} className={`p-2 rounded-lg transition-all hover:scale-110 ${isDarkMode ? "text-white/70 hover:bg-white/10" : "text-slate-600 hover:bg-slate-200"}`} title={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}>
+              {sidebarOpen ? <PanelLeftClose className="w-5 h-5" /> : <PanelLeft className="w-5 h-5" />}
+            </button>
+            <div className={`text-sm font-medium transition-colors duration-500 ${isDarkMode ? "text-white/80" : "text-slate-700"}`}>{view === "dashboard" ? "Dashboard" : view === "gd-create" ? "New GD" : view === "gd-session" ? "GD Session" : view === "gd-leaderboard" ? "Leaderboard" : view === "solo-practice" ? "Solo Practice" : view === "solo-session" ? "Solo Session" : view === "solo-result" ? "Results" : ""}</div>
+          </div>
           {(success || message) && (
-            <div className={`mb-4 flex items-center gap-2 rounded-xl p-4 text-sm ${success ? "bg-emerald-500/20 text-emerald-200 border border-emerald-500/30" : "bg-red-500/20 text-red-200 border border-red-500/30"}`}>
+            <div className={`mb-4 flex items-center gap-2 rounded-xl p-4 text-sm transition-colors duration-500 ${success ? (isDarkMode ? "bg-emerald-500/20 text-emerald-200 border border-emerald-500/30" : "bg-emerald-100 text-emerald-700 border border-emerald-300") : isDarkMode ? "bg-red-500/20 text-red-200 border border-red-500/30" : "bg-red-100 text-red-700 border border-red-300"}`}>
               {success ? <Zap className="h-4 w-4 shrink-0" /> : <AlertCircle className="h-4 w-4 shrink-0" />}
               <span>{success || message}</span>
               <button onClick={() => { setMessage(""); setSuccess(""); }} className="ml-auto text-white/50 hover:text-white">&times;</button>
@@ -501,7 +545,7 @@ export default function Home() {
                   </div>
                 ))}
               </div>
-              <div className="rounded-xl bg-white/5 backdrop-blur-sm border border-white/10 p-5">
+              <div className={`rounded-xl backdrop-blur-sm border transition-colors duration-500 ${isDarkMode ? "bg-white/5 border-white/10" : "bg-white/80 border-slate-200"} p-5`}>
                 <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2"><Users className="w-5 h-5 text-amber-400" /> Recent Sessions</h2>
                 {sessions.length === 0 && <p className="text-slate-400 text-sm">No sessions yet. Create or join one!</p>}
                 <div className="space-y-2">
@@ -522,7 +566,7 @@ export default function Home() {
           {/* GD Create/Join View */}
           {view === "gd-create" && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="rounded-xl bg-white/5 backdrop-blur-sm border border-white/10 p-6">
+              <div className={`rounded-xl backdrop-blur-sm border transition-colors duration-500 ${isDarkMode ? "bg-white/5 border-white/10" : "bg-white/80 border-slate-200"} p-6`}>
                 <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2"><MessageSquare className="w-5 h-5 text-amber-400" /> Create GD Session</h2>
                 {currentTopic && (
                   <div className="mb-4 p-4 rounded-lg bg-gradient-to-r from-amber-500/20 to-orange-600/20 border border-amber-500/30">
@@ -552,10 +596,10 @@ export default function Home() {
                   </Button>
                 </div>
               </div>
-              <div className="rounded-xl bg-white/5 backdrop-blur-sm border border-white/10 p-6">
+              <div className={`rounded-xl backdrop-blur-sm border transition-colors duration-500 ${isDarkMode ? "bg-white/5 border-white/10" : "bg-white/80 border-slate-200"} p-6`}>
                 <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2"><Users className="w-5 h-5 text-amber-400" /> Join Session</h2>
                 <div className="space-y-3">
-                  <Input placeholder="Enter Session Code (e.g. A3F9K2B7X1M4)" value={sessionCodeInput} onChange={(e) => setSessionCodeInput(e.target.value.toUpperCase())} className="bg-white/10 border-white/20 text-white placeholder:text-white/40 font-mono tracking-wider" />
+                  <Input placeholder="Enter Session Code (e.g. A3F9K2B7X1M4)" value={sessionCodeInput} onChange={(e) => setSessionCodeInput(e.target.value.toUpperCase())} className={`transition-colors duration-500 ${isDarkMode ? "bg-white/10 border-white/20 text-white placeholder:text-white/40" : "bg-white border-slate-300 text-slate-900 placeholder:text-slate-400"} font-mono tracking-wider`} />
                   <Button onClick={joinSession} disabled={loading} className="w-full bg-gradient-to-r from-purple-500 to-pink-600 border-0">
                     {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Users className="h-4 w-4" />} Join Session
                   </Button>
@@ -567,7 +611,7 @@ export default function Home() {
           {/* GD Session View */}
           {view === "gd-session" && activeSession && (
             <div className="space-y-4">
-              <div className="rounded-xl bg-white/5 backdrop-blur-sm border border-white/10 p-6">
+              <div className={`rounded-xl backdrop-blur-sm border transition-colors duration-500 ${isDarkMode ? "bg-white/5 border-white/10" : "bg-white/80 border-slate-200"} p-6`}>
                 <div className="flex items-center justify-between mb-4">
                   <div>
                     <h2 className="text-xl font-bold text-white">{activeSession.topic}</h2>
@@ -615,7 +659,7 @@ export default function Home() {
                       {recordingStatus && <span className="text-xs text-slate-400">{recordingStatus}</span>}
                     </div>
                     {liveDetectedText && <p className="text-xs text-emerald-300 bg-emerald-500/10 p-2 rounded"><span className="font-medium">Detected:</span> {liveDetectedText}</p>}
-                    <Textarea placeholder="Type or record your speech contribution here..." value={transcript} onChange={(e) => setTranscript(e.target.value)} className="bg-white/10 border-white/20 text-white placeholder:text-white/40 min-h-[100px]" />
+                    <Textarea placeholder="Type or record your speech contribution here..." value={transcript} onChange={(e) => setTranscript(e.target.value)} className={`transition-colors duration-500 ${isDarkMode ? "bg-white/10 border-white/20 text-white placeholder:text-white/40" : "bg-white border-slate-300 text-slate-900 placeholder:text-slate-400"} min-h-[100px]`} />
                     <div className="flex justify-between items-center">
                       <span className="text-xs text-slate-400">{transcript.trim().split(/\s+/).filter(Boolean).length} words</span>
                       <Button onClick={submitTranscriptForEval} disabled={loading || !transcript.trim()} className="bg-gradient-to-r from-amber-500 to-orange-600 border-0">
@@ -626,7 +670,7 @@ export default function Home() {
                 )}
               </div>
               {Object.keys(gdTranscripts).length > 0 && (
-                <div className="rounded-xl bg-white/5 backdrop-blur-sm border border-white/10 p-4">
+                <div className={`rounded-xl backdrop-blur-sm border transition-colors duration-500 ${isDarkMode ? "bg-white/5 border-white/10" : "bg-white/80 border-slate-200"} p-4`}>
                   <p className="text-sm font-medium text-slate-300 mb-2">Submitted Contributions</p>
                   {Object.entries(gdTranscripts).map(([sc, txt]) => (
                     <p key={sc} className="text-xs text-slate-400 bg-white/5 p-2 rounded mb-1">{txt.slice(0, 100)}...</p>
@@ -640,13 +684,13 @@ export default function Home() {
           {view === "gd-leaderboard" && (
             <div className="space-y-6">
               {activeSession && (
-                <div className="rounded-xl bg-white/5 backdrop-blur-sm border border-white/10 p-5">
+                <div className={`rounded-xl backdrop-blur-sm border transition-colors duration-500 ${isDarkMode ? "bg-white/5 border-white/10" : "bg-white/80 border-slate-200"} p-5`}>
                   <div className="flex items-center justify-between mb-4">
                     <div>
                       <h2 className="text-xl font-bold text-white flex items-center gap-2"><Trophy className="w-6 h-6 text-amber-400" /> Leaderboard</h2>
                       <p className="text-sm text-slate-400">{activeSession.topic} · Code: {activeSession.session_code}</p>
                     </div>
-                    <Button onClick={() => { setView("dashboard"); }} variant="secondary" className="bg-white/10 text-white border-white/20">Back</Button>
+                    <Button onClick={() => { setView("dashboard"); }} variant="secondary" className={`transition-colors duration-500 ${isDarkMode ? "bg-white/10 text-white border-white/20" : "bg-slate-100 text-slate-700 border-slate-300"}`}>Back</Button>
                   </div>
                   {leaderboard.length === 0 && <p className="text-slate-400 text-sm">Leaderboard not ready yet. Finish the GD first.</p>}
                   {leaderboard.length > 0 && (
@@ -700,7 +744,7 @@ export default function Home() {
               )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="rounded-xl bg-white/5 backdrop-blur-sm border border-white/10 p-6">
+                <div className={`rounded-xl backdrop-blur-sm border transition-colors duration-500 ${isDarkMode ? "bg-white/5 border-white/10" : "bg-white/80 border-slate-200"} p-6`}>
                   <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2"><Target className="w-5 h-5 text-amber-400" /> Solo Practice</h2>
                   <div className="mb-4 p-4 rounded-lg bg-gradient-to-r from-amber-500/20 to-orange-600/20 border border-amber-500/30">
                     <p className="text-xs text-amber-300/80 mb-1">Your Topic</p>
@@ -714,7 +758,7 @@ export default function Home() {
                   </Button>
                 </div>
 
-                <div className="rounded-xl bg-white/5 backdrop-blur-sm border border-white/10 p-6">
+                <div className={`rounded-xl backdrop-blur-sm border transition-colors duration-500 ${isDarkMode ? "bg-white/5 border-white/10" : "bg-white/80 border-slate-200"} p-6`}>
                   <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2"><TrendingUp className="w-5 h-5 text-amber-400" /> Your Progress</h2>
                   {soloSession.is_new_user ? (
                     <div className="text-center py-6">
@@ -757,7 +801,7 @@ export default function Home() {
           {/* ─── Solo Session (Prep + Speaking) ─── */}
           {view === "solo-session" && soloSession && (
             <div className="max-w-3xl mx-auto space-y-4">
-              <div className="rounded-xl bg-white/5 backdrop-blur-sm border border-white/10 p-6">
+              <div className={`rounded-xl backdrop-blur-sm border transition-colors duration-500 ${isDarkMode ? "bg-white/5 border-white/10" : "bg-white/80 border-slate-200"} p-6`}>
                 <div className="flex items-center justify-between mb-4">
                   <div>
                     <h2 className="text-xl font-bold text-white">{soloSession.topic}</h2>
@@ -796,12 +840,12 @@ export default function Home() {
                     placeholder={isPrepPhase ? "Jot down notes and key points for your speech..." : "Type or record your speech here..."}
                     value={transcript}
                     onChange={(e) => setTranscript(e.target.value)}
-                    className="bg-white/10 border-white/20 text-white placeholder:text-white/40 min-h-[150px]"
+                    className={`transition-colors duration-500 ${isDarkMode ? "bg-white/10 border-white/20 text-white placeholder:text-white/40" : "bg-white border-slate-300 text-slate-900 placeholder:text-slate-400"} min-h-[150px]`}
                   />
                   <div className="flex justify-between items-center">
                     <span className="text-xs text-slate-400">{transcript.trim().split(/\s+/).filter(Boolean).length} words</span>
                     <div className="flex gap-2">
-                      <Button onClick={() => { setView("solo-practice"); if (timerRef.current) clearInterval(timerRef.current); setIsPrepPhase(false); setIsSpeakingPhase(false); }} variant="secondary" className="bg-white/10 text-white border-white/20">
+                      <Button onClick={() => { setView("solo-practice"); if (timerRef.current) clearInterval(timerRef.current); setIsPrepPhase(false); setIsSpeakingPhase(false); }} variant="secondary" className={`transition-colors duration-500 ${isDarkMode ? "bg-white/10 text-white border-white/20" : "bg-slate-100 text-slate-700 border-slate-300"}`}>
                         Cancel
                       </Button>
                       <Button onClick={submitSoloPractice} disabled={loading || transcript.trim().length < 10} className="bg-gradient-to-r from-amber-500 to-orange-600 border-0">
@@ -826,7 +870,7 @@ export default function Home() {
               )}
 
               {/* Score Overview */}
-              <div className="rounded-xl bg-white/5 backdrop-blur-sm border border-white/10 p-6">
+              <div className={`rounded-xl backdrop-blur-sm border transition-colors duration-500 ${isDarkMode ? "bg-white/5 border-white/10" : "bg-white/80 border-slate-200"} p-6`}>
                 <div className="flex items-center justify-between mb-4">
                   <div>
                     <h2 className="text-xl font-bold text-white flex items-center gap-2"><Target className="w-6 h-6 text-amber-400" /> Practice Results</h2>
@@ -898,7 +942,7 @@ export default function Home() {
 
               {/* Improvement Comparison */}
               {soloResult.last_session && (
-                <div className="rounded-xl bg-white/5 backdrop-blur-sm border border-white/10 p-6">
+                <div className={`rounded-xl backdrop-blur-sm border transition-colors duration-500 ${isDarkMode ? "bg-white/5 border-white/10" : "bg-white/80 border-slate-200"} p-6`}>
                   <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2"><TrendingUp className="w-5 h-5 text-amber-400" /> Improvement from Last Session</h3>
                   <div className="grid grid-cols-4 gap-3">
                     {[
@@ -928,7 +972,7 @@ export default function Home() {
                 <Button onClick={startSoloPractice} className="bg-gradient-to-r from-amber-500 to-orange-600 border-0">
                   <Target className="h-4 w-4 mr-2" /> Practice Again
                 </Button>
-                <Button onClick={() => { setView("dashboard"); }} variant="secondary" className="bg-white/10 text-white border-white/20">
+                <Button onClick={() => { setView("dashboard"); }} variant="secondary" className={`transition-colors duration-500 ${isDarkMode ? "bg-white/10 text-white border-white/20" : "bg-slate-100 text-slate-700 border-slate-300"}`}>
                   Back to Dashboard
                 </Button>
               </div>
