@@ -2,10 +2,10 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from mysql.connector import MySQLConnection
 
-from database.db import get_db
-from database import queries
-from models.schemas import LoginRequest, RegisterNumberLogin, RegisterRequest, TokenResponse, UserResponse
-from security import create_access_token, get_current_user, hash_password, verify_password
+from backend.database.db import get_db
+from backend.database import queries
+from backend.models.schemas import LoginRequest, RegisterNumberLogin, RegisterRequest, TokenResponse, UserResponse
+from backend.security import create_access_token, get_current_user, hash_password, verify_password
 
 router = APIRouter(tags=["Authentication"])
 
