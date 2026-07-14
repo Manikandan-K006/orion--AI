@@ -88,7 +88,7 @@ for reg_no, name in STUDENTS:
     if row:
         uid = row[0]
         cursor.execute(
-            "INSERT IGNORE INTO student_profile (user_id, department, year) VALUES (%s, 'Computer Science', 'Final Year')",
+            "INSERT IGNORE INTO student_profile (user_id, department, year) VALUES (%s, 'IT', '3rd Year')",
             (uid,)
         )
 
