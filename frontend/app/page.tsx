@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircle, Award, Clock, LogOut, MessageSquare, Mic, MicOff, RefreshCw, Trophy, Users, Zap, Loader2, Copy, Check, Target, TrendingUp, ArrowUp, ArrowDown, PanelLeftClose, PanelLeft, Sparkles, Share2 } from "lucide-react";
+import { AlertCircle, Award, Clock, LogOut, MessageSquare, Mic, MicOff, RefreshCw, Trophy, Users, Zap, Loader2, Copy, Check, Target, TrendingUp, ArrowUp, ArrowDown, PanelLeftClose, PanelLeft, Share2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Bar, BarChart, CartesianGrid, Cell, Legend, PolarAngleAxis, PolarGrid, Radar, RadarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
@@ -467,7 +467,7 @@ export default function Home() {
                 />
               </div>
               <Button
-                className="group relative w-full bg-gradient-to-r from-amber-500 via-orange-500 to-amber-500 hover:from-amber-600 hover:via-orange-600 hover:to-amber-600 text-white border-0 h-12 text-lg font-semibold shadow-lg shadow-orange-500/30 overflow-hidden rounded-xl transition-all duration-300 hover:shadow-orange-400/40 hover:scale-[1.02] active:scale-95"
+                className="group relative w-full bg-gradient-to-r from-purple-600 via-indigo-500 to-blue-600 hover:from-purple-700 hover:via-indigo-600 hover:to-blue-700 text-white border-0 h-12 text-lg font-semibold shadow-lg shadow-purple-500/30 overflow-hidden rounded-2xl backdrop-blur-sm bg-opacity-90 transition-all duration-300 hover:shadow-purple-400/40 hover:shadow-xl hover:scale-[1.02] active:scale-95"
                 onClick={handleLogin}
                 disabled={loading}
               >
@@ -475,9 +475,8 @@ export default function Home() {
                 {loading ? (
                   <Loader2 className="h-5 w-5 animate-spin mx-auto" />
                 ) : (
-                  <span className="flex items-center justify-center gap-2">
-                    <Sparkles className="w-5 h-5 animate-shine" />
-                    <span>Enter GD Portal</span>
+                  <span className="flex items-center justify-center gap-2 tracking-widest font-bold">
+                    ENTER
                   </span>
                 )}
               </Button>
