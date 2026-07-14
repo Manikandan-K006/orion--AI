@@ -15,9 +15,15 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class RegisterNumberLogin(BaseModel):
+    register_number: str = Field(min_length=10, max_length=20)
+    password: str
+
+
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
+    user: dict | None = None
 
 
 class UserResponse(BaseModel):
@@ -25,6 +31,7 @@ class UserResponse(BaseModel):
     name: str
     email: EmailStr
     role: str
+    register_number: str | None = None
 
 
 class QuestionCreate(BaseModel):
@@ -58,3 +65,31 @@ class AnalysisResult(BaseModel):
     emotion: str
     overall_score: float
     feedback: str
+
+
+class GDSessionCreate(BaseModel):
+    topic_id: int
+    team_size: int = Field(default=6, ge=1, le=10)
+
+
+class GDJoinRequest(BaseModel):
+    session_id: int
+
+
+class GDTranscriptSubmit(BaseModel):
+    session_id: int
+    transcript: str = Field(min_length=10)
+
+
+class GDLeaderboardEntry(BaseModel):
+    user_id: int
+    name: str
+    register_number: str
+    overall_score: float
+    fluency_score: float
+    grammar_score: float
+    accent_score: float
+    relevance_score: float
+    content_quality_score: float
+    credential_points: float
+    rank_position: int

@@ -3,6 +3,7 @@ USE speaksense_ai;
 
 CREATE TABLE IF NOT EXISTS users (
     id INT AUTO_INCREMENT PRIMARY KEY,
+    register_number VARCHAR(20) NOT NULL UNIQUE,
     name VARCHAR(100) NOT NULL,
     email VARCHAR(255) NOT NULL UNIQUE,
     password_hash VARCHAR(255) NOT NULL,
@@ -27,41 +28,60 @@ CREATE TABLE IF NOT EXISTS interview_questions (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE IF NOT EXISTS interview_session (
+CREATE TABLE IF NOT EXISTS gd_topics (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    student_id INT NOT NULL,
-    title VARCHAR(150) NOT NULL,
-    status ENUM('in_progress', 'completed', 'cancelled') NOT NULL DEFAULT 'in_progress',
-    total_score DECIMAL(5,2),
+    topic TEXT NOT NULL,
+    category VARCHAR(100) DEFAULT 'general',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS gd_sessions (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    topic_id INT NOT NULL,
+    status ENUM('waiting', 'preparation', 'speaking', 'completed') NOT NULL DEFAULT 'waiting',
+    team_size INT NOT NULL DEFAULT 6,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     completed_at TIMESTAMP NULL,
-    FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE
+    FOREIGN KEY (topic_id) REFERENCES gd_topics(id) ON DELETE RESTRICT
 );
 
-CREATE TABLE IF NOT EXISTS interview_response (
+CREATE TABLE IF NOT EXISTS gd_team_members (
     id INT AUTO_INCREMENT PRIMARY KEY,
     session_id INT NOT NULL,
-    question_id INT NOT NULL,
-    audio_path VARCHAR(500),
-    transcript TEXT NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (session_id) REFERENCES interview_session(id) ON DELETE CASCADE,
-    FOREIGN KEY (question_id) REFERENCES interview_questions(id) ON DELETE RESTRICT
+    user_id INT NOT NULL,
+    team_number INT NOT NULL DEFAULT 1,
+    joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (session_id) REFERENCES gd_sessions(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
-CREATE TABLE IF NOT EXISTS ai_analysis (
+CREATE TABLE IF NOT EXISTS gd_evaluation (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    response_id INT NOT NULL UNIQUE,
-    grammar_score DECIMAL(5,2) NOT NULL,
-    pronunciation_score DECIMAL(5,2) NOT NULL,
-    fluency_score DECIMAL(5,2) NOT NULL,
-    confidence_score DECIMAL(5,2) NOT NULL,
-    vocabulary_score DECIMAL(5,2) NOT NULL,
-    emotion VARCHAR(50) NOT NULL,
-    overall_score DECIMAL(5,2) NOT NULL,
-    feedback TEXT NOT NULL,
+    session_id INT NOT NULL,
+    user_id INT NOT NULL,
+    fluency_score DECIMAL(5,2) NOT NULL DEFAULT 0,
+    grammar_score DECIMAL(5,2) NOT NULL DEFAULT 0,
+    accent_score DECIMAL(5,2) NOT NULL DEFAULT 0,
+    relevance_score DECIMAL(5,2) NOT NULL DEFAULT 0,
+    content_quality_score DECIMAL(5,2) NOT NULL DEFAULT 0,
+    overall_score DECIMAL(5,2) NOT NULL DEFAULT 0,
+    transcript TEXT,
+    credential_points DECIMAL(5,2) NOT NULL DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (response_id) REFERENCES interview_response(id) ON DELETE CASCADE
+    FOREIGN KEY (session_id) REFERENCES gd_sessions(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS gd_leaderboard (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    session_id INT NOT NULL,
+    user_id INT NOT NULL,
+    rank_position INT NOT NULL,
+    overall_score DECIMAL(5,2) NOT NULL,
+    credential_points DECIMAL(5,2) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (session_id) REFERENCES gd_sessions(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS reports (
@@ -78,18 +98,26 @@ CREATE TABLE IF NOT EXISTS progress (
     student_id INT NOT NULL UNIQUE,
     average_score DECIMAL(5,2) NOT NULL DEFAULT 0,
     interviews_completed INT NOT NULL DEFAULT 0,
+    total_credits DECIMAL(7,2) NOT NULL DEFAULT 0,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
-INSERT INTO interview_questions (question_text, category, difficulty)
-SELECT 'Tell me about yourself and your academic background.', 'introduction', 'easy'
-WHERE NOT EXISTS (SELECT 1 FROM interview_questions WHERE question_text = 'Tell me about yourself and your academic background.');
+INSERT IGNORE INTO gd_topics (id, topic, category) VALUES
+(1, 'Impact of Artificial Intelligence on Employment', 'technology'),
+(2, 'Remote Work vs Office Culture', 'workplace'),
+(3, 'Climate Change and Individual Responsibility', 'environment'),
+(4, 'Social Media Influence on Youth', 'society'),
+(5, 'Online Education vs Traditional Education', 'education');
 
-INSERT INTO interview_questions (question_text, category, difficulty)
-SELECT 'Describe a project where you solved a difficult problem.', 'technical', 'medium'
-WHERE NOT EXISTS (SELECT 1 FROM interview_questions WHERE question_text = 'Describe a project where you solved a difficult problem.');
-
-INSERT INTO interview_questions (question_text, category, difficulty)
-SELECT 'How do you handle pressure during interviews or deadlines?', 'behavioral', 'medium'
-WHERE NOT EXISTS (SELECT 1 FROM interview_questions WHERE question_text = 'How do you handle pressure during interviews or deadlines?');
+INSERT IGNORE INTO users (register_number, name, email, password_hash, role) VALUES
+('911724205001', 'Aadithya', 'aadithya@mzgd.edu', '$2b$12$PlaceholderHashABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890abcdef', 'student'),
+('911724205002', 'Afra nasrin', 'afra@mzgd.edu', '$2b$12$PlaceholderHashABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890abcdef', 'student'),
+('911724205003', 'Anbu Selvam V', 'anbuselvamv@mzgd.edu', '$2b$12$PlaceholderHashABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890abcdef', 'student'),
+('911724205004', 'Anbu selvan . G', 'anbuselvang@mzgd.edu', '$2b$12$PlaceholderHashABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890abcdef', 'student'),
+('911724205005', 'Avineshwaran', 'avinesh@mzgd.edu', '$2b$12$PlaceholderHashABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890abcdef', 'student'),
+('911724205006', 'Bala murugan', 'balamurugan@mzgd.edu', '$2b$12$PlaceholderHashABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890abcdef', 'student'),
+('911724205007', 'Benazir', 'benazir@mzgd.edu', '$2b$12$PlaceholderHashABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890abcdef', 'student'),
+('911724205008', 'Bharanidharan', 'bharanidharan@mzgd.edu', '$2b$12$PlaceholderHashABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890abcdef', 'student'),
+('911724205009', 'Bharathi', 'bharathi@mzgd.edu', '$2b$12$PlaceholderHashABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890abcdef', 'student'),
+('911724205010', 'Bhavishna', 'bhavishna@mzgd.edu', '$2b$12$PlaceholderHashABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890abcdef', 'student');

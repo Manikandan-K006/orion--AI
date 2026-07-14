@@ -37,250 +37,169 @@ def execute(connection: MySQLConnection, query: str, params: tuple[Any, ...] = (
 def get_user_by_email(connection: MySQLConnection, email: str) -> dict[str, Any] | None:
     return fetch_one(
         connection,
-        """
-        SELECT id, name, email, password_hash, role, created_at
-        FROM users
-        WHERE email = %s
-        """,
+        "SELECT id, name, email, register_number, password_hash, role, created_at FROM users WHERE email = %s",
         (email,),
+    )
+
+
+def get_user_by_register_number(connection: MySQLConnection, register_number: str) -> dict[str, Any] | None:
+    return fetch_one(
+        connection,
+        "SELECT id, name, email, register_number, password_hash, role FROM users WHERE register_number = %s",
+        (register_number,),
     )
 
 
 def get_user_by_id(connection: MySQLConnection, user_id: int) -> dict[str, Any] | None:
     return fetch_one(
         connection,
-        """
-        SELECT id, name, email, role, created_at
-        FROM users
-        WHERE id = %s
-        """,
+        "SELECT id, name, email, register_number, role, created_at FROM users WHERE id = %s",
         (user_id,),
     )
 
 
-def create_user(connection: MySQLConnection, name: str, email: str, password_hash: str, role: str) -> int:
+def create_user(connection: MySQLConnection, name: str, email: str, password_hash: str, role: str, register_number: str = "") -> int:
     return execute(
         connection,
-        """
-        INSERT INTO users (name, email, password_hash, role)
-        VALUES (%s, %s, %s, %s)
-        """,
-        (name, email, password_hash, role),
+        "INSERT INTO users (name, email, password_hash, role, register_number) VALUES (%s, %s, %s, %s, %s)",
+        (name, email, password_hash, role, register_number),
     )
 
 
 def create_student_profile(connection: MySQLConnection, user_id: int, department: str | None, year: str | None) -> int:
     return execute(
         connection,
-        """
-        INSERT INTO student_profile (user_id, department, year)
-        VALUES (%s, %s, %s)
-        """,
+        "INSERT INTO student_profile (user_id, department, year) VALUES (%s, %s, %s)",
         (user_id, department, year),
     )
 
 
 def list_questions(connection: MySQLConnection) -> list[dict[str, Any]]:
-    return fetch_all(
-        connection,
-        """
-        SELECT id, question_text, category, difficulty, created_at
-        FROM interview_questions
-        ORDER BY id DESC
-        """,
-    )
+    return fetch_all(connection, "SELECT id, question_text, category, difficulty, created_at FROM interview_questions ORDER BY id DESC")
 
 
 def create_question(connection: MySQLConnection, question_text: str, category: str, difficulty: str) -> int:
-    return execute(
-        connection,
-        """
-        INSERT INTO interview_questions (question_text, category, difficulty)
-        VALUES (%s, %s, %s)
-        """,
-        (question_text, category, difficulty),
-    )
+    return execute(connection, "INSERT INTO interview_questions (question_text, category, difficulty) VALUES (%s, %s, %s)",
+                   (question_text, category, difficulty))
 
 
 def create_interview_session(connection: MySQLConnection, student_id: int, title: str, status: str) -> int:
-    return execute(
-        connection,
-        """
-        INSERT INTO interview_session (student_id, title, status)
-        VALUES (%s, %s, %s)
-        """,
-        (student_id, title, status),
-    )
+    return execute(connection, "INSERT INTO interview_session (student_id, title, status) VALUES (%s, %s, %s)",
+                   (student_id, title, status))
 
 
 def get_session(connection: MySQLConnection, session_id: int) -> dict[str, Any] | None:
-    return fetch_one(
-        connection,
-        """
-        SELECT id, student_id, title, status, total_score, created_at, completed_at
-        FROM interview_session
-        WHERE id = %s
-        """,
-        (session_id,),
-    )
+    return fetch_one(connection, "SELECT id, student_id, title, status, total_score, created_at, completed_at FROM interview_session WHERE id = %s",
+                     (session_id,))
 
 
 def list_sessions_for_student(connection: MySQLConnection, student_id: int) -> list[dict[str, Any]]:
-    return fetch_all(
-        connection,
-        """
-        SELECT id, student_id, title, status, total_score, created_at, completed_at
-        FROM interview_session
-        WHERE student_id = %s
-        ORDER BY created_at DESC
-        """,
-        (student_id,),
-    )
+    return fetch_all(connection, "SELECT id, student_id, title, status, total_score, created_at, completed_at FROM interview_session WHERE student_id = %s ORDER BY created_at DESC",
+                     (student_id,))
 
 
-def create_interview_response(
-    connection: MySQLConnection,
-    session_id: int,
-    question_id: int,
-    audio_path: str | None,
-    transcript: str,
-) -> int:
-    return execute(
-        connection,
-        """
-        INSERT INTO interview_response (session_id, question_id, audio_path, transcript)
-        VALUES (%s, %s, %s, %s)
-        """,
-        (session_id, question_id, audio_path, transcript),
-    )
+def create_interview_response(connection: MySQLConnection, session_id: int, question_id: int, audio_path: str | None, transcript: str) -> int:
+    return execute(connection, "INSERT INTO interview_response (session_id, question_id, audio_path, transcript) VALUES (%s, %s, %s, %s)",
+                   (session_id, question_id, audio_path, transcript))
 
 
-def create_ai_analysis(
-    connection: MySQLConnection,
-    response_id: int,
-    grammar_score: float,
-    pronunciation_score: float,
-    fluency_score: float,
-    confidence_score: float,
-    vocabulary_score: float,
-    emotion: str,
-    overall_score: float,
-    feedback: str,
-) -> int:
-    return execute(
-        connection,
-        """
-        INSERT INTO ai_analysis (
-            response_id, grammar_score, pronunciation_score, fluency_score,
-            confidence_score, vocabulary_score, emotion, overall_score, feedback
-        )
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-        """,
-        (
-            response_id,
-            grammar_score,
-            pronunciation_score,
-            fluency_score,
-            confidence_score,
-            vocabulary_score,
-            emotion,
-            overall_score,
-            feedback,
-        ),
-    )
+def create_ai_analysis(connection: MySQLConnection, response_id: int, grammar_score: float, pronunciation_score: float, fluency_score: float, confidence_score: float, vocabulary_score: float, emotion: str, overall_score: float, feedback: str) -> int:
+    return execute(connection, "INSERT INTO ai_analysis (response_id, grammar_score, pronunciation_score, fluency_score, confidence_score, vocabulary_score, emotion, overall_score, feedback) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                   (response_id, grammar_score, pronunciation_score, fluency_score, confidence_score, vocabulary_score, emotion, overall_score, feedback))
 
 
 def update_session_score(connection: MySQLConnection, session_id: int, total_score: float, status: str) -> int:
-    return execute(
-        connection,
-        """
-        UPDATE interview_session
-        SET total_score = %s, status = %s, completed_at = CURRENT_TIMESTAMP
-        WHERE id = %s
-        """,
-        (total_score, status, session_id),
-    )
+    return execute(connection, "UPDATE interview_session SET total_score = %s, status = %s, completed_at = CURRENT_TIMESTAMP WHERE id = %s",
+                   (total_score, status, session_id))
 
 
 def create_report(connection: MySQLConnection, session_id: int, report_path: str, summary: str) -> int:
-    return execute(
-        connection,
-        """
-        INSERT INTO reports (session_id, report_path, summary)
-        VALUES (%s, %s, %s)
-        """,
-        (session_id, report_path, summary),
-    )
+    return execute(connection, "INSERT INTO reports (session_id, report_path, summary) VALUES (%s, %s, %s)",
+                   (session_id, report_path, summary))
 
 
-def upsert_progress(connection: MySQLConnection, student_id: int, average_score: float, interviews_completed: int) -> int:
-    return execute(
-        connection,
-        """
-        INSERT INTO progress (student_id, average_score, interviews_completed)
-        VALUES (%s, %s, %s)
-        ON DUPLICATE KEY UPDATE
-            average_score = VALUES(average_score),
-            interviews_completed = VALUES(interviews_completed),
-            updated_at = CURRENT_TIMESTAMP
-        """,
-        (student_id, average_score, interviews_completed),
-    )
+def upsert_progress(connection: MySQLConnection, student_id: int, average_score: float, interviews_completed: int, total_credits: float = 0) -> int:
+    return execute(connection, "INSERT INTO progress (student_id, average_score, interviews_completed, total_credits) VALUES (%s, %s, %s, %s) ON DUPLICATE KEY UPDATE average_score = VALUES(average_score), interviews_completed = VALUES(interviews_completed), total_credits = total_credits + VALUES(total_credits), updated_at = CURRENT_TIMESTAMP",
+                   (student_id, average_score, interviews_completed, total_credits))
 
 
 def get_progress(connection: MySQLConnection, student_id: int) -> dict[str, Any] | None:
-    return fetch_one(
-        connection,
-        """
-        SELECT student_id, average_score, interviews_completed, updated_at
-        FROM progress
-        WHERE student_id = %s
-        """,
-        (student_id,),
-    )
+    return fetch_one(connection, "SELECT student_id, average_score, interviews_completed, total_credits, updated_at FROM progress WHERE student_id = %s",
+                     (student_id,))
 
 
 def get_completed_session_stats(connection: MySQLConnection, student_id: int) -> dict[str, Any] | None:
-    return fetch_one(
-        connection,
-        """
-        SELECT COUNT(*) AS interviews_completed, COALESCE(AVG(total_score), 0) AS average_score
-        FROM interview_session
-        WHERE student_id = %s AND status = 'completed'
-        """,
-        (student_id,),
-    )
+    return fetch_one(connection, "SELECT COUNT(*) AS interviews_completed, COALESCE(AVG(total_score), 0) AS average_score FROM interview_session WHERE student_id = %s AND status = 'completed'",
+                     (student_id,))
 
 
 def update_question(connection: MySQLConnection, question_id: int, question_text: str, category: str, difficulty: str) -> int:
-    return execute(
-        connection,
-        """
-        UPDATE interview_questions
-        SET question_text = %s, category = %s, difficulty = %s
-        WHERE id = %s
-        """,
-        (question_text, category, difficulty, question_id),
-    )
+    return execute(connection, "UPDATE interview_questions SET question_text = %s, category = %s, difficulty = %s WHERE id = %s",
+                   (question_text, category, difficulty, question_id))
 
 
 def delete_question(connection: MySQLConnection, question_id: int) -> int:
-    return execute(
-        connection,
-        """
-        DELETE FROM interview_questions WHERE id = %s
-        """,
-        (question_id,),
-    )
+    return execute(connection, "DELETE FROM interview_questions WHERE id = %s", (question_id,))
 
 
 def get_report_by_session(connection: MySQLConnection, session_id: int) -> dict[str, Any] | None:
-    return fetch_one(
-        connection,
-        """
-        SELECT id, session_id, report_path, summary, created_at
-        FROM reports
-        WHERE session_id = %s
-        """,
-        (session_id,),
-    )
+    return fetch_one(connection, "SELECT id, session_id, report_path, summary, created_at FROM reports WHERE session_id = %s",
+                     (session_id,))
+
+
+def list_gd_topics(connection: MySQLConnection) -> list[dict[str, Any]]:
+    return fetch_all(connection, "SELECT id, topic, category FROM gd_topics ORDER BY id")
+
+
+def create_gd_session(connection: MySQLConnection, topic_id: int, team_size: int) -> int:
+    return execute(connection, "INSERT INTO gd_sessions (topic_id, team_size, status) VALUES (%s, %s, 'waiting')",
+                   (topic_id, team_size))
+
+
+def get_gd_session(connection: MySQLConnection, session_id: int) -> dict[str, Any] | None:
+    return fetch_one(connection, "SELECT gs.*, gt.topic FROM gd_sessions gs JOIN gd_topics gt ON gs.topic_id = gt.id WHERE gs.id = %s",
+                     (session_id,))
+
+
+def list_gd_sessions(connection: MySQLConnection) -> list[dict[str, Any]]:
+    return fetch_all(connection, "SELECT gs.*, gt.topic, (SELECT COUNT(*) FROM gd_team_members WHERE session_id = gs.id) AS member_count FROM gd_sessions gs JOIN gd_topics gt ON gs.topic_id = gt.id ORDER BY gs.created_at DESC")
+
+
+def join_gd_session(connection: MySQLConnection, session_id: int, user_id: int) -> int:
+    return execute(connection, "INSERT INTO gd_team_members (session_id, user_id) VALUES (%s, %s)", (session_id, user_id))
+
+
+def get_gd_team_members(connection: MySQLConnection, session_id: int) -> list[dict[str, Any]]:
+    return fetch_all(connection, "SELECT u.id, u.name, u.register_number, tm.joined_at FROM gd_team_members tm JOIN users u ON tm.user_id = u.id WHERE tm.session_id = %s",
+                     (session_id,))
+
+
+def is_member_of_gd(connection: MySQLConnection, session_id: int, user_id: int) -> bool:
+    return fetch_one(connection, "SELECT id FROM gd_team_members WHERE session_id = %s AND user_id = %s",
+                     (session_id, user_id)) is not None
+
+
+def update_gd_status(connection: MySQLConnection, session_id: int, status: str) -> int:
+    completed = "', completed_at = CURRENT_TIMESTAMP" if status == "completed" else ""
+    return execute(connection, f"UPDATE gd_sessions SET status = %s{completed} WHERE id = %s",
+                   (status, session_id))
+
+
+def create_gd_evaluation(connection: MySQLConnection, session_id: int, user_id: int, fluency: float, grammar: float, accent: float, relevance: float, quality: float, overall: float, transcript: str, points: float) -> int:
+    return execute(connection, "INSERT INTO gd_evaluation (session_id, user_id, fluency_score, grammar_score, accent_score, relevance_score, content_quality_score, overall_score, transcript, credential_points) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                   (session_id, user_id, fluency, grammar, accent, relevance, quality, overall, transcript, points))
+
+
+def get_gd_evaluations(connection: MySQLConnection, session_id: int) -> list[dict[str, Any]]:
+    return fetch_all(connection, "SELECT ge.*, u.name, u.register_number FROM gd_evaluation ge JOIN users u ON ge.user_id = u.id WHERE ge.session_id = %s ORDER BY ge.overall_score DESC",
+                     (session_id,))
+
+
+def save_gd_leaderboard(connection: MySQLConnection, session_id: int, user_id: int, rank: int, score: float, points: float) -> int:
+    return execute(connection, "INSERT INTO gd_leaderboard (session_id, user_id, rank_position, overall_score, credential_points) VALUES (%s, %s, %s, %s, %s)",
+                   (session_id, user_id, rank, score, points))
+
+
+def get_gd_leaderboard(connection: MySQLConnection, session_id: int) -> list[dict[str, Any]]:
+    return fetch_all(connection, "SELECT gl.*, u.name, u.register_number FROM gd_leaderboard gl JOIN users u ON gl.user_id = u.id WHERE gl.session_id = %s ORDER BY gl.rank_position",
+                     (session_id,))
