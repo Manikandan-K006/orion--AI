@@ -425,7 +425,12 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex">
+    <div className="min-h-screen flex relative overflow-hidden">
+      <div className="absolute inset-0">
+        <img src="/college_image.jpeg" alt="" className="w-full h-full object-cover" />
+        <div className="absolute inset-0 bg-black/60" />
+      </div>
+      <div className="relative z-10 flex flex-1">
       {/* Sidebar */}
       <aside className="w-64 bg-slate-900/80 border-r border-white/10 flex flex-col shrink-0">
         <div className="p-5 border-b border-white/10">
@@ -931,6 +936,7 @@ export default function Home() {
           )}
         </div>
       </main>
+    </div>
     </div>
   );
 }
