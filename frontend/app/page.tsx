@@ -382,8 +382,8 @@ export default function Home() {
         <div className="relative z-10 w-full max-w-md mx-4">
           <div className="text-center mb-8">
             <img src="/MZ_logo_DB.webp" alt="Mount Zion Logo" className="w-24 h-24 rounded-2xl mx-auto mb-4 shadow-lg shadow-purple-500/30 object-cover animate-float" />
-            <h1 className="text-4xl font-bold mb-2 text-white">Mount Zion GD</h1>
-            <p className="text-purple-200/80">Group Discussion Assessment Platform</p>
+            <h1 className="text-4xl font-bold mb-2 text-white">MZ Orator</h1>
+            <p className="text-purple-200/80">AI Group Discussion Platform</p>
           </div>
           <div className="bg-white/10 backdrop-blur-xl rounded-2xl p-8 shadow-2xl border border-white/20">
             <div className="space-y-4">
@@ -447,7 +447,7 @@ export default function Home() {
           <div className="flex items-center gap-3">
             <img src="/MZ_logo_DB.webp" alt="Mount Zion Logo" className="w-10 h-10 rounded-xl object-cover shadow-lg shrink-0" />
             <div className="truncate">
-              <p className="text-sm font-bold text-white">Mount Zion GD</p>
+              <p className="text-sm font-bold text-white">MZ Orator</p>
               <p className="text-xs text-purple-300/60">{user.name}</p>
             </div>
           </div>

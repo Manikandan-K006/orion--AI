@@ -5,12 +5,18 @@ from mysql.connector import MySQLConnection
 
 from backend.database.db import get_db
 from backend.database import queries
-from backend.database import queries
-from backend.database.db import get_db
 from backend.models.schemas import LoginRequest, RegisterNumberLogin, RegisterRequest, TokenResponse, UserResponse
 from backend.security import create_access_token, get_current_user, hash_password, verify_password
 
 router = APIRouter(tags=["Authentication"])
+
+
+@router.get("/users")
+def list_users(
+    _: dict = Depends(get_current_user),
+    connection: MySQLConnection = Depends(get_db),
+) -> list[dict]:
+    return queries.list_all_users(connection)
 
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)

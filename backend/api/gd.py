@@ -86,6 +86,40 @@ def join_gd(
     return {"message": "Joined GD session successfully"}
 
 
+@router.post("/sessions/{session_code}/invite")
+def invite_to_gd(
+    session_code: str,
+    payload: dict,
+    current_user: dict = Depends(get_current_user),
+    connection: MySQLConnection = Depends(get_db),
+) -> dict:
+    """Invite users to a GD session by their user IDs."""
+    session = queries.get_gd_session(connection, session_code)
+    if not session:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
+    if session["status"] != "waiting":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="GD already started")
+
+    user_ids = payload.get("user_ids", [])
+    if not user_ids:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No users specified")
+
+    member_count = len(queries.get_gd_team_members(connection, session_code))
+    team_size = session["team_size"]
+
+    invited = 0
+    for uid in user_ids:
+        if uid == current_user["id"]:
+            continue
+        if member_count + invited >= team_size:
+            break
+        if not queries.is_member_of_gd(connection, session_code, uid):
+            queries.join_gd_session(connection, session_code, uid)
+            invited += 1
+
+    return {"message": f"Invited {invited} user(s) to the session", "invited_count": invited}
+
+
 @router.post("/sessions/{session_code}/start")
 def start_gd(
     session_code: str,

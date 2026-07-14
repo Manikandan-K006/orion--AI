@@ -233,7 +233,7 @@ def list_gd_sessions(connection: MySQLConnection) -> list[dict[str, Any]]:
 
 
 def join_gd_session(connection: MySQLConnection, session_code: str, user_id: int) -> int:
-    return execute(connection, "INSERT INTO gd_team_members (session_code, user_id) VALUES (%s, %s)",
+    return execute(connection, "INSERT INTO gd_team_members (session_code, user_id) VALUES (%s, %s) ON DUPLICATE KEY UPDATE user_id=user_id",
                    (session_code, user_id))
 
 
@@ -369,3 +369,8 @@ def get_last_solo_session(connection: MySQLConnection, user_id: int) -> dict[str
         "SELECT overall_score, fluency_score, grammar_score, accent_score, delivery_score, weaknesses "
         "FROM solo_practice_sessions WHERE user_id=%s AND status='completed' ORDER BY created_at DESC LIMIT 1",
         (user_id,))
+
+
+def list_all_users(connection: MySQLConnection) -> list[dict[str, Any]]:
+    return fetch_all(connection,
+        "SELECT id, name, register_number FROM users ORDER BY register_number")
