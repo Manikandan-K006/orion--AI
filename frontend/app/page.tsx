@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircle, Award, Clock, Crown, LogOut, MessageSquare, Mic, MicOff, RefreshCw, Trophy, Users, Zap, Circle, Loader2, Copy, Check } from "lucide-react";
+import { AlertCircle, Award, Clock, LogOut, MessageSquare, Mic, MicOff, RefreshCw, Trophy, Users, Zap, Loader2, Copy, Check } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
@@ -47,6 +47,18 @@ export default function Home() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const [liveDetectedText, setLiveDetectedText] = useState("");
+  const [floaterStyles, setFloaterStyles] = useState<Record<string, string>[]>([]);
+
+  useEffect(() => {
+    setFloaterStyles([...Array(20)].map(() => ({
+      width: `${Math.random() * 200 + 50}px`,
+      height: `${Math.random() * 200 + 50}px`,
+      left: `${Math.random() * 100}%`,
+      top: `${Math.random() * 100}%`,
+      animationDelay: `${Math.random() * 5}s`,
+      animationDuration: `${Math.random() * 5 + 3}s`,
+    })));
+  }, []);
 
   useEffect(() => {
     const savedToken = localStorage.getItem("mzgd_token");
@@ -285,19 +297,13 @@ export default function Home() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 relative overflow-hidden">
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          {[...Array(20)].map((_, i) => (
-            <div key={i} className="absolute rounded-full bg-white/5 animate-pulse" style={{
-              width: `${Math.random() * 200 + 50}px`, height: `${Math.random() * 200 + 50}px`,
-              left: `${Math.random() * 100}%`, top: `${Math.random() * 100}%`,
-              animationDelay: `${Math.random() * 5}s`, animationDuration: `${Math.random() * 5 + 3}s`
-            }} />
+          {floaterStyles.length > 0 && floaterStyles.map((style, i) => (
+            <div key={i} className="absolute rounded-full bg-white/5 animate-pulse" style={style} />
           ))}
         </div>
         <div className="relative z-10 w-full max-w-md mx-4">
           <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-600 mb-4 shadow-lg shadow-orange-500/30 animate-bounce-slow">
-              <MessageSquare className="w-10 h-10 text-white" />
-            </div>
+            <img src="/MZ_logo_DB.webp" alt="Mount Zion Logo" className="w-24 h-24 rounded-2xl mx-auto mb-4 shadow-lg shadow-purple-500/30 object-cover" />
             <h1 className="text-4xl font-bold text-white mb-2">Mount Zion GD</h1>
             <p className="text-purple-200/80">Group Discussion Assessment Platform</p>
           </div>

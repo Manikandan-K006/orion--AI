@@ -80,7 +80,8 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}, tok
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(data.detail || "Request failed");
+    const detail = typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail || "Request failed");
+    throw new Error(detail);
   }
   return data as T;
 }
