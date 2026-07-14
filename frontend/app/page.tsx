@@ -487,7 +487,7 @@ export default function Home() {
         <div className="p-6 max-w-6xl mx-auto">
           {/* Sidebar toggle + theme toggle on top */}
           <div className="flex items-center justify-between mb-4">
-            <button onClick={() => setSidebarOpen(!sidebarOpen)} className={`p-2 rounded-lg transition-all hover:scale-110 ${isDarkMode ? "text-white/70 hover:bg-white/10" : "text-slate-600 hover:bg-slate-200"}`} title={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}>
+            <button onClick={() => setSidebarOpen(!sidebarOpen)} className={`p-2 rounded-lg transition-all hover:scale-110 text-white/70 hover:bg-white/10`} title={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}>
               {sidebarOpen ? <PanelLeftClose className="w-5 h-5" /> : <PanelLeft className="w-5 h-5" />}
             </button>
             <div className={`text-sm font-medium transition-colors duration-500 ${isDarkMode ? "text-white/80" : "text-slate-700"}`}>{view === "dashboard" ? "Dashboard" : view === "gd-create" ? "New GD" : view === "gd-session" ? "GD Session" : view === "gd-leaderboard" ? "Leaderboard" : view === "solo-practice" ? "Solo Practice" : view === "solo-session" ? "Solo Session" : view === "solo-result" ? "Results" : ""}</div>
@@ -957,4 +957,3 @@ export default function Home() {
     </div>
   );
 }
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     
