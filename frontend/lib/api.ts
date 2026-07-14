@@ -41,7 +41,7 @@ export type GDTopic = {
 };
 
 export type GDSession = {
-  id: number;
+  session_code: string;
   topic_id: number;
   topic: string;
   status: string;
@@ -61,7 +61,7 @@ export type GDMember = {
 export type GDLeaderboardEntry = {
   id: number;
   user_id: number;
-  session_id: number;
+  session_code: string;
   rank_position: number;
   overall_score: number;
   credential_points: number;
