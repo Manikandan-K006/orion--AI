@@ -5,6 +5,7 @@ export type User = {
   name: string;
   email: string;
   role: string;
+  register_number?: string;
 };
 
 export type Question = {
@@ -18,6 +19,7 @@ export type Progress = {
   student_id: number;
   average_score: number;
   interviews_completed: number;
+  total_credits?: number;
   updated_at?: string;
 };
 
@@ -32,6 +34,41 @@ export type Analysis = {
   feedback: string;
 };
 
+export type GDTopic = {
+  id: number;
+  topic: string;
+  category: string;
+};
+
+export type GDSession = {
+  id: number;
+  topic_id: number;
+  topic: string;
+  status: string;
+  team_size: number;
+  member_count: number;
+  members?: GDMember[];
+  created_at: string;
+};
+
+export type GDMember = {
+  id: number;
+  name: string;
+  register_number: string;
+  joined_at: string;
+};
+
+export type GDLeaderboardEntry = {
+  id: number;
+  user_id: number;
+  session_id: number;
+  rank_position: number;
+  overall_score: number;
+  credential_points: number;
+  name: string;
+  register_number: string;
+};
+
 export async function apiRequest<T>(path: string, options: RequestInit = {}, token?: string): Promise<T> {
   const response = await fetch(`${API_URL}${path}`, {
     ...options,
@@ -41,7 +78,6 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}, tok
       ...options.headers
     }
   });
-
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
     throw new Error(data.detail || "Request failed");
@@ -58,9 +94,7 @@ export async function uploadAudio(file: File, token: string) {
     body: formData,
   });
   const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(data.detail || "Upload failed");
-  }
+  if (!response.ok) throw new Error(data.detail || "Upload failed");
   return data as { audio_path: string; transcript: string; message: string };
 }
 
