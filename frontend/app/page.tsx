@@ -437,18 +437,21 @@ export default function Home() {
       <div className="min-h-screen flex items-center justify-center relative overflow-hidden">
         <div className="absolute inset-0">
           <img src="/college_image.jpeg" alt="" className="w-full h-full object-cover animate-ken-burns" />
-          <div className="absolute inset-0 bg-black/60" />
+          <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/50 to-black/70" />
         </div>
         <div className="relative z-10 w-full max-w-md mx-4">
-          <div className="text-center mb-8">
-            <img src="/MZ_logo_DB.webp" alt="Mount Zion Logo" className="w-24 h-24 rounded-2xl mx-auto mb-4 shadow-lg shadow-purple-500/30 object-cover animate-float" />
-            <h1 className="text-4xl font-bold mb-2 text-white">MZ Orator</h1>
-            <p className="text-purple-200/80">AI Group Discussion Platform</p>
+          <div className="text-center mb-10">
+            <div className="relative inline-block mb-5">
+              <div className="absolute inset-0 bg-gradient-to-r from-purple-500/30 to-blue-500/30 rounded-full blur-3xl animate-pulse" style={{ width: "150%", height: "150%", left: "-25%", top: "-25%" }} />
+              <img src="/MZ_logo_DB.webp" alt="Mount Zion Logo" className="w-28 h-28 rounded-2xl mx-auto shadow-2xl shadow-purple-500/40 object-cover animate-float relative" />
+            </div>
+            <h1 className="text-4xl font-bold mb-2 text-white drop-shadow-lg">MZ Orator</h1>
+            <p className="text-purple-200/80 drop-shadow">AI Group Discussion Platform</p>
           </div>
           <div className="bg-white/10 backdrop-blur-xl rounded-2xl p-8 shadow-2xl border border-white/20">
-            <div className="space-y-4">
+            <div className="space-y-5">
               <div>
-                <label className="block text-sm font-medium mb-1 text-purple-200">Register Number</label>
+                <label className="block text-sm font-medium mb-1.5 text-purple-200">Register Number</label>
                 <Input
                   placeholder="911724205001"
                   value={registerNumber}
@@ -457,7 +460,7 @@ export default function Home() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1 text-purple-200">Password</label>
+                <label className="block text-sm font-medium mb-1.5 text-purple-200">Password</label>
                 <Input
                   type="password"
                   placeholder="Default: Password123"
