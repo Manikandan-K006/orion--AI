@@ -163,7 +163,6 @@ export default function Home() {
       setSuccess(res.message);
       setSelectedUserIds([]);
       setInviteTarget("");
-      await loadSessions();
     } catch (err: any) { setMessage(err.message); }
     finally { setLoading(false); }
   }
