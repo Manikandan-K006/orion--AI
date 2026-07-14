@@ -58,6 +58,54 @@ export type GDMember = {
   joined_at: string;
 };
 
+export type SoloQuote = {
+  id: number;
+  quote: string;
+  author: string;
+};
+
+export type SoloStartResponse = {
+  session_id: number;
+  topic: string;
+  session_number: number;
+  preparation_minutes: number;
+  speaking_minutes: number;
+  quote: SoloQuote;
+  last_session: SoloSessionResult | null;
+  is_new_user: boolean;
+};
+
+export type SoloSessionResult = {
+  id?: number;
+  overall_score: number;
+  fluency_score: number;
+  grammar_score: number;
+  accent_score: number;
+  delivery_score: number;
+  weaknesses?: string;
+  improvement_tips?: string;
+  topic?: string;
+  created_at?: string;
+};
+
+export type SoloSubmitResponse = {
+  message: string;
+  overall_score: number;
+  fluency_score: number;
+  grammar_score: number;
+  accent_score: number;
+  delivery_score: number;
+  weaknesses: string[];
+  improvement_tips: string[];
+  last_session: SoloSessionResult | null;
+};
+
+export type SoloStats = {
+  total_sessions: number;
+  is_new: boolean;
+  seen_quote_ids?: string;
+};
+
 export type GDLeaderboardEntry = {
   id: number;
   user_id: number;
