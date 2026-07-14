@@ -10,6 +10,10 @@ const config: Config = {
         ink: "#17202a",
         muted: "#607084",
         accent: "#0f766e"
+      },
+      animation: {
+        "bounce-slow": "bounce 3s infinite",
+        "pulse-slow": "pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite",
       }
     }
   },
