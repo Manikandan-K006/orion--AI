@@ -103,9 +103,13 @@ export default function Home() {
     setRefreshCount(0);
     setCurrentTopic(null);
     setLastCreatedCode("");
+    setInviteMessage("");
+    setSelectedUserIds([]);
     const t = await apiRequest<GDTopic[]>("/gd/topics", {}, token);
     setTopics(t);
     await doRefresh();
+    const users = await apiRequest<{ id: number; name: string; register_number: string }[]>("/users", {}, token).catch(() => []);
+    setAllUsers(users.filter(u => u.id !== user?.id));
     setView("gd-create");
   }
 
@@ -585,9 +589,9 @@ export default function Home() {
                     </div>
                   )}
                   {lastCreatedCode && allUsers.length > 0 && (
-                    <div className="pt-2">
-                      <p className="text-xs text-slate-400 mb-2">Invite teammates:</p>
-                      <div className="max-h-40 overflow-y-auto space-y-1 mb-2 scrollbar-thin">
+                    <div className="border-t border-white/10 pt-3 mt-3">
+                      <p className="text-xs font-medium text-amber-300/90 mb-2 flex items-center gap-1"><Users className="w-3.5 h-3.5" /> Invite Teammates (select from registered students)</p>
+                      <div className="max-h-40 overflow-y-auto space-y-1 mb-3 scrollbar-thin rounded-lg border border-white/5 p-1">
                         {allUsers.map(u => (
                           <label key={u.id} className={`flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition ${selectedUserIds.includes(u.id) ? "bg-amber-500/20 border border-amber-500/30" : "bg-white/[0.04] hover:bg-white/[0.08]"}`}>
                             <input type="checkbox" checked={selectedUserIds.includes(u.id)} onChange={() => setSelectedUserIds(prev => prev.includes(u.id) ? prev.filter(id => id !== u.id) : [...prev, u.id])} className="accent-amber-500" />
@@ -598,10 +602,15 @@ export default function Home() {
                           </label>
                         ))}
                       </div>
-                      <Button onClick={inviteSelectedUsers} disabled={loading || selectedUserIds.length === 0} className="w-full bg-gradient-to-r from-emerald-500 to-green-600 border-0 text-sm">
-                        {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Users className="h-4 w-4" />} Send Invite ({selectedUserIds.length})
-                      </Button>
-                      {inviteMessage && <p className="text-xs text-emerald-300 mt-1">{inviteMessage}</p>}
+                      <div className="flex gap-2">
+                        <Button onClick={inviteSelectedUsers} disabled={loading || selectedUserIds.length === 0} className="flex-1 bg-gradient-to-r from-emerald-500 to-green-600 border-0 text-sm">
+                          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Users className="h-4 w-4" />} Send Invite ({selectedUserIds.length})
+                        </Button>
+                        <Button onClick={() => copyCode(lastCreatedCode)} className="bg-white/10 border border-white/20 text-white hover:bg-white/20 text-sm">
+                          {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                        </Button>
+                      </div>
+                      {inviteMessage && <p className="text-xs text-emerald-300 mt-2">{inviteMessage}</p>}
                     </div>
                   )}
                   <Button onClick={createSession} disabled={loading || !currentTopic} className="w-full bg-gradient-to-r from-amber-500 to-orange-600 border-0">
