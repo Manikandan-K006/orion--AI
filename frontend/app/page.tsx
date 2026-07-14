@@ -455,7 +455,7 @@ export default function Home() {
         <nav className="flex-1 p-3 space-y-1">
           {[
             { icon: <Users className="w-5 h-5 shrink-0" />, label: "Dashboard", view: "dashboard" as PageView },
-            { icon: <MessageSquare className="w-5 h-5 shrink-0" />, label: "New GD", view: "gd-create" as PageView },
+            { icon: <MessageSquare className="w-5 h-5 shrink-0" />, label: "GD", view: "gd-create" as PageView },
             { icon: <Target className="w-5 h-5 shrink-0" />, label: "Solo Practice", view: "solo-practice" as PageView },
             { icon: <Trophy className="w-5 h-5 shrink-0" />, label: "Leaderboard", view: "gd-leaderboard" as PageView, badge: leaderboard.length > 0 ? `${leaderboard.length}` : undefined },
           ].map((item) => (
@@ -505,11 +505,11 @@ export default function Home() {
             <div className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {[
-                  { icon: <Users className="w-6 h-6" />, label: "Active Sessions", value: sessions.filter(s => s.status !== "completed").length.toString(), color: "from-blue-500 to-cyan-600" },
-                  { icon: <Trophy className="w-6 h-6" />, label: "Avg Score", value: progress ? `${progress.average_score}` : "0", color: "from-amber-500 to-orange-600" },
-                  { icon: <Award className="w-6 h-6" />, label: "Credits", value: progress ? `${progress.total_credits || 0}` : "0", color: "from-purple-500 to-pink-600" },
-                ].map((card) => (
-                  <div key={card.label} className={`rounded-xl bg-gradient-to-br ${card.color} p-5 shadow-lg`}>
+                  { icon: <Users className="w-6 h-6" />, label: "Active Sessions", value: sessions.filter(s => s.status !== "completed").length.toString() },
+                  { icon: <Trophy className="w-6 h-6" />, label: "Avg Score", value: progress ? `${progress.average_score}` : "0" },
+                  { icon: <Award className="w-6 h-6" />, label: "Credits", value: progress ? `${progress.total_credits || 0}` : "0" },
+                ].map((card, idx) => (
+                  <div key={card.label} className="rounded-xl backdrop-blur-xl bg-white/[0.08] border border-white/10 p-5 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)]">
                     <div className="flex items-center justify-between mb-3">
                       <div className="text-white/80">{card.icon}</div>
                       <span className="text-white/50 text-xs font-medium uppercase tracking-wider">{card.label}</span>
@@ -518,12 +518,12 @@ export default function Home() {
                   </div>
                 ))}
               </div>
-              <div className={`rounded-xl backdrop-blur-sm border transition-colors duration-500 bg-white/5 border-white/10 p-5`}>
+              <div className={`rounded-xl backdrop-blur-xl border transition-colors duration-500 bg-white/[0.08] border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-5`}>
                 <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2"><Users className="w-5 h-5 text-amber-400" /> Recent Sessions</h2>
                 {sessions.length === 0 && <p className="text-slate-400 text-sm">No sessions yet. Create or join one!</p>}
                 <div className="space-y-2">
                   {sessions.slice(0, 10).map((s) => (
-                    <div key={s.session_code} className="flex items-center justify-between p-3 rounded-lg bg-white/5 hover:bg-white/10 transition cursor-pointer" onClick={() => openSession(s)}>
+                    <div key={s.session_code} className="flex items-center justify-between p-3 rounded-lg backdrop-blur-sm bg-white/[0.06] hover:bg-white/[0.12] transition cursor-pointer" onClick={() => openSession(s)}>
                       <div>
                         <p className="text-sm font-medium text-white">{s.topic}</p>
                         <p className="text-xs text-slate-400">Code: {s.session_code} · {s.status} · {s.member_count}/{s.team_size} members</p>
@@ -539,7 +539,7 @@ export default function Home() {
           {/* GD Create/Join View */}
           {view === "gd-create" && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className={`rounded-xl backdrop-blur-sm border transition-colors duration-500 bg-white/5 border-white/10 p-6`}>
+              <div className={`rounded-xl backdrop-blur-xl border transition-colors duration-500 bg-white/[0.08] border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6`}>
                 <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2"><MessageSquare className="w-5 h-5 text-amber-400" /> Create GD Session</h2>
                 {currentTopic && (
                   <div className="mb-4 p-4 rounded-lg bg-gradient-to-r from-amber-500/20 to-orange-600/20 border border-amber-500/30">
@@ -569,7 +569,7 @@ export default function Home() {
                   </Button>
                 </div>
               </div>
-              <div className={`rounded-xl backdrop-blur-sm border transition-colors duration-500 bg-white/5 border-white/10 p-6`}>
+              <div className={`rounded-xl backdrop-blur-xl border transition-colors duration-500 bg-white/[0.08] border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6`}>
                 <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2"><Users className="w-5 h-5 text-amber-400" /> Join Session</h2>
                 <div className="space-y-3">
                   <Input placeholder="Enter Session Code (e.g. A3F9K2B7X1M4)" value={sessionCodeInput} onChange={(e) => setSessionCodeInput(e.target.value.toUpperCase())} className={`transition-colors duration-500 bg-white/10 border-white/20 text-white placeholder:text-white/40 font-mono tracking-wider`} />
@@ -584,7 +584,7 @@ export default function Home() {
           {/* GD Session View */}
           {view === "gd-session" && activeSession && (
             <div className="space-y-4">
-              <div className={`rounded-xl backdrop-blur-sm border transition-colors duration-500 bg-white/5 border-white/10 p-6`}>
+              <div className={`rounded-xl backdrop-blur-xl border transition-colors duration-500 bg-white/[0.08] border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6`}>
                 <div className="flex items-center justify-between mb-4">
                   <div>
                     <h2 className="text-xl font-bold text-white">{activeSession.topic}</h2>
@@ -643,7 +643,7 @@ export default function Home() {
                 )}
               </div>
               {Object.keys(gdTranscripts).length > 0 && (
-                <div className={`rounded-xl backdrop-blur-sm border transition-colors duration-500 bg-white/5 border-white/10 p-4`}>
+                <div className={`rounded-xl backdrop-blur-xl border transition-colors duration-500 bg-white/[0.08] border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-4`}>
                   <p className="text-sm font-medium text-slate-300 mb-2">Submitted Contributions</p>
                   {Object.entries(gdTranscripts).map(([sc, txt]) => (
                     <p key={sc} className="text-xs text-slate-400 bg-white/5 p-2 rounded mb-1">{txt.slice(0, 100)}...</p>
@@ -657,7 +657,7 @@ export default function Home() {
           {view === "gd-leaderboard" && (
             <div className="space-y-6">
               {activeSession && (
-                <div className={`rounded-xl backdrop-blur-sm border transition-colors duration-500 bg-white/5 border-white/10 p-5`}>
+                <div className={`rounded-xl backdrop-blur-xl border transition-colors duration-500 bg-white/[0.08] border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-5`}>
                   <div className="flex items-center justify-between mb-4">
                     <div>
                       <h2 className="text-xl font-bold text-white flex items-center gap-2"><Trophy className="w-6 h-6 text-amber-400" /> Leaderboard</h2>
@@ -709,7 +709,7 @@ export default function Home() {
             <div className="space-y-6 animate-in fade-in duration-300">
               {/* Motivational Quote */}
               {soloQuote && (
-                <div className="rounded-xl bg-gradient-to-r from-purple-600/30 to-pink-600/30 border border-purple-500/30 p-6 text-center">
+                <div className="rounded-xl backdrop-blur-xl bg-white/[0.08] border border-purple-500/30 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6 text-center">
                   <p className="text-sm text-purple-300/80 mb-2">Motivational Quote</p>
                   <p className="text-lg font-medium text-white italic">"{soloQuote.quote}"</p>
                   <p className="text-sm text-purple-300/60 mt-2">— {soloQuote.author}</p>
@@ -717,7 +717,7 @@ export default function Home() {
               )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className={`rounded-xl backdrop-blur-sm border transition-colors duration-500 bg-white/5 border-white/10 p-6`}>
+                <div className={`rounded-xl backdrop-blur-xl border transition-colors duration-500 bg-white/[0.08] border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6`}>
                   <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2"><Target className="w-5 h-5 text-amber-400" /> Solo Practice</h2>
                   <div className="mb-4 p-4 rounded-lg bg-gradient-to-r from-amber-500/20 to-orange-600/20 border border-amber-500/30">
                     <p className="text-xs text-amber-300/80 mb-1">Your Topic</p>
@@ -731,7 +731,7 @@ export default function Home() {
                   </Button>
                 </div>
 
-                <div className={`rounded-xl backdrop-blur-sm border transition-colors duration-500 bg-white/5 border-white/10 p-6`}>
+                <div className={`rounded-xl backdrop-blur-xl border transition-colors duration-500 bg-white/[0.08] border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6`}>
                   <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2"><TrendingUp className="w-5 h-5 text-amber-400" /> Your Progress</h2>
                   {soloSession.is_new_user ? (
                     <div className="text-center py-6">
@@ -748,7 +748,7 @@ export default function Home() {
                           { label: "Grammar", value: soloSession.last_session.grammar_score, color: "text-purple-300" },
                           { label: "Delivery", value: soloSession.last_session.delivery_score, color: "text-cyan-300" },
                         ].map(s => (
-                          <div key={s.label} className="bg-white/5 rounded-lg p-3 text-center">
+                          <div key={s.label} className="backdrop-blur-sm bg-white/[0.06] rounded-lg p-3 text-center">
                             <p className="text-xs text-slate-400">{s.label}</p>
                             <p className={`text-lg font-bold ${s.color}`}>{s.value}</p>
                           </div>
@@ -774,7 +774,7 @@ export default function Home() {
           {/* ─── Solo Session (Prep + Speaking) ─── */}
           {view === "solo-session" && soloSession && (
             <div className="max-w-3xl mx-auto space-y-4">
-              <div className={`rounded-xl backdrop-blur-sm border transition-colors duration-500 bg-white/5 border-white/10 p-6`}>
+              <div className={`rounded-xl backdrop-blur-xl border transition-colors duration-500 bg-white/[0.08] border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6`}>
                 <div className="flex items-center justify-between mb-4">
                   <div>
                     <h2 className="text-xl font-bold text-white">{soloSession.topic}</h2>
@@ -836,14 +836,14 @@ export default function Home() {
             <div className="space-y-6 animate-in fade-in duration-300">
               {/* Quote */}
               {soloQuote && (
-                <div className="rounded-xl bg-gradient-to-r from-purple-600/30 to-pink-600/30 border border-purple-500/30 p-4 text-center">
+                <div className="rounded-xl backdrop-blur-xl bg-white/[0.08] border border-purple-500/30 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-4 text-center">
                   <p className="text-sm text-white/80 italic">"{soloQuote.quote}"</p>
                   <p className="text-xs text-purple-300/60 mt-1">— {soloQuote.author}</p>
                 </div>
               )}
 
               {/* Score Overview */}
-              <div className={`rounded-xl backdrop-blur-sm border transition-colors duration-500 bg-white/5 border-white/10 p-6`}>
+              <div className={`rounded-xl backdrop-blur-xl border transition-colors duration-500 bg-white/[0.08] border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6`}>
                 <div className="flex items-center justify-between mb-4">
                   <div>
                     <h2 className="text-xl font-bold text-white flex items-center gap-2"><Target className="w-6 h-6 text-amber-400" /> Practice Results</h2>
@@ -915,7 +915,7 @@ export default function Home() {
 
               {/* Improvement Comparison */}
               {soloResult.last_session && (
-                <div className={`rounded-xl backdrop-blur-sm border transition-colors duration-500 bg-white/5 border-white/10 p-6`}>
+                <div className={`rounded-xl backdrop-blur-xl border transition-colors duration-500 bg-white/[0.08] border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6`}>
                   <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2"><TrendingUp className="w-5 h-5 text-amber-400" /> Improvement from Last Session</h3>
                   <div className="grid grid-cols-4 gap-3">
                     {[
@@ -926,7 +926,7 @@ export default function Home() {
                     ].map(s => {
                       const diff = s.current - s.prev;
                       return (
-                        <div key={s.label} className="bg-white/5 rounded-lg p-3 text-center">
+                        <div key={s.label} className="backdrop-blur-sm bg-white/[0.06] rounded-lg p-3 text-center">
                           <p className="text-xs text-slate-400">{s.label}</p>
                           <p className="text-lg font-bold text-white">{s.current}</p>
                           <p className={`text-xs flex items-center justify-center gap-1 ${diff >= 0 ? "text-emerald-400" : "text-red-400"}`}>
