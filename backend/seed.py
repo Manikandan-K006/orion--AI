@@ -1,4 +1,5 @@
 """Seed the database with all students and proper bcrypt hashes."""
+import os
 import mysql.connector
 from passlib.context import CryptContext
 
@@ -71,9 +72,10 @@ STUDENTS = [
 hash_pw = pwd_context.hash("Password123")
 
 conn = mysql.connector.connect(
-    host="your-project.aivencloud.com", port=12345, user="avnadmin",
-    password="YOUR_AIVEN_PASSWORD", database="speaksense_ai",
-    ssl_disabled=False,
+    host=os.environ.get("MYSQL_HOST", "localhost"), port=int(os.environ.get("MYSQL_PORT", 3306)),
+    user=os.environ.get("MYSQL_USER", "root"),
+    password=os.environ.get("MYSQL_PASSWORD", "mani_password"),
+    database=os.environ.get("MYSQL_DATABASE", "speaksense_ai"),
 )
 cursor = conn.cursor()
 
