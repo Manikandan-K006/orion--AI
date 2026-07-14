@@ -303,7 +303,7 @@ export default function Home() {
         </div>
         <div className="relative z-10 w-full max-w-md mx-4">
           <div className="text-center mb-8">
-            <img src="/MZ_logo_DB.webp" alt="Mount Zion Logo" className="w-24 h-24 rounded-2xl mx-auto mb-4 shadow-lg shadow-purple-500/30 object-cover" />
+            <img src="/MZ_logo_DB.webp" alt="Mount Zion Logo" className="w-24 h-24 rounded-2xl mx-auto mb-4 shadow-lg shadow-purple-500/30 object-cover animate-bounce-slow" />
             <h1 className="text-4xl font-bold text-white mb-2">Mount Zion GD</h1>
             <p className="text-purple-200/80">Group Discussion Assessment Platform</p>
           </div>
