@@ -2,8 +2,8 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from backend.api import auth, interviews, progress, questions, reports
-from backend.config import get_settings
+from api import auth, interviews, progress, questions, reports
+from config import get_settings
 
 settings = get_settings()
 
