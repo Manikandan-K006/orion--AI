@@ -295,11 +295,10 @@ export default function Home() {
 
   if (!user) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 relative overflow-hidden">
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          {floaterStyles.length > 0 && floaterStyles.map((style, i) => (
-            <div key={i} className="absolute rounded-full bg-white/5 animate-pulse" style={style} />
-          ))}
+      <div className="min-h-screen flex items-center justify-center relative overflow-hidden">
+        <div className="absolute inset-0">
+          <img src="/college_image.jpeg" alt="" className="w-full h-full object-cover" />
+          <div className="absolute inset-0 bg-black/60" />
         </div>
         <div className="relative z-10 w-full max-w-md mx-4">
           <div className="text-center mb-8">
