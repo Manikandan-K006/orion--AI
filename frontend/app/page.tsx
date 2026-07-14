@@ -315,9 +315,7 @@ export default function Home() {
       <aside className="w-64 bg-slate-900/80 border-r border-white/10 flex flex-col shrink-0">
         <div className="p-5 border-b border-white/10">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-orange-600 flex items-center justify-center shadow-lg">
-              <MessageSquare className="w-5 h-5 text-white" />
-            </div>
+            <img src="/MZ_logo_DB.webp" alt="Mount Zion Logo" className="w-10 h-10 rounded-xl object-cover shadow-lg" />
             <div>
               <p className="text-sm font-bold text-white">Mount Zion GD</p>
               <p className="text-xs text-purple-300/60">{user.name}</p>
