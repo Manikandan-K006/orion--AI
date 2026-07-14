@@ -72,12 +72,7 @@ class GDSessionCreate(BaseModel):
     team_size: int = Field(default=6, ge=1, le=10)
 
 
-class GDJoinRequest(BaseModel):
-    session_id: int
-
-
 class GDTranscriptSubmit(BaseModel):
-    session_id: int
     transcript: str = Field(min_length=10)
 
 

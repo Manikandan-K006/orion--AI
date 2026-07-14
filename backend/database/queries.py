@@ -1,3 +1,5 @@
+import secrets
+import string
 from typing import Any
 
 from mysql.connector import MySQLConnection
@@ -147,59 +149,140 @@ def get_report_by_session(connection: MySQLConnection, session_id: int) -> dict[
                      (session_id,))
 
 
+# ──────────────────────────────────────────────
+# GD — Topic refresh support
+# ──────────────────────────────────────────────
+
 def list_gd_topics(connection: MySQLConnection) -> list[dict[str, Any]]:
     return fetch_all(connection, "SELECT id, topic, category FROM gd_topics ORDER BY id")
 
 
-def create_gd_session(connection: MySQLConnection, topic_id: int, team_size: int) -> int:
-    return execute(connection, "INSERT INTO gd_sessions (topic_id, team_size, status) VALUES (%s, %s, 'waiting')",
-                   (topic_id, team_size))
+def refresh_gd_topic(connection: MySQLConnection, user_id: int) -> dict:
+    """Return a random unseen topic for the user. Max 3 refreshes per user."""
+    row = fetch_one(connection,
+        "SELECT refresh_count, seen_topic_ids FROM gd_topic_refreshes WHERE user_id = %s",
+        (user_id,))
+
+    refresh_count = row["refresh_count"] if row else 0
+    seen_ids = set()
+    if row and row["seen_topic_ids"]:
+        seen_ids = set(int(x) for x in row["seen_topic_ids"].split(",") if x)
+
+    if refresh_count >= 3:
+        return {"error": "Max refreshes reached (3)"}
+
+    # Get a random topic NOT in seen_ids
+    if seen_ids:
+        placeholders = ",".join(["%s"] * len(seen_ids))
+        topic = fetch_one(connection,
+            f"SELECT id, topic, category FROM gd_topics WHERE id NOT IN ({placeholders}) ORDER BY RAND() LIMIT 1",
+            tuple(seen_ids))
+    else:
+        topic = fetch_one(connection,
+            "SELECT id, topic, category FROM gd_topics ORDER BY RAND() LIMIT 1")
+
+    if not topic:
+        # All topics seen — reset and use any
+        topic = fetch_one(connection,
+            "SELECT id, topic, category FROM gd_topics ORDER BY RAND() LIMIT 1")
+        seen_ids = {topic["id"]}
+    else:
+        seen_ids.add(topic["id"])
+
+    new_seen = ",".join(str(x) for x in sorted(seen_ids))
+    execute(connection,
+        "INSERT INTO gd_topic_refreshes (user_id, refresh_count, seen_topic_ids) VALUES (%s, %s, %s) "
+        "ON DUPLICATE KEY UPDATE refresh_count = refresh_count + 1, seen_topic_ids = %s",
+        (user_id, refresh_count + 1, new_seen, new_seen))
+
+    return topic
 
 
-def get_gd_session(connection: MySQLConnection, session_id: int) -> dict[str, Any] | None:
-    return fetch_one(connection, "SELECT gs.*, gt.topic FROM gd_sessions gs JOIN gd_topics gt ON gs.topic_id = gt.id WHERE gs.id = %s",
-                     (session_id,))
+def reset_topic_refreshes(connection: MySQLConnection, user_id: int) -> None:
+    execute(connection, "DELETE FROM gd_topic_refreshes WHERE user_id = %s", (user_id,))
+
+
+# ──────────────────────────────────────────────
+# GD — Sessions (session_code based)
+# ──────────────────────────────────────────────
+
+def _generate_session_code() -> str:
+    return ''.join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(12))
+
+
+def create_gd_session(connection: MySQLConnection, topic_id: int, team_size: int) -> str:
+    code = _generate_session_code()
+    # ensure uniqueness
+    while fetch_one(connection, "SELECT session_code FROM gd_sessions WHERE session_code = %s", (code,)):
+        code = _generate_session_code()
+    execute(connection, "INSERT INTO gd_sessions (session_code, topic_id, team_size) VALUES (%s, %s, %s)",
+            (code, topic_id, team_size))
+    return code
+
+
+def get_gd_session(connection: MySQLConnection, session_code: str) -> dict[str, Any] | None:
+    return fetch_one(connection,
+        "SELECT gs.*, gt.topic FROM gd_sessions gs JOIN gd_topics gt ON gs.topic_id = gt.id WHERE gs.session_code = %s",
+        (session_code,))
 
 
 def list_gd_sessions(connection: MySQLConnection) -> list[dict[str, Any]]:
-    return fetch_all(connection, "SELECT gs.*, gt.topic, (SELECT COUNT(*) FROM gd_team_members WHERE session_id = gs.id) AS member_count FROM gd_sessions gs JOIN gd_topics gt ON gs.topic_id = gt.id ORDER BY gs.created_at DESC")
+    return fetch_all(connection,
+        "SELECT gs.*, gt.topic, (SELECT COUNT(*) FROM gd_team_members WHERE session_code = gs.session_code) AS member_count "
+        "FROM gd_sessions gs JOIN gd_topics gt ON gs.topic_id = gt.id ORDER BY gs.created_at DESC")
 
 
-def join_gd_session(connection: MySQLConnection, session_id: int, user_id: int) -> int:
-    return execute(connection, "INSERT INTO gd_team_members (session_id, user_id) VALUES (%s, %s)", (session_id, user_id))
+def join_gd_session(connection: MySQLConnection, session_code: str, user_id: int) -> int:
+    return execute(connection, "INSERT INTO gd_team_members (session_code, user_id) VALUES (%s, %s)",
+                   (session_code, user_id))
 
 
-def get_gd_team_members(connection: MySQLConnection, session_id: int) -> list[dict[str, Any]]:
-    return fetch_all(connection, "SELECT u.id, u.name, u.register_number, tm.joined_at FROM gd_team_members tm JOIN users u ON tm.user_id = u.id WHERE tm.session_id = %s",
-                     (session_id,))
+def get_gd_team_members(connection: MySQLConnection, session_code: str) -> list[dict[str, Any]]:
+    return fetch_all(connection,
+        "SELECT u.id, u.name, u.register_number, tm.joined_at FROM gd_team_members tm "
+        "JOIN users u ON tm.user_id = u.id WHERE tm.session_code = %s",
+        (session_code,))
 
 
-def is_member_of_gd(connection: MySQLConnection, session_id: int, user_id: int) -> bool:
-    return fetch_one(connection, "SELECT id FROM gd_team_members WHERE session_id = %s AND user_id = %s",
-                     (session_id, user_id)) is not None
+def is_member_of_gd(connection: MySQLConnection, session_code: str, user_id: int) -> bool:
+    return fetch_one(connection, "SELECT id FROM gd_team_members WHERE session_code = %s AND user_id = %s",
+                     (session_code, user_id)) is not None
 
 
-def update_gd_status(connection: MySQLConnection, session_id: int, status: str) -> int:
+def update_gd_status(connection: MySQLConnection, session_code: str, status: str) -> int:
     completed = "', completed_at = CURRENT_TIMESTAMP" if status == "completed" else ""
-    return execute(connection, f"UPDATE gd_sessions SET status = %s{completed} WHERE id = %s",
-                   (status, session_id))
+    return execute(connection, f"UPDATE gd_sessions SET status = %s{completed} WHERE session_code = %s",
+                   (status, session_code))
 
 
-def create_gd_evaluation(connection: MySQLConnection, session_id: int, user_id: int, fluency: float, grammar: float, accent: float, relevance: float, quality: float, overall: float, transcript: str, points: float) -> int:
-    return execute(connection, "INSERT INTO gd_evaluation (session_id, user_id, fluency_score, grammar_score, accent_score, relevance_score, content_quality_score, overall_score, transcript, credential_points) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
-                   (session_id, user_id, fluency, grammar, accent, relevance, quality, overall, transcript, points))
+def create_gd_evaluation(connection: MySQLConnection, session_code: str, user_id: int,
+                         fluency: float, grammar: float, accent: float,
+                         relevance: float, quality: float, overall: float,
+                         transcript: str, points: float) -> int:
+    return execute(connection,
+        "INSERT INTO gd_evaluation (session_code, user_id, fluency_score, grammar_score, accent_score, "
+        "relevance_score, content_quality_score, overall_score, transcript, credential_points) "
+        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+        (session_code, user_id, fluency, grammar, accent, relevance, quality, overall, transcript, points))
 
 
-def get_gd_evaluations(connection: MySQLConnection, session_id: int) -> list[dict[str, Any]]:
-    return fetch_all(connection, "SELECT ge.*, u.name, u.register_number FROM gd_evaluation ge JOIN users u ON ge.user_id = u.id WHERE ge.session_id = %s ORDER BY ge.overall_score DESC",
-                     (session_id,))
+def get_gd_evaluations(connection: MySQLConnection, session_code: str) -> list[dict[str, Any]]:
+    return fetch_all(connection,
+        "SELECT ge.*, u.name, u.register_number FROM gd_evaluation ge "
+        "JOIN users u ON ge.user_id = u.id WHERE ge.session_code = %s ORDER BY ge.overall_score DESC",
+        (session_code,))
 
 
-def save_gd_leaderboard(connection: MySQLConnection, session_id: int, user_id: int, rank: int, score: float, points: float) -> int:
-    return execute(connection, "INSERT INTO gd_leaderboard (session_id, user_id, rank_position, overall_score, credential_points) VALUES (%s, %s, %s, %s, %s)",
-                   (session_id, user_id, rank, score, points))
+def save_gd_leaderboard(connection: MySQLConnection, session_code: str, user_id: int,
+                        rank: int, score: float, points: float) -> int:
+    return execute(connection,
+        "INSERT INTO gd_leaderboard (session_code, user_id, rank_position, overall_score, credential_points) "
+        "VALUES (%s, %s, %s, %s, %s)",
+        (session_code, user_id, rank, score, points))
 
 
-def get_gd_leaderboard(connection: MySQLConnection, session_id: int) -> list[dict[str, Any]]:
-    return fetch_all(connection, "SELECT gl.*, u.name, u.register_number FROM gd_leaderboard gl JOIN users u ON gl.user_id = u.id WHERE gl.session_id = %s ORDER BY gl.rank_position",
-                     (session_id,))
+def get_gd_leaderboard(connection: MySQLConnection, session_code: str) -> list[dict[str, Any]]:
+    return fetch_all(connection,
+        "SELECT gl.*, u.name, u.register_number FROM gd_leaderboard gl "
+        "JOIN users u ON gl.user_id = u.id WHERE gl.session_code = %s ORDER BY gl.rank_position",
+        (session_code,))
