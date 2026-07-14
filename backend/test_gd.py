@@ -4,6 +4,7 @@ import urllib.request
 import urllib.error
 
 BASE = "http://localhost:8000"
+# Change this if your server runs on a different port
 
 def req(method, path, data=None, token=None):
     headers = {"Content-Type": "application/json"}
@@ -31,7 +32,7 @@ for i in range(3):
     print(f"2.{i+1} Topic {i+1}: {t['topic']} [{t['category']}]")
 
 assert len(topics_seen) == 3, f"Topics should be unique, got {len(topics_seen)}"
-print(f"   All {len(topics_seen)} topics are unique ✓")
+print(f"   All {len(topics_seen)} topics are unique [OK]")
 
 # 5. 4th refresh should fail
 try:
@@ -40,10 +41,7 @@ try:
 except Exception as e:
     print(f"3. 4th refresh correctly rejected: {e}")
 
-# 6. Create session with the last topic
-t = req("POST", "/gd/topics/refresh", token=token)  # reset by actually we need a fresh topic since the previous session
-# Actually the refresh resets on session creation, but we need a topic. Let me just pick the first one available
-# Get topics list
+# 6. Create session with a topic from the pool
 topics = req("GET", "/gd/topics", token=token)
 t2 = topics[0]
 print(f"4. Using topic: {t2['topic']}")
@@ -64,7 +62,7 @@ assert s["status"] == "waiting"
 r2 = req("POST", "/login/register-number", {"register_number": "911724205002", "password": "Password123"})
 token2 = r2["access_token"]
 req("POST", f"/gd/sessions/{code}/join", token=token2)
-print("7. User 2 joined ✓")
+print("7. User 2 joined [OK]")
 
 # 9. Start GD
 r = req("POST", f"/gd/sessions/{code}/start", token=token)
@@ -81,7 +79,7 @@ print(f"10. User 2 submitted: score={r['overall_score']}, points={r['credential_
 
 # 12. Finish GD
 req("POST", f"/gd/sessions/{code}/finish", token=token)
-print("11. GD finished ✓")
+print("11. GD finished [OK]")
 
 # 13. Leaderboard
 lb = req("GET", f"/gd/sessions/{code}/leaderboard", token=token)
@@ -93,6 +91,6 @@ assert len(lb) == 2
 # 14. Verify session is completed
 s = req("GET", f"/gd/sessions/{code}", token=token)
 assert s["status"] == "completed"
-print("13. Session status is 'completed' ✓")
+print("13. Session status is 'completed' [OK]")
 
-print("\n✅ ALL TESTS PASSED")
+print("\n[OK] ALL TESTS PASSED")
