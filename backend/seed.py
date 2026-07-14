@@ -71,8 +71,9 @@ STUDENTS = [
 hash_pw = pwd_context.hash("Password123")
 
 conn = mysql.connector.connect(
-    host="localhost", port=3306, user="root",
-    password="mani_password", database="speaksense_ai"
+    host="your-project.aivencloud.com", port=12345, user="avnadmin",
+    password="YOUR_AIVEN_PASSWORD", database="speaksense_ai",
+    ssl_disabled=False,
 )
 cursor = conn.cursor()
 
