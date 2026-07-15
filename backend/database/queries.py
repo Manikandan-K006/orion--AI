@@ -524,3 +524,134 @@ def decline_invitation(connection: MySQLConnection, invitation_id: int, user_id:
         "UPDATE gd_invitations SET status = 'declined' WHERE id = %s AND to_user_id = %s AND status = 'pending'",
         (invitation_id, user_id))
     return result > 0
+
+
+# ──────────────────────────────────────────────
+# GD Live (Anonymous 4-digit code sessions)
+# ──────────────────────────────────────────────
+
+def generate_live_code(connection: MySQLConnection) -> str:
+    import random, string
+    while True:
+        code = "".join(random.choices(string.digits, k=4))
+        if not fetch_one(connection, "SELECT id FROM gd_live_sessions WHERE session_code = %s AND status != 'completed'", (code,)):
+            return code
+
+
+def create_live_session(connection: MySQLConnection, created_by: int) -> dict[str, Any]:
+    code = generate_live_code(connection)
+    execute(connection, "INSERT INTO gd_live_sessions (session_code, created_by) VALUES (%s, %s)", (code, created_by))
+    topics = fetch_all(connection, "SELECT topic FROM gd_easy_topics ORDER BY RAND() LIMIT 21")
+    return {"session_code": code, "topics_available": len(topics)}
+
+
+def list_live_sessions(connection: MySQLConnection) -> list[dict[str, Any]]:
+    return fetch_all(connection,
+        "SELECT ls.*, (SELECT COUNT(*) FROM gd_live_participants WHERE session_code = ls.session_code) AS participant_count, "
+        "(SELECT COUNT(*) FROM gd_live_teams WHERE session_code = ls.session_code) AS team_count "
+        "FROM gd_live_sessions ls ORDER BY ls.created_at DESC")
+
+
+def join_live_session(connection: MySQLConnection, session_code: str, user_id: int) -> str:
+    existing = fetch_one(connection, "SELECT id FROM gd_live_participants WHERE session_code = %s AND user_id = %s",
+                         (session_code, user_id))
+    if existing:
+        return "already_joined"
+    session = fetch_one(connection, "SELECT id FROM gd_live_sessions WHERE session_code = %s AND status = 'waiting'",
+                        (session_code,))
+    if not session:
+        return "invalid"
+    execute(connection, "INSERT IGNORE INTO gd_live_participants (session_code, user_id) VALUES (%s, %s)",
+            (session_code, user_id))
+    execute(connection, "UPDATE gd_live_sessions SET total_participants = total_participants + 1 WHERE session_code = %s",
+            (session_code,))
+    return "joined"
+
+
+def assign_live_teams(connection: MySQLConnection, session_code: str) -> list[dict[str, Any]]:
+    participants = fetch_all(connection,
+        "SELECT lp.*, u.name, u.register_number, sp.department, sp.year FROM gd_live_participants lp "
+        "JOIN users u ON lp.user_id = u.id "
+        "LEFT JOIN student_profile sp ON sp.user_id = u.id "
+        "WHERE lp.session_code = %s ORDER BY RAND()",
+        (session_code,))
+    if not participants:
+        return []
+
+    topics = fetch_all(connection, "SELECT topic FROM gd_easy_topics ORDER BY RAND()")
+    if not topics:
+        return []
+
+    teams = []
+    team_number = 1
+    for i in range(0, len(participants), 3):
+        team_members = participants[i:i+3]
+        topic = topics[(team_number - 1) % len(topics)]["topic"]
+        execute(connection,
+            "INSERT INTO gd_live_teams (session_code, team_number, topic) VALUES (%s, %s, %s)",
+            (session_code, team_number, topic))
+        for j, member in enumerate(team_members):
+            label = f"Member {j + 1}"
+            execute(connection,
+                "UPDATE gd_live_participants SET team_number = %s, anonymous_label = %s, status = 'assigned' WHERE id = %s",
+                (team_number, label, member["id"]))
+        teams.append({
+            "team_number": team_number,
+            "topic": topic,
+            "members": [{"user_id": m["user_id"], "label": f"Member {idx + 1}", "name": m["name"],
+                         "register_number": m["register_number"], "department": m.get("department"),
+                         "year": m.get("year")} for idx, m in enumerate(team_members)]
+        })
+        team_number += 1
+
+    execute(connection, "UPDATE gd_live_sessions SET status = 'active' WHERE session_code = %s", (session_code,))
+    return teams
+
+
+def get_live_my_team(connection: MySQLConnection, session_code: str, user_id: int) -> dict[str, Any] | None:
+    participant = fetch_one(connection,
+        "SELECT team_number FROM gd_live_participants WHERE session_code = %s AND user_id = %s",
+        (session_code, user_id))
+    if not participant or not participant["team_number"]:
+        return None
+    team = fetch_one(connection,
+        "SELECT * FROM gd_live_teams WHERE session_code = %s AND team_number = %s",
+        (session_code, participant["team_number"]))
+    members = fetch_all(connection,
+        "SELECT anonymous_label FROM gd_live_participants WHERE session_code = %s AND team_number = %s ORDER BY id",
+        (session_code, participant["team_number"]))
+    return {
+        "team_number": participant["team_number"],
+        "topic": team["topic"],
+        "team_status": team["status"],
+        "members": [m["anonymous_label"] for m in members],
+    }
+
+
+def get_live_participants(connection: MySQLConnection, session_code: str) -> list[dict[str, Any]]:
+    return fetch_all(connection,
+        "SELECT lp.*, u.name, u.register_number, sp.department, sp.year FROM gd_live_participants lp "
+        "JOIN users u ON lp.user_id = u.id "
+        "LEFT JOIN student_profile sp ON sp.user_id = u.id "
+        "WHERE lp.session_code = %s ORDER BY lp.team_number, lp.id",
+        (session_code,))
+
+
+def start_live_team(connection: MySQLConnection, session_code: str, team_number: int) -> bool:
+    r = execute(connection,
+        "UPDATE gd_live_teams SET status = 'active' WHERE session_code = %s AND team_number = %s AND status = 'waiting'",
+        (session_code, team_number))
+    return r > 0
+
+
+def submit_live_transcript(connection: MySQLConnection, session_code: str, user_id: int, transcript: str) -> bool:
+    r = execute(connection,
+        "UPDATE gd_live_participants SET transcript = %s, status = 'completed' WHERE session_code = %s AND user_id = %s",
+        (transcript, session_code, user_id))
+    return r > 0
+
+
+def complete_live_session(connection: MySQLConnection, session_code: str) -> bool:
+    r = execute(connection,
+        "UPDATE gd_live_sessions SET status = 'completed' WHERE session_code = %s", (session_code,))
+    return r > 0

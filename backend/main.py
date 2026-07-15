@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from backend.api import auth, gd, interviews, progress, questions, reports, solo
+from backend.api import auth, gd, gd_live, interviews, progress, questions, reports, solo
 from backend.config import get_settings
 
 settings = get_settings()
@@ -35,4 +35,5 @@ app.include_router(interviews.router)
 app.include_router(progress.router)
 app.include_router(reports.router)
 app.include_router(gd.router)
+app.include_router(gd_live.router)
 app.include_router(solo.router)

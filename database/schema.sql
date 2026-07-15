@@ -245,4 +245,69 @@ INSERT IGNORE INTO motivational_quotes (id, quote, author) VALUES
 (24, 'Do what you can, with what you have, where you are.', 'Theodore Roosevelt'),
 (25, 'The only impossible journey is the one you never begin.', 'Tony Robbins');
 
+-- Easy topics for GD Live (simple enough for anyone)
+CREATE TABLE IF NOT EXISTS gd_easy_topics (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    topic VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+INSERT IGNORE INTO gd_easy_topics (id, topic) VALUES
+(1, 'My favorite animal and why I like it'),
+(2, 'What I like to do on weekends'),
+(3, 'My favorite food'),
+(4, 'A happy memory from my childhood'),
+(5, 'What I want to become when I grow up'),
+(6, 'My best friend'),
+(7, 'A game I love to play'),
+(8, 'My favorite season and why'),
+(9, 'What makes me happy'),
+(10, 'A place I want to visit'),
+(11, 'My favorite subject in school'),
+(12, 'Something I learned recently'),
+(13, 'The best gift I ever received'),
+(14, 'My favorite movie or cartoon'),
+(15, 'What I do to help at home'),
+(16, 'A skill I want to learn'),
+(17, 'My favorite holiday'),
+(18, 'An interesting dream I had'),
+(19, 'A person I admire'),
+(20, 'What peace means to me');
+
+-- Anonymous GD Live sessions (4-digit code)
+CREATE TABLE IF NOT EXISTS gd_live_sessions (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    session_code VARCHAR(4) NOT NULL UNIQUE,
+    status ENUM('waiting', 'active', 'completed') NOT NULL DEFAULT 'waiting',
+    total_participants INT NOT NULL DEFAULT 0,
+    created_by INT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (created_by) REFERENCES users(id)
+);
+
+-- Teams within a live session
+CREATE TABLE IF NOT EXISTS gd_live_teams (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    session_code VARCHAR(4) NOT NULL,
+    team_number INT NOT NULL,
+    topic VARCHAR(255) NOT NULL,
+    status ENUM('waiting', 'active', 'completed') NOT NULL DEFAULT 'waiting',
+    FOREIGN KEY (session_code) REFERENCES gd_live_sessions(session_code) ON DELETE CASCADE
+);
+
+-- Participants in live sessions (anonymous to each other)
+CREATE TABLE IF NOT EXISTS gd_live_participants (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    session_code VARCHAR(4) NOT NULL,
+    user_id INT NOT NULL,
+    team_number INT,
+    anonymous_label VARCHAR(20),
+    transcript TEXT,
+    status ENUM('joined', 'assigned', 'completed') NOT NULL DEFAULT 'joined',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY (session_code, user_id),
+    FOREIGN KEY (session_code) REFERENCES gd_live_sessions(session_code) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
 -- Students are seeded via backend/seed.py with proper bcrypt hashes
