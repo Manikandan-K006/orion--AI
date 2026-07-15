@@ -596,6 +596,33 @@ export default function Home() {
           {/* Dashboard View */}
           {view === "dashboard" && (
             <div className="space-y-6">
+              {/* General Rules Notice */}
+              <div className="rounded-xl backdrop-blur-xl bg-amber-500/[0.06] border border-amber-500/20 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6">
+                <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2"><AlertCircle className="w-5 h-5 text-amber-400" /> General Rules — Before Starting</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2">
+                  {[
+                    "Read the instructions before beginning.",
+                    "Use a stable internet connection.",
+                    "Allow camera and microphone permissions.",
+                    "Sit in a quiet environment with minimal background noise.",
+                    "Use headphones if possible to reduce echo.",
+                    "Keep your device charged or connected to power.",
+                    "Close unnecessary applications before starting.",
+                    "Do not refresh or close the browser during an active session.",
+                    "Maintain professional behavior throughout the assessment.",
+                  ].map((rule, i) => (
+                    <div key={i} className="flex items-start gap-2 text-sm text-slate-300">
+                      <span className="text-amber-400 mt-0.5 shrink-0">•</span> {rule}
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-4 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                  <p className="text-xs text-amber-300/90 flex items-center gap-1">
+                    <Shield className="w-3.5 h-3.5" />
+                    AI Monitoring Notice: Microphone, tab switching, full-screen exit, background noise, and speaking activity may be monitored for assessment fairness.
+                  </p>
+                </div>
+              </div>
               <div className="rounded-xl backdrop-blur-xl bg-white/[0.08] border border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6">
                 <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2"><Zap className="w-5 h-5 text-amber-400" /> Conducted GD Sessions</h2>
                 {gdLiveSessions.filter(s => s.status === "completed").length === 0 ? (
@@ -765,6 +792,25 @@ export default function Home() {
                   <div className="flex items-center gap-2 text-sm text-slate-400 mb-4">
                     <Clock className="w-4 h-4" /> Session #{soloSession.session_number} · 4 min prep · 10 min speak
                   </div>
+                  <details className="mb-4 group">
+                    <summary className="text-xs text-amber-300/80 cursor-pointer hover:text-amber-300 select-none">Solo Practice Rules ▼</summary>
+                    <div className="mt-3 space-y-1.5 text-xs text-slate-400 pl-2 border-l border-amber-500/20">
+                      {[
+                        "Speak naturally and confidently.",
+                        "Answer using your own words.",
+                        "Avoid reading directly from notes or another screen.",
+                        "Maintain eye contact with the camera as much as possible.",
+                        "Avoid excessive filler words such as 'um', 'uh', and 'like'.",
+                        "Complete your response within the allotted time.",
+                        "Wait until the timer finishes before stopping.",
+                        "Speak clearly at a moderate pace.",
+                        "Do not interrupt the recording once it has started.",
+                        "Review your AI feedback after completing the session.",
+                      ].map((rule, i) => (
+                        <p key={i} className="flex items-start gap-1.5"><span className="text-amber-400 shrink-0">•</span> {rule}</p>
+                      ))}
+                    </div>
+                  </details>
                   <Button onClick={beginSoloPrep} className="w-full bg-gradient-to-r from-emerald-500 to-green-600 border-0 h-12 text-lg">
                     <Zap className="h-5 w-5 mr-2" /> Begin Practice
                   </Button>
@@ -1025,10 +1071,30 @@ export default function Home() {
                   <li className="flex items-start gap-2">✓ Each member is labeled as "Member 1", "Member 2", "Member 3"</li>
                   <li className="flex items-start gap-2">✓ Each team gets a separate discussion topic</li>
                   <li className="flex items-start gap-2">✓ Only admins can view your identity, department, and year</li>
-                  <li className="flex items-start gap-2">✓ Topics are basic opinion/debate subjects everyone can talk about</li>
-                </ul>
+                    <li className="flex items-start gap-2">✓ Topics are basic opinion/debate subjects everyone can talk about</li>
+                  </ul>
+                </div>
+                <div className="rounded-xl backdrop-blur-xl bg-white/[0.08] border border-amber-500/20 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6">
+                  <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2"><MessageSquare className="w-5 h-5 text-amber-400" /> Group Discussion Rules</h2>
+                  <div className="space-y-1.5 text-sm text-slate-300">
+                    {[
+                      "Join the discussion before the scheduled start time.",
+                      "Keep your microphone enabled unless instructed otherwise.",
+                      "Respect all participants. Do not interrupt another speaker.",
+                      "Stay on the assigned discussion topic.",
+                      "Allow every participant an opportunity to contribute.",
+                      "Use professional and respectful language.",
+                      "Support your opinions with logical reasoning.",
+                      "Avoid personal attacks or inappropriate comments.",
+                      "Keep your microphone muted when not speaking (if required).",
+                      "Follow the moderator's instructions.",
+                      "Complete the discussion within the allotted time.",
+                    ].map((rule, i) => (
+                      <p key={i} className="flex items-start gap-2"><span className="text-amber-400 shrink-0">•</span> {rule}</p>
+                    ))}
+                  </div>
+                </div>
               </div>
-            </div>
           )}
 
           {/* ─── GD Live Admin ─── */}
