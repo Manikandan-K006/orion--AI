@@ -153,13 +153,6 @@ export default function Home() {
     } finally { setLoading(false); }
   }
 
-  async function loadGdLiveSessions() {
-    navigator.clipboard.writeText(code);
-    setCopied(true);
-    setCopiedCopyCode(code);
-    setTimeout(() => { setCopied(false); setCopiedCopyCode(""); }, 2000);
-  }
-
   async function toggleRecording() {
     if (isRecording) {
       mediaRecorderRef.current?.stop();
