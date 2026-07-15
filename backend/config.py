@@ -21,6 +21,8 @@ class Settings(BaseSettings):
     smtp_user: str = ""
     smtp_password: str = ""
     smtp_from_email: str = ""
+    sendgrid_api_key: str = ""
+    sendgrid_from_email: str = "noreply@mzorator.com"
     frontend_url: str = "https://orion-ai-gamma.vercel.app"
 
     upload_dir: str = "uploads"
