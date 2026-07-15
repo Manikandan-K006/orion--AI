@@ -161,6 +161,22 @@ for reg_no, name in STUDENTS:
         )
 
 conn.commit()
+
+# Create admin user if not exists
+admin_email = "admin@mountzion.ac.in"
+admin_reg = "ADMIN001"
+cursor.execute("SELECT id FROM users WHERE register_number = %s", (admin_reg,))
+if not cursor.fetchone():
+    admin_hash = hash_password("Admin@123")
+    cursor.execute(
+        "INSERT INTO users (register_number, name, email, password_hash, role) VALUES (%s, %s, %s, %s, 'admin')",
+        (admin_reg, "Admin", admin_email, admin_hash)
+    )
+    print("Admin user created: admin@mountzion.ac.in / Admin@123")
+else:
+    print("Admin user already exists")
+
+conn.commit()
 cursor.close()
 conn.close()
 print(f"Seeded {len(STUDENTS)} students with password: Password123")

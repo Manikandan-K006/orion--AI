@@ -39,6 +39,8 @@ export default function Home() {
 
   const [registerNumber, setRegisterNumber] = useState("");
   const [password, setPassword] = useState("");
+  const [isAdminLogin, setIsAdminLogin] = useState(false);
+  const [adminEmail, setAdminEmail] = useState("");
 
   const [progress, setProgress] = useState<Progress | null>(null);
   const [transcript, setTranscript] = useState("");
@@ -138,13 +140,22 @@ export default function Home() {
   }
 
   async function handleLogin() {
-    if (!registerNumber.trim()) { setMessage("Enter your register number"); return; }
     setLoading(true); setMessage(""); setSuccess("");
     try {
-      const res = await apiRequest<{ access_token: string; user: User }>("/login/register-number", {
-        method: "POST",
-        body: JSON.stringify({ register_number: registerNumber, password: password || "Password123" })
-      });
+      let res: { access_token: string; user: User };
+      if (isAdminLogin) {
+        if (!adminEmail.trim()) { setMessage("Enter your admin email"); setLoading(false); return; }
+        res = await apiRequest<{ access_token: string; user: User }>("/login", {
+          method: "POST",
+          body: JSON.stringify({ email: adminEmail, password })
+        });
+      } else {
+        if (!registerNumber.trim()) { setMessage("Enter your register number"); setLoading(false); return; }
+        res = await apiRequest<{ access_token: string; user: User }>("/login/register-number", {
+          method: "POST",
+          body: JSON.stringify({ register_number: registerNumber, password: password || "Password123" })
+        });
+      }
       localStorage.setItem("mzgd_token", res.access_token);
       setToken(res.access_token);
       await loadProfile(res.access_token);
@@ -427,21 +438,42 @@ export default function Home() {
             <p className="text-xs md:text-base text-purple-200/80 drop-shadow">AI Group Discussion Platform</p>
           </div>
           <div className="bg-white/10 backdrop-blur-xl rounded-2xl p-5 md:p-8 shadow-2xl border border-white/20">
+            {/* Role toggle */}
+            <div className="flex mb-5 bg-white/5 rounded-xl p-1 border border-white/10">
+              <button onClick={() => setIsAdminLogin(false)} className={`flex-1 py-2 text-sm font-medium rounded-lg transition ${!isAdminLogin ? "bg-amber-500/30 text-amber-200 border border-amber-500/40" : "text-slate-400 hover:text-white"}`}>
+                <Users className="w-4 h-4 inline mr-1.5" />Student
+              </button>
+              <button onClick={() => setIsAdminLogin(true)} className={`flex-1 py-2 text-sm font-medium rounded-lg transition ${isAdminLogin ? "bg-amber-500/30 text-amber-200 border border-amber-500/40" : "text-slate-400 hover:text-white"}`}>
+                <Shield className="w-4 h-4 inline mr-1.5" />Admin
+              </button>
+            </div>
             <div className="space-y-4 md:space-y-5">
-              <div>
-                <label className="block text-xs md:text-sm font-medium mb-1 md:mb-1.5 text-purple-200">Register Number</label>
-                <Input
-                  placeholder="911724205001"
-                  value={registerNumber}
-                  onChange={(e) => setRegisterNumber(e.target.value)}
-                  className="bg-white/5 border-white/20 text-white placeholder:text-white/40"
-                />
-              </div>
+              {isAdminLogin ? (
+                <div>
+                  <label className="block text-xs md:text-sm font-medium mb-1 md:mb-1.5 text-purple-200">Admin Email</label>
+                  <Input
+                    placeholder="admin@mountzion.ac.in"
+                    value={adminEmail}
+                    onChange={(e) => setAdminEmail(e.target.value)}
+                    className="bg-white/5 border-white/20 text-white placeholder:text-white/40"
+                  />
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-xs md:text-sm font-medium mb-1 md:mb-1.5 text-purple-200">Register Number</label>
+                  <Input
+                    placeholder="911724205001"
+                    value={registerNumber}
+                    onChange={(e) => setRegisterNumber(e.target.value)}
+                    className="bg-white/5 border-white/20 text-white placeholder:text-white/40"
+                  />
+                </div>
+              )}
               <div>
                 <label className="block text-sm font-medium mb-1.5 text-purple-200">Password</label>
                 <Input
                   type="password"
-                  placeholder="Default: Password123"
+                  placeholder={isAdminLogin ? "Enter admin password" : "Default: Password123"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="bg-white/5 border-white/20 text-white placeholder:text-white/40"
