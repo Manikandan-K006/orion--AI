@@ -449,7 +449,7 @@ export default function Home() {
     return (
       <div className="min-h-screen flex items-center justify-center relative overflow-hidden">
         <div className="absolute inset-0">
-          <img src="/college_image.jpeg" alt="" className="w-full h-full object-cover animate-ken-burns" />
+          <img src="/4k_BG.jpeg" alt="" className="w-full h-full object-cover animate-ken-burns" />
           <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/50 to-black/70" />
         </div>
         <div className="relative z-10 w-full max-w-sm md:max-w-md mx-3 md:mx-4">
