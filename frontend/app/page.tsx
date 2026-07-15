@@ -540,10 +540,6 @@ export default function Home() {
             ...(user?.role === "admin" ? [
               { icon: <Shield className="w-5 h-5 shrink-0" />, label: "Admin", view: "gd-live-admin" as PageView },
             ] : []),
-            { icon: <Trophy className="w-5 h-5 shrink-0" />, label: "Leaderboard", view: "gd-leaderboard" as PageView },
-            ...(user?.role === "admin" ? [
-              { icon: <Shield className="w-5 h-5 shrink-0" />, label: "Admin", view: "gd-live-admin" as PageView },
-            ] : []),
           ].filter(Boolean).map((item: { icon: React.ReactNode; label: string; view: PageView; badge?: string }) => (
             <button
               key={item.label}
