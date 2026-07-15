@@ -81,7 +81,8 @@ cursor = conn.cursor()
 for reg_no, name in STUDENTS:
     email = f"{reg_no}@mzgd.edu"
     cursor.execute(
-        "INSERT IGNORE INTO users (register_number, name, email, password_hash, role) VALUES (%s, %s, %s, %s, 'student')",
+        "INSERT INTO users (register_number, name, email, password_hash, role) VALUES (%s, %s, %s, %s, 'student') "
+        "ON DUPLICATE KEY UPDATE password_hash = VALUES(password_hash), name = VALUES(name)",
         (reg_no, name, email, hash_pw)
     )
     # Get the user id (whether just inserted or already existed)
@@ -90,7 +91,8 @@ for reg_no, name in STUDENTS:
     if row:
         uid = row[0]
         cursor.execute(
-            "INSERT IGNORE INTO student_profile (user_id, department, year) VALUES (%s, 'IT', '3rd Year')",
+            "INSERT INTO student_profile (user_id, department, year) VALUES (%s, 'IT', '3rd Year') "
+            "ON DUPLICATE KEY UPDATE department = VALUES(department), year = VALUES(year)",
             (uid,)
         )
 
