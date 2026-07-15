@@ -122,7 +122,8 @@ export default function Home() {
     } finally { setLoading(false); }
   }
 
-  async function loadTopics() {
+  async function loadTopics(force = false) {
+    if (topics.length > 0 && !force) { setView("gd-create"); return; }
     setPageLoading(true);
     setRefreshCount(0);
     setCurrentTopic(null);
@@ -140,6 +141,7 @@ export default function Home() {
   }
 
   async function loadLeaderboard(department = lbDepartment, year = lbYear, timeframe = lbTimeframe) {
+    if (lbData && lbDepartment === department && lbYear === year && lbTimeframe === timeframe) { setView("gd-leaderboard"); return; }
     setPageLoading(true);
     try {
       const params = new URLSearchParams({ department, year, timeframe });
