@@ -39,6 +39,7 @@ export default function Home() {
 
   const [registerNumber, setRegisterNumber] = useState("");
   const [password, setPassword] = useState("");
+  const [loginTab, setLoginTab] = useState<"student" | "admin">("student");
 
   const [progress, setProgress] = useState<Progress | null>(null);
   const [transcript, setTranscript] = useState("");
@@ -427,11 +428,32 @@ export default function Home() {
             <p className="text-xs md:text-base text-purple-200/80 drop-shadow">AI Group Discussion Platform</p>
           </div>
           <div className="bg-white/10 backdrop-blur-xl rounded-2xl p-5 md:p-8 shadow-2xl border border-white/20">
+            {/* Login tabs */}
+            <div className="flex mb-6 bg-white/5 rounded-xl p-1 border border-white/10">
+              <button
+                onClick={() => { setLoginTab("student"); setMessage(""); }}
+                className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium rounded-lg transition ${
+                  loginTab === "student" ? "bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-lg shadow-orange-500/30" : "text-slate-400 hover:text-white"
+                }`}
+              >
+                <Users className="w-4 h-4" /> Student Login
+              </button>
+              <button
+                onClick={() => { setLoginTab("admin"); setMessage(""); }}
+                className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium rounded-lg transition ${
+                  loginTab === "admin" ? "bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-lg shadow-orange-500/30" : "text-slate-400 hover:text-white"
+                }`}
+              >
+                <Shield className="w-4 h-4" /> Admin Login
+              </button>
+            </div>
             <div className="space-y-4 md:space-y-5">
               <div>
-                <label className="block text-xs md:text-sm font-medium mb-1 md:mb-1.5 text-purple-200">Register / SPR Number</label>
+                <label className="block text-xs md:text-sm font-medium mb-1 md:mb-1.5 text-purple-200">
+                  {loginTab === "student" ? "Register Number" : "SPR Number"}
+                </label>
                 <Input
-                  placeholder="Students: 911724205001 | Admin: 12345"
+                  placeholder={loginTab === "student" ? "911724205001" : "12345"}
                   value={registerNumber}
                   onChange={(e) => setRegisterNumber(e.target.value)}
                   className="bg-white/5 border-white/20 text-white placeholder:text-white/40"
@@ -441,12 +463,20 @@ export default function Home() {
                 <label className="block text-sm font-medium mb-1.5 text-purple-200">Password</label>
                 <Input
                   type="password"
-                  placeholder="Students: Password123 | Admin: Mzorator@admin"
+                  placeholder={loginTab === "student" ? "Default: Password123" : "Mzorator@admin"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="bg-white/5 border-white/20 text-white placeholder:text-white/40"
                 />
               </div>
+              {loginTab === "admin" && (
+                <div className="rounded-lg bg-amber-500/10 border border-amber-500/30 p-3">
+                  <p className="text-xs text-amber-300/90">
+                    <Shield className="w-3 h-3 inline mr-1" />
+                    Admin demo: SPR <code className="text-white font-mono">12345</code> / Password <code className="text-white font-mono">Mzorator@admin</code>
+                  </p>
+                </div>
+              )}
               <Button
                 className="group relative w-full bg-gradient-to-r from-amber-500 via-orange-500 to-amber-500 hover:from-amber-600 hover:via-orange-600 hover:to-amber-600 text-white border-0 h-12 text-lg font-semibold shadow-lg shadow-orange-500/30 overflow-hidden rounded-xl transition-all duration-300 hover:shadow-orange-400/40 hover:scale-[1.02] active:scale-95"
                 onClick={handleLogin}
