@@ -69,12 +69,39 @@ export default function Home() {
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [pageLoading, setPageLoading] = useState(false);
+  const [isSessionLocked, setIsSessionLocked] = useState(false);
+  const [tabSwitchWarning, setTabSwitchWarning] = useState(false);
+  const lockWarningRef = useRef<boolean>(false);
 
   useEffect(() => {
     if (typeof window !== "undefined" && window.innerWidth >= 768) {
       setSidebarOpen(true);
     }
   }, []);
+
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isSessionLocked) {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    };
+    const handleVisibilityChange = () => {
+      if (isSessionLocked && document.visibilityState === "hidden") {
+        setTabSwitchWarning(true);
+        lockWarningRef.current = true;
+      }
+      if (document.visibilityState === "visible" && lockWarningRef.current) {
+        setTabSwitchWarning(true);
+      }
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [isSessionLocked]);
 
   useEffect(() => {
     const savedToken = localStorage.getItem("mzgd_token");
@@ -278,6 +305,7 @@ export default function Home() {
       setSuccess(res.message);
       setIsPrepPhase(true);
       setPrepSeconds(240);
+      setIsSessionLocked(true);
       if (timerRef.current) clearInterval(timerRef.current);
       timerRef.current = setInterval(() => {
         setPrepSeconds(prev => {
@@ -327,6 +355,7 @@ export default function Home() {
       setIsPrepPhase(false);
       setIsSpeakingPhase(false);
       setIsGdDone(true);
+      setIsSessionLocked(false);
       setView("gd-leaderboard");
       setSuccess("GD completed! See leaderboard below.");
     } catch (err: any) { setMessage(err.message); }
@@ -415,6 +444,7 @@ export default function Home() {
   function beginSoloPrep() {
     if (!soloSession) return;
     setIsPrepPhase(true);
+    setIsSessionLocked(true);
     setPrepSeconds(240);
     setIsSpeakingPhase(false);
     setSpeakingSeconds(0);
@@ -454,6 +484,7 @@ export default function Home() {
       if (timerRef.current) clearInterval(timerRef.current);
       setIsPrepPhase(false);
       setIsSpeakingPhase(false);
+      setIsSessionLocked(false);
       setView("solo-result");
       setSuccess(`${res.message} — Score: ${res.overall_score}`);
       // Fetch history
@@ -572,7 +603,9 @@ export default function Home() {
           ].map((item: { icon: React.ReactNode; label: string; view: PageView; badge?: string }) => (
             <button
               key={item.label}
+              disabled={isSessionLocked}
               onClick={() => {
+                if (isSessionLocked) return;
                 if (item.view === "gd-leaderboard") { setView("gd-leaderboard"); loadLeaderboard(); }
                 else if (item.view === "gd-create") { setView("gd-create"); loadTopics(); }
                 else if (item.view === "solo-practice") { setView("solo-practice"); startSoloPractice(); }
@@ -580,7 +613,7 @@ export default function Home() {
                 else setView(item.view);
                 setSidebarOpen(false);
               }}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all whitespace-nowrap ${view === item.view ? "bg-amber-500/20 text-amber-300 border border-amber-500/30" : "text-slate-300 hover:bg-white/5 hover:text-white"}`}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all whitespace-nowrap ${view === item.view ? "bg-amber-500/20 text-amber-300 border border-amber-500/30" : "text-slate-300 hover:bg-white/5 hover:text-white"} ${isSessionLocked ? "opacity-40 cursor-not-allowed" : ""}`}
             >
               {item.icon}
               <span>{item.label}</span>
@@ -589,7 +622,7 @@ export default function Home() {
           ))}
         </nav>
         <div className="p-3 border-t border-white/10 space-y-2">
-          <button onClick={logout} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all whitespace-nowrap text-red-300 hover:bg-red-500/10">
+          <button onClick={logout} disabled={isSessionLocked} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all whitespace-nowrap ${isSessionLocked ? "text-slate-600 cursor-not-allowed" : "text-red-300 hover:bg-red-500/10"}`}>
             <LogOut className="w-5 h-5 shrink-0" /> Sign Out
           </button>
         </div>
@@ -600,7 +633,7 @@ export default function Home() {
         <div className="p-4 md:p-6 max-w-6xl mx-auto">
           {/* Mobile top bar */}
           <div className="flex items-center justify-between mb-4 md:mb-4 sticky top-0 z-10 md:static bg-slate-900/80 md:bg-transparent py-2 -mx-4 px-4 md:px-0 md:py-0 md:mx-0 backdrop-blur-md md:backdrop-blur-none">
-            <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-2 rounded-lg transition-all hover:scale-110 text-white/70 hover:bg-white/10 md:hover:bg-transparent" title={sidebarOpen ? "Close menu" : "Open menu"}>
+            <button onClick={() => { if (!isSessionLocked) setSidebarOpen(!sidebarOpen); }} className={`p-2 rounded-lg transition-all hover:scale-110 text-white/70 hover:bg-white/10 md:hover:bg-transparent ${isSessionLocked ? "opacity-40 cursor-not-allowed" : ""}`} title={sidebarOpen ? "Close menu" : "Open menu"}>
               {sidebarOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
             </button>
             <div className="text-sm font-semibold text-white/90">{view === "dashboard" ? "Dashboard" : view === "gd-create" ? "New GD" : view === "gd-session" ? "GD Session" : view === "gd-leaderboard" ? "Leaderboard" : view === "solo-practice" ? "Solo Practice" : view === "solo-session" ? "Solo Session" : view === "solo-result" ? "Results" : ""}</div>
@@ -1237,6 +1270,19 @@ export default function Home() {
                 </Button>
                 <Button onClick={() => { setView("dashboard"); }} variant="secondary" className={`transition-colors duration-500 bg-white/10 text-white border-white/20`}>
                   Back to Dashboard
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {tabSwitchWarning && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
+              <div className="bg-slate-900 border border-red-500/40 rounded-2xl p-6 max-w-sm mx-4 shadow-2xl text-center">
+                <AlertCircle className="w-12 h-12 text-red-400 mx-auto mb-3" />
+                <h3 className="text-lg font-bold text-white mb-2">Stay Focused!</h3>
+                <p className="text-sm text-slate-300 mb-4">You left the session tab. Please return to the MZ Orator tab immediately to continue your assessment.</p>
+                <Button onClick={() => setTabSwitchWarning(false)} className="w-full bg-gradient-to-r from-amber-500 to-orange-600 border-0">
+                  I'm back, continue
                 </Button>
               </div>
             </div>
