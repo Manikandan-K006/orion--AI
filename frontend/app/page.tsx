@@ -67,6 +67,7 @@ export default function Home() {
   const [gdQuote, setGdQuote] = useState<{ quote: string; author: string } | null>(null);
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [pageLoading, setPageLoading] = useState(false);
 
   useEffect(() => {
     if (typeof window !== "undefined" && window.innerWidth >= 768) {
@@ -122,6 +123,7 @@ export default function Home() {
   }
 
   async function loadTopics() {
+    setPageLoading(true);
     setRefreshCount(0);
     setCurrentTopic(null);
     setLastCreatedCode("");
@@ -134,9 +136,11 @@ export default function Home() {
     const users = await apiRequest<{ id: number; name: string; register_number: string }[]>("/users", {}, token).catch(() => []);
     setAllUsers(users.filter(u => u.id !== user?.id));
     setView("gd-create");
+    setPageLoading(false);
   }
 
   async function loadLeaderboard(department = lbDepartment, year = lbYear, timeframe = lbTimeframe) {
+    setPageLoading(true);
     try {
       const params = new URLSearchParams({ department, year, timeframe });
       const data = await apiRequest<ComprehensiveLeaderboard>(`/gd/leaderboard/comprehensive?${params}`, {}, token);
@@ -146,6 +150,7 @@ export default function Home() {
       setLbTimeframe(timeframe);
       setView("gd-leaderboard");
     } catch (err: any) { setMessage(err.message); }
+    finally { setPageLoading(false); }
   }
 
   async function doRefresh() {
@@ -537,9 +542,9 @@ export default function Home() {
             <button
               key={item.label}
               onClick={() => {
-                if (item.view === "gd-leaderboard") { loadLeaderboard(); }
-                else if (item.view === "gd-create") loadTopics();
-                else if (item.view === "solo-practice") startSoloPractice();
+                if (item.view === "gd-leaderboard") { setView("gd-leaderboard"); loadLeaderboard(); }
+                else if (item.view === "gd-create") { setView("gd-create"); loadTopics(); }
+                else if (item.view === "solo-practice") { setView("solo-practice"); startSoloPractice(); }
                 else setView(item.view);
                 setSidebarOpen(false);
               }}
@@ -573,6 +578,11 @@ export default function Home() {
               {success ? <Zap className="h-4 w-4 shrink-0" /> : <AlertCircle className="h-4 w-4 shrink-0" />}
               <span>{success || message}</span>
               <button onClick={() => { setMessage(""); setSuccess(""); }} className="ml-auto text-white/50 hover:text-white">&times;</button>
+            </div>
+          )}
+          {pageLoading && (
+            <div className="mb-4 flex items-center gap-2 rounded-xl p-3 text-sm bg-white/10 text-white/70 border border-white/10">
+              <Loader2 className="h-4 w-4 animate-spin shrink-0" /> Loading...
             </div>
           )}
 
