@@ -7,8 +7,9 @@ logger = logging.getLogger(__name__)
 
 def send_invitation_email(to_email: str, to_name: str, from_name: str, session_code: str, topic: str) -> bool:
     settings = get_settings()
+    print(f"[EMAIL] Attempting to send to {to_email}, API key: {'set' if settings.sendgrid_api_key else 'NOT SET'}")
     if not settings.sendgrid_api_key:
-        logger.warning("SENDGRID_API_KEY not configured, skipping email to %s", to_email)
+        print("[EMAIL] SENDGRID_API_KEY not configured, skipping")
         return False
 
     import sendgrid
@@ -40,8 +41,8 @@ MZ Orator Team"""
     try:
         sg = sendgrid.SendGridAPIClient(settings.sendgrid_api_key)
         response = sg.send(message)
-        logger.info("Invitation email sent to %s (status: %s)", to_email, response.status_code)
+        print(f"[EMAIL] Sent to {to_email}, status: {response.status_code}")
         return 200 <= response.status_code < 300
     except Exception as e:
-        logger.error("Failed to send email to %s: %s", to_email, e)
+        print(f"[EMAIL] Failed to send to {to_email}: {e}")
         return False
