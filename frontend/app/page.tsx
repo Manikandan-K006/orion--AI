@@ -931,7 +931,8 @@ export default function Home() {
           )}
 
           {/* ─── Solo Practice ─── */}
-          {view === "solo-practice" && soloSession && (
+          {view === "solo-practice" && (
+            soloSession ? (
             <div className="space-y-6 animate-in fade-in duration-300">
               {/* Motivational Quote */}
               {soloQuote && (
@@ -1055,7 +1056,14 @@ export default function Home() {
                 </div>
               </div>
             </div>
+          ) : (
+            <div className="rounded-xl backdrop-blur-xl bg-white/[0.08] border border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6 text-center">
+              <Loader2 className="h-8 w-8 animate-spin mx-auto text-amber-400 mb-3" />
+              <p className="text-white font-medium">Preparing your solo practice...</p>
+              <p className="text-sm text-slate-400 mt-1">Loading your topic and motivational quote</p>
+            </div>
           )}
+        )}
 
           {/* ─── Solo Result ─── */}
           {view === "solo-result" && soloResult && soloSession && (
