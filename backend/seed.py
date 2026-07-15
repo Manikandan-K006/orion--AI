@@ -1,9 +1,7 @@
-"""Seed the database with all students and proper bcrypt hashes."""
+"""Seed the database with all students and proper password hashes."""
+import hashlib
 import os
 import mysql.connector
-from passlib.context import CryptContext
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 STUDENTS = [
     ("911724205001", "ADITHYA K"),
@@ -69,7 +67,8 @@ STUDENTS = [
     ("911724205701", "AHAMED AASHIQ S"),
 ]
 
-hash_pw = pwd_context.hash("Password123")
+salt = os.urandom(32)
+hash_pw = salt.hex() + ":" + hashlib.pbkdf2_hmac("sha256", "Password123".encode("utf-8"), salt, 100000).hex()
 
 conn = mysql.connector.connect(
     host=os.environ.get("MYSQL_HOST", "localhost"), port=int(os.environ.get("MYSQL_PORT", 3306)),

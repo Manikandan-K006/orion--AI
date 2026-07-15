@@ -1,10 +1,11 @@
+import hashlib
+import os
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 from mysql.connector import MySQLConnection
 
 from backend.config import get_settings
@@ -12,16 +13,21 @@ from backend.database.db import get_db
 from backend.database import queries
 
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/login")
 
 
 def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
+    salt = os.urandom(32)
+    key = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, 100000)
+    return salt.hex() + ":" + key.hex()
 
 
 def verify_password(plain_password: str, password_hash: str) -> bool:
-    return pwd_context.verify(plain_password, password_hash)
+    salt_hex, key_hex = password_hash.split(":")
+    salt = bytes.fromhex(salt_hex)
+    stored_key = bytes.fromhex(key_hex)
+    new_key = hashlib.pbkdf2_hmac("sha256", plain_password.encode("utf-8"), salt, 100000)
+    return new_key == stored_key
 
 
 def create_access_token(data: dict[str, Any]) -> str:
