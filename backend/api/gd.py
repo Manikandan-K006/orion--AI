@@ -151,7 +151,15 @@ def list_invitations(
     connection: MySQLConnection = Depends(get_db),
 ) -> list[dict]:
     """List pending invitations for the current user."""
-    return queries.get_pending_invitations(connection, current_user["id"])
+    inv = queries.get_pending_invitations(connection, current_user["id"])
+    # convert datetime objects to strings for JSON serialization
+    result = []
+    for i in inv:
+        r = dict(i)
+        if isinstance(r.get("created_at"), datetime):
+            r["created_at"] = r["created_at"].isoformat()
+        result.append(r)
+    return result
 
 
 @router.post("/invitations/{invitation_id}/accept")

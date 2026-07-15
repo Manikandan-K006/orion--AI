@@ -348,13 +348,9 @@ def get_random_quote(connection: MySQLConnection, user_id: int) -> dict[str, Any
             "SELECT id, quote, author FROM motivational_quotes ORDER BY RAND() LIMIT 1")
 
     if not quote:
-        # all seen, reset
-        quote = fetch_one(connection,
-            "SELECT id, quote, author FROM motivational_quotes ORDER BY RAND() LIMIT 1")
-        new_seen = str(quote["id"])
-    else:
-        seen.add(quote["id"])
-        new_seen = ",".join(str(x) for x in sorted(seen))
+        return None
+    seen.add(quote["id"])
+    new_seen = ",".join(str(x) for x in sorted(seen))
 
     execute(connection,
         "INSERT INTO solo_practice_usage (user_id, total_sessions, seen_quote_ids) VALUES (%s, 0, %s) "
@@ -489,10 +485,11 @@ def get_pending_invitations(connection: MySQLConnection, user_id: int) -> list[d
     return fetch_all(connection,
         "SELECT gi.id, gi.session_code, gi.status, gi.created_at, "
         "u.id AS from_user_id, u.name AS from_name, u.register_number AS from_register, "
-        "gs.topic, gs.status AS session_status "
+        "gt.topic, gs.status AS session_status "
         "FROM gd_invitations gi "
         "JOIN users u ON gi.from_user_id = u.id "
         "JOIN gd_sessions gs ON gi.session_code = gs.session_code "
+        "JOIN gd_topics gt ON gs.topic_id = gt.id "
         "WHERE gi.to_user_id = %s AND gi.status = 'pending' "
         "ORDER BY gi.created_at DESC",
         (user_id,))
