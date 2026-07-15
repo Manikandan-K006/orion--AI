@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircle, Award, Clock, LogOut, MessageSquare, Mic, MicOff, RefreshCw, Trophy, Users, Zap, Loader2, Copy, Check, Target, TrendingUp, ArrowUp, ArrowDown, PanelLeftClose, PanelLeft, Share2, Sparkles } from "lucide-react";
+import { AlertCircle, Award, Clock, LogOut, MessageSquare, Mic, MicOff, RefreshCw, Trophy, Users, Zap, Loader2, Copy, Check, Target, TrendingUp, ArrowUp, ArrowDown, PanelLeftClose, PanelLeft, Share2, Sparkles, Menu, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Bar, BarChart, CartesianGrid, Cell, Legend, PolarAngleAxis, PolarGrid, Radar, RadarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
@@ -561,7 +561,7 @@ export default function Home() {
               <p className="text-xs text-purple-300/60">{user.name}</p>
             </div>
           </div>
-          <button className="md:hidden p-1 text-white/60 hover:text-white" onClick={() => setSidebarOpen(false)}><PanelLeftClose className="w-5 h-5" /></button>
+          <button className="md:hidden p-2 text-white/60 hover:text-white hover:bg-white/10 rounded-lg" onClick={() => setSidebarOpen(false)}><X className="w-5 h-5" /></button>
         </div>
         <nav className="flex-1 p-3 space-y-1">
           {[
@@ -598,12 +598,13 @@ export default function Home() {
       {/* Main Content */}
       <main className="flex-1 overflow-auto min-h-screen">
         <div className="p-4 md:p-6 max-w-6xl mx-auto">
-          {/* Sidebar toggle on top */}
-          <div className="flex items-center justify-between mb-4">
-            <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-2 rounded-lg transition-all hover:scale-110 text-white/70 hover:bg-white/10" title={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}>
-              {sidebarOpen ? <PanelLeftClose className="w-5 h-5" /> : <PanelLeft className="w-5 h-5" />}
+          {/* Mobile top bar */}
+          <div className="flex items-center justify-between mb-4 md:mb-4 sticky top-0 z-10 md:static bg-slate-900/80 md:bg-transparent py-2 -mx-4 px-4 md:px-0 md:py-0 md:mx-0 backdrop-blur-md md:backdrop-blur-none">
+            <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-2 rounded-lg transition-all hover:scale-110 text-white/70 hover:bg-white/10 md:hover:bg-transparent" title={sidebarOpen ? "Close menu" : "Open menu"}>
+              {sidebarOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
             </button>
-            <div className={`text-sm font-medium transition-colors duration-500 text-white/80`}>{view === "dashboard" ? "Dashboard" : view === "gd-create" ? "New GD" : view === "gd-session" ? "GD Session" : view === "gd-leaderboard" ? "Leaderboard" : view === "solo-practice" ? "Solo Practice" : view === "solo-session" ? "Solo Session" : view === "solo-result" ? "Results" : ""}</div>
+            <div className="text-sm font-semibold text-white/90">{view === "dashboard" ? "Dashboard" : view === "gd-create" ? "New GD" : view === "gd-session" ? "GD Session" : view === "gd-leaderboard" ? "Leaderboard" : view === "solo-practice" ? "Solo Practice" : view === "solo-session" ? "Solo Session" : view === "solo-result" ? "Results" : ""}</div>
+            <div className="w-10" /> {/* spacer */}
           </div>
           {(success || message) && (
             <div className={`mb-4 flex items-center gap-2 rounded-xl p-4 text-sm transition-colors duration-500 ${success ? "bg-emerald-500/20 text-emerald-200 border border-emerald-500/30" : "bg-red-500/20 text-red-200 border border-red-500/30"}`}>
