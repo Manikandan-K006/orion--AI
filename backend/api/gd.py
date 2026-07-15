@@ -117,7 +117,7 @@ def invite_to_gd(
     current_user: dict = Depends(get_current_user),
     connection: MySQLConnection = Depends(get_db),
 ) -> dict:
-    """Invite users to a GD session (max 5 invitees, team_size max 6)."""
+    """Invite users to a GD session (max 1 invitee, team_size max 2)."""
     session = queries.get_gd_session(connection, session_code)
     if not session:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
@@ -127,8 +127,8 @@ def invite_to_gd(
     user_ids = payload.get("user_ids", [])
     if not user_ids:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No users specified")
-    if len(user_ids) > 5:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Can only invite up to 5 members")
+    if len(user_ids) > 1:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Can only invite 1 member")
 
     member_count = len(queries.get_gd_team_members(connection, session_code))
     if member_count >= session["team_size"]:

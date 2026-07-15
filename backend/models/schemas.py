@@ -69,7 +69,7 @@ class AnalysisResult(BaseModel):
 
 class GDSessionCreate(BaseModel):
     topic_id: int
-    team_size: int = Field(default=6, ge=1, le=10)
+    team_size: int = Field(default=2, ge=1, le=4)
 
 
 class GDTranscriptSubmit(BaseModel):

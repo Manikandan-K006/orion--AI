@@ -251,7 +251,7 @@ export default function Home() {
     setLoading(true);
     try {
       const res = await apiRequest<{ session_code: string; message: string }>(
-        "/gd/sessions", { method: "POST", body: JSON.stringify({ topic_id: currentTopic.id, team_size: 6 }) }, token
+        "/gd/sessions", { method: "POST", body: JSON.stringify({ topic_id: currentTopic.id, team_size: 2 }) }, token
       );
       setLastCreatedCode(res.session_code);
       setSuccess(`Session created! Code: ${res.session_code}`);
@@ -750,12 +750,12 @@ export default function Home() {
                             </button>
                           </div>
                           <div className="flex items-center justify-between gap-2 mb-2">
-                            <p className="text-xs font-medium text-amber-300/90 flex items-center gap-1"><Users className="w-3 h-3" /> Invite teammates (max 5)</p>
+                            <p className="text-xs font-medium text-amber-300/90 flex items-center gap-1"><Users className="w-3 h-3" /> Invite teammate (max 1)</p>
                           </div>
                           <div className="max-h-32 overflow-y-auto space-y-1 mb-2 rounded-lg border border-white/5 p-1">
                             {allUsers.map(u => (
                               <label key={u.id} className={`flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer transition ${selectedUserIds.includes(u.id) ? "bg-amber-500/20 border border-amber-500/30" : "bg-white/[0.04] hover:bg-white/[0.08]"}`}>
-                                <input type="checkbox" checked={selectedUserIds.includes(u.id)} onChange={() => setSelectedUserIds(prev => prev.includes(u.id) ? prev.filter(id => id !== u.id) : prev.length < 5 ? [...prev, u.id] : prev)} className="accent-amber-500" />
+                                <input type="checkbox" checked={selectedUserIds.includes(u.id)} onChange={() => setSelectedUserIds(prev => prev.includes(u.id) ? prev.filter(id => id !== u.id) : prev.length < 1 ? [...prev, u.id] : prev)} className="accent-amber-500" />
                                 <span className="text-xs text-white truncate">{u.name}</span>
                               </label>
                             ))}
@@ -801,11 +801,11 @@ export default function Home() {
                   )}
                   {lastCreatedCode && allUsers.length > 0 && (
                     <div className="border-t border-white/10 pt-3 mt-3">
-                      <p className="text-xs font-medium text-amber-300/90 mb-2 flex items-center gap-1"><Users className="w-3.5 h-3.5" /> Invite Teammates (max 5, select from registered students)</p>
+                      <p className="text-xs font-medium text-amber-300/90 mb-2 flex items-center gap-1"><Users className="w-3.5 h-3.5" /> Invite Teammate (max 1, select from registered students)</p>
                       <div className="max-h-40 overflow-y-auto space-y-1 mb-3 scrollbar-thin rounded-lg border border-white/5 p-1">
                         {allUsers.map(u => (
                           <label key={u.id} className={`flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition ${selectedUserIds.includes(u.id) ? "bg-amber-500/20 border border-amber-500/30" : "bg-white/[0.04] hover:bg-white/[0.08]"}`}>
-                            <input type="checkbox" checked={selectedUserIds.includes(u.id)} onChange={() => setSelectedUserIds(prev => prev.includes(u.id) ? prev.filter(id => id !== u.id) : prev.length < 5 ? [...prev, u.id] : prev)} className="accent-amber-500" />
+                            <input type="checkbox" checked={selectedUserIds.includes(u.id)} onChange={() => setSelectedUserIds(prev => prev.includes(u.id) ? prev.filter(id => id !== u.id) : prev.length < 1 ? [...prev, u.id] : prev)} className="accent-amber-500" />
                             <div className="flex-1 min-w-0">
                               <p className="text-sm text-white truncate">{u.name}</p>
                               <p className="text-xs text-slate-400">{u.register_number}</p>

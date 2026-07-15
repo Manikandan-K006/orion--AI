@@ -97,7 +97,7 @@ CREATE TABLE IF NOT EXISTS gd_sessions (
     session_code VARCHAR(12) PRIMARY KEY,
     topic_id INT NOT NULL,
     status ENUM('waiting', 'preparation', 'speaking', 'completed') NOT NULL DEFAULT 'waiting',
-    team_size INT NOT NULL DEFAULT 6,
+    team_size INT NOT NULL DEFAULT 2,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     completed_at TIMESTAMP NULL,
     FOREIGN KEY (topic_id) REFERENCES gd_topics(id) ON DELETE RESTRICT
