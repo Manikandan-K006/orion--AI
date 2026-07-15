@@ -1,13 +1,13 @@
 "use client";
 
-import { AlertCircle, Award, Clock, LogOut, MessageSquare, Mic, MicOff, RefreshCw, Trophy, Users, Zap, Loader2, Copy, Check, Target, TrendingUp, ArrowUp, ArrowDown, PanelLeftClose, PanelLeft, Share2, Sparkles, Menu, X, Shield } from "lucide-react";
+import { AlertCircle, Award, Clock, LogOut, MessageSquare, Mic, MicOff, Trophy, Users, Zap, Loader2, Copy, Check, Target, TrendingUp, ArrowUp, ArrowDown, Sparkles, Menu, X, Shield } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Bar, BarChart, CartesianGrid, Cell, Legend, PolarAngleAxis, PolarGrid, Radar, RadarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { AllTimeAchiever, ComprehensiveLeaderboard, GDInvitation, GDLeaderboardEntry, GDSession, GDTopic, LeaderboardRanking, LeaderboardStats, Progress, SoloQuote, SoloStartResponse, SoloSubmitResponse, User, apiRequest } from "@/lib/api";
+import { AllTimeAchiever, ComprehensiveLeaderboard, LeaderboardRanking, LeaderboardStats, Progress, SoloQuote, SoloStartResponse, SoloSubmitResponse, User, apiRequest } from "@/lib/api";
 
 function speak(text: string) {
   if (typeof window === "undefined" || !window.speechSynthesis) return;
@@ -27,7 +27,7 @@ const MOTIVATIONAL_PHRASES = [
   "Fantastic! Your hard work is paying off.",
 ];
 
-type PageView = "login" | "dashboard" | "gd-create" | "gd-session" | "gd-leaderboard" | "solo-practice" | "solo-session" | "solo-result" | "gd-live" | "gd-live-session" | "gd-live-admin";
+type PageView = "login" | "dashboard" | "gd-leaderboard" | "solo-practice" | "solo-session" | "solo-result" | "gd-live" | "gd-live-session" | "gd-live-admin";
 
 export default function Home() {
   const [token, setToken] = useState("");
@@ -40,23 +40,10 @@ export default function Home() {
   const [registerNumber, setRegisterNumber] = useState("");
   const [password, setPassword] = useState("");
 
-  const [topics, setTopics] = useState<GDTopic[]>([]);
-  const [currentTopic, setCurrentTopic] = useState<GDTopic | null>(null);
-  const [refreshCount, setRefreshCount] = useState(0);
-  const [sessions, setSessions] = useState<GDSession[]>([]);
-  const [activeSession, setActiveSession] = useState<GDSession | null>(null);
-  const [leaderboard, setLeaderboard] = useState<GDLeaderboardEntry[]>([]);
   const [progress, setProgress] = useState<Progress | null>(null);
   const [transcript, setTranscript] = useState("");
-  const [gdTranscripts, setGdTranscripts] = useState<Record<string, string>>({});
-  const [sessionCodeInput, setSessionCodeInput] = useState("");
-  const [lastCreatedCode, setLastCreatedCode] = useState("");
   const [copied, setCopied] = useState(false);
   const [copiedCopyCode, setCopiedCopyCode] = useState("");
-  const [allUsers, setAllUsers] = useState<{ id: number; name: string; register_number: string }[]>([]);
-  const [selectedUserIds, setSelectedUserIds] = useState<number[]>([]);
-  const [inviteMessage, setInviteMessage] = useState("");
-  const [inviteTarget, setInviteTarget] = useState(""); // session_code being invited to
 
   // Comprehensive leaderboard state
   const [lbData, setLbData] = useState<ComprehensiveLeaderboard | null>(null);
@@ -74,7 +61,6 @@ export default function Home() {
   const [speakingSeconds, setSpeakingSeconds] = useState(0);
   const [isPrepPhase, setIsPrepPhase] = useState(false);
   const [isSpeakingPhase, setIsSpeakingPhase] = useState(false);
-  const [isGdDone, setIsGdDone] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const [isRecording, setIsRecording] = useState(false);
@@ -82,8 +68,6 @@ export default function Home() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const [liveDetectedText, setLiveDetectedText] = useState("");
-  const [gdQuote, setGdQuote] = useState<{ quote: string; author: string } | null>(null);
-  const [invitations, setInvitations] = useState<GDInvitation[]>([]);
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [pageLoading, setPageLoading] = useState(false);
@@ -150,44 +134,7 @@ export default function Home() {
       setView("dashboard");
       const p = await apiRequest<Progress>("/progress", {}, t).catch(() => null);
       if (p) setProgress(p);
-      const s = await apiRequest<GDSession[]>("/gd/sessions", {}, t).catch(() => []);
-      setSessions(s);
-      const inv = await apiRequest<GDInvitation[]>("/gd/invitations", {}, t).catch(() => []);
-      setInvitations(inv);
     } catch { localStorage.removeItem("mzgd_token"); setView("login"); }
-  }
-
-  async function loadInvitations() {
-    const inv = await apiRequest<GDInvitation[]>("/gd/invitations", {}, token).catch(() => []);
-    setInvitations(inv);
-  }
-
-  async function acceptInvitation(id: number) {
-    setLoading(true);
-    try {
-      await apiRequest(`/gd/invitations/${id}/accept`, { method: "POST" }, token);
-      await loadInvitations();
-      await refreshSessions();
-      setSuccess("Joined the GD session!");
-    } catch (err: any) { setMessage(err.message); }
-    finally { setLoading(false); }
-  }
-
-  async function declineInvitation(id: number) {
-    setLoading(true);
-    try {
-      await apiRequest(`/gd/invitations/${id}/decline`, { method: "POST" }, token);
-      await loadInvitations();
-      setSuccess("Invitation declined");
-    } catch (err: any) { setMessage(err.message); }
-    finally { setLoading(false); }
-  }
-
-  async function refreshSessions() {
-    try {
-      const s = await apiRequest<GDSession[]>("/gd/sessions", {}, token).catch(() => []);
-      setSessions(s);
-    } catch {}
   }
 
   async function handleLogin() {
@@ -206,193 +153,7 @@ export default function Home() {
     } finally { setLoading(false); }
   }
 
-  async function loadTopics(force = false) {
-    if (topics.length > 0 && !force) { setView("gd-create"); return; }
-    setPageLoading(true);
-    setRefreshCount(0);
-    setCurrentTopic(null);
-    setLastCreatedCode("");
-    setInviteMessage("");
-    setSelectedUserIds([]);
-    await apiRequest("/gd/topics/reset-refreshes", { method: "POST" }, token).catch(() => {});
-    const t = await apiRequest<GDTopic[]>("/gd/topics", {}, token);
-    setTopics(t);
-    await doRefresh();
-    const users = await apiRequest<{ id: number; name: string; register_number: string }[]>("/users", {}, token).catch(() => []);
-    setAllUsers(users.filter(u => u.id !== user?.id));
-    setView("gd-create");
-    setPageLoading(false);
-  }
-
-  async function loadLeaderboard(department = lbDepartment, year = lbYear, timeframe = lbTimeframe) {
-    if (lbData && lbDepartment === department && lbYear === year && lbTimeframe === timeframe) { setView("gd-leaderboard"); return; }
-    setPageLoading(true);
-    try {
-      const params = new URLSearchParams({ department, year, timeframe });
-      const data = await apiRequest<ComprehensiveLeaderboard>(`/gd/leaderboard/comprehensive?${params}`, {}, token);
-      setLbData(data);
-      setLbDepartment(department);
-      setLbYear(year);
-      setLbTimeframe(timeframe);
-      setView("gd-leaderboard");
-    } catch (err: any) { setMessage(err.message); }
-    finally { setPageLoading(false); }
-  }
-
-  async function doRefresh() {
-    if (refreshCount >= 3) {
-      setMessage("You have used all 3 topic refreshes.");
-      return;
-    }
-    setLoading(true);
-    try {
-      const topic = await apiRequest<GDTopic>("/gd/topics/refresh", { method: "POST" }, token);
-      setCurrentTopic(topic);
-      setRefreshCount(prev => prev + 1);
-      setMessage("");
-    } catch (err: any) {
-      setMessage(err.message);
-    } finally { setLoading(false); }
-  }
-
-  async function createSession() {
-    if (!currentTopic) { setMessage("No topic selected"); return; }
-    setLoading(true);
-    try {
-      const res = await apiRequest<{ session_code: string; message: string }>(
-        "/gd/sessions", { method: "POST", body: JSON.stringify({ topic_id: currentTopic.id, team_size: 2 }) }, token
-      );
-      setLastCreatedCode(res.session_code);
-      setSuccess(`Session created! Code: ${res.session_code}`);
-      setSelectedUserIds([]);
-      setInviteMessage("");
-      const s = await apiRequest<GDSession[]>("/gd/sessions", {}, token);
-      setSessions(s);
-      const users = await apiRequest<{ id: number; name: string; register_number: string }[]>("/users", {}, token);
-      setAllUsers(users.filter(u => u.id !== user?.id));
-    } catch (err: any) { setMessage(err.message); }
-    finally { setLoading(false); }
-  }
-
-  async function inviteSelectedUsers(targetCode?: string) {
-    const code = targetCode || lastCreatedCode;
-    if (!code || selectedUserIds.length === 0) return;
-    setLoading(true);
-    try {
-      const res = await apiRequest<{ message: string; invited_count: number }>(
-        `/gd/sessions/${code}/invite`, { method: "POST", body: JSON.stringify({ user_ids: selectedUserIds }) }, token
-      );
-      setInviteMessage(res.message);
-      setSuccess(res.message);
-      setSelectedUserIds([]);
-      setInviteTarget("");
-      await refreshSessions();
-    } catch (err: any) { setMessage(err.message); }
-    finally { setLoading(false); }
-  }
-
-  async function joinSession() {
-    const code = sessionCodeInput.trim().toUpperCase();
-    if (!code) { setMessage("Enter session code"); return; }
-    setLoading(true);
-    try {
-      await apiRequest(`/gd/sessions/${code}/join`, { method: "POST" }, token);
-      setSuccess("Joined session!");
-      const s = await apiRequest<GDSession[]>("/gd/sessions", {}, token);
-      setSessions(s);
-    } catch (err: any) { setMessage(err.message); }
-    finally { setLoading(false); }
-  }
-
-  async function openSession(session: GDSession) {
-    const s = await apiRequest<GDSession>(`/gd/sessions/${session.session_code}`, {}, token);
-    setActiveSession(s);
-    // Fetch a unity motivational quote for GD
-    apiRequest<{ quote: string; author: string }>("/gd/quote", {}, token).then(q => setGdQuote(q)).catch(() => {});
-    if (s.status === "completed") {
-      const lb = await apiRequest<GDLeaderboardEntry[]>(`/gd/sessions/${session.session_code}/leaderboard`, {}, token);
-      setLeaderboard(lb);
-      setView("gd-leaderboard");
-    } else {
-      setTranscript("");
-      setIsGdDone(false);
-      setIsPrepPhase(false);
-      setIsSpeakingPhase(false);
-      setPrepSeconds(0);
-      setSpeakingSeconds(0);
-      setGdTranscripts({});
-      setView("gd-session");
-    }
-  }
-
-  async function startGd() {
-    if (!activeSession) return;
-    setLoading(true);
-    try {
-      const res = await apiRequest<{ message: string; topic: string; preparation_minutes: number; speaking_minutes: number }>(`/gd/sessions/${activeSession.session_code}/start`, { method: "POST" }, token);
-      setSuccess(res.message);
-      setIsPrepPhase(true);
-      setPrepSeconds(240);
-      setIsSessionLocked(true);
-      speak(`Your GD topic is: ${res.topic}. You have 4 minutes to prepare.`);
-      if (timerRef.current) clearInterval(timerRef.current);
-      timerRef.current = setInterval(() => {
-        setPrepSeconds(prev => {
-          if (prev <= 1) {
-            clearInterval(timerRef.current!);
-            setIsPrepPhase(false);
-            setIsSpeakingPhase(true);
-            setSpeakingSeconds(960);
-            setSuccess("Preparation time over! Start speaking now.");
-            speak("Preparation time is over. Start speaking now.");
-            timerRef.current = setInterval(() => {
-              setSpeakingSeconds(p => {
-                if (p <= 1) { clearInterval(timerRef.current!); return 0; }
-                return p - 1;
-              });
-            }, 1000);
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    } catch (err: any) { setMessage(err.message); }
-    finally { setLoading(false); }
-  }
-
-  async function submitTranscriptForEval() {
-    if (!activeSession || !transcript.trim()) { setMessage("Write your transcript first"); return; }
-    setLoading(true);
-    try {
-      const res = await apiRequest<{ message: string; overall_score: number; credential_points: number }>(`/gd/sessions/${activeSession.session_code}/submit`, {
-        method: "POST", body: JSON.stringify({ transcript })
-      }, token);
-      setSuccess(`${res.message} — Score: ${res.overall_score}, Points: ${res.credential_points}`);
-      setGdTranscripts(prev => ({ ...prev, [activeSession.session_code]: transcript }));
-      setTranscript("");
-    } catch (err: any) { setMessage(err.message); }
-    finally { setLoading(false); }
-  }
-
-  async function finishGd() {
-    if (!activeSession) return;
-    setLoading(true);
-    try {
-      await apiRequest(`/gd/sessions/${activeSession.session_code}/finish`, { method: "POST" }, token);
-      const lb = await apiRequest<GDLeaderboardEntry[]>(`/gd/sessions/${activeSession.session_code}/leaderboard`, {}, token);
-      setLeaderboard(lb);
-      if (timerRef.current) clearInterval(timerRef.current);
-      setIsPrepPhase(false);
-      setIsSpeakingPhase(false);
-      setIsGdDone(true);
-      setIsSessionLocked(false);
-      setView("gd-leaderboard");
-      setSuccess("GD completed! See leaderboard below.");
-    } catch (err: any) { setMessage(err.message); }
-    finally { setLoading(false); }
-  }
-
-  function copyCode(code: string) {
+  async function loadGdLiveSessions() {
     navigator.clipboard.writeText(code);
     setCopied(true);
     setCopiedCopyCode(code);
@@ -447,9 +208,29 @@ export default function Home() {
   function logout() {
     localStorage.removeItem("mzgd_token");
     setUser(null); setToken(""); setView("login");
-    setActiveSession(null); setLeaderboard([]);
     setMessage(""); setSuccess("");
     setSoloSession(null); setSoloResult(null); setSoloQuote(null);
+  }
+
+  function copyCode(code: string) {
+    navigator.clipboard.writeText(code);
+    setCopied(true);
+    setCopiedCopyCode(code);
+    setTimeout(() => { setCopied(false); setCopiedCopyCode(""); }, 2000);
+  }
+
+  async function loadLeaderboard(department = "ALL", year = "ALL", timeframe = "all") {
+    setPageLoading(true);
+    try {
+      const params = new URLSearchParams({ department, year, timeframe });
+      const data = await apiRequest<ComprehensiveLeaderboard>(`/gd/leaderboard/comprehensive?${params}`, {}, token);
+      setLbData(data);
+      setLbDepartment(department);
+      setLbYear(year);
+      setLbTimeframe(timeframe);
+      setView("gd-leaderboard");
+    } catch (err: any) { setMessage(err.message); }
+    finally { setPageLoading(false); }
   }
 
   // ─── GD Live Functions ───
@@ -728,15 +509,11 @@ export default function Home() {
         <nav className="flex-1 p-3 space-y-1">
           {[
             { icon: <Users className="w-5 h-5 shrink-0" />, label: "Dashboard", view: "dashboard" as PageView },
-            { icon: <MessageSquare className="w-5 h-5 shrink-0" />, label: "Mock GD", view: "gd-create" as PageView },
+            { icon: <Zap className="w-5 h-5 shrink-0" />, label: "GD", view: "gd-live" as PageView },
             { icon: <Target className="w-5 h-5 shrink-0" />, label: "Solo Practice", view: "solo-practice" as PageView },
             { icon: <Trophy className="w-5 h-5 shrink-0" />, label: "Leaderboard", view: "gd-leaderboard" as PageView },
             ...(user?.role === "admin" ? [
-              { icon: <Zap className="w-5 h-5 shrink-0" />, label: "GD Live", view: "gd-live" as PageView },
               { icon: <Shield className="w-5 h-5 shrink-0" />, label: "Admin", view: "gd-live-admin" as PageView },
-            ] : []),
-            ...(user?.role !== "admin" ? [
-              { icon: <Zap className="w-5 h-5 shrink-0" />, label: "GD", view: "gd-live" as PageView },
             ] : []),
           ].filter(Boolean).map((item: { icon: React.ReactNode; label: string; view: PageView; badge?: string }) => (
             <button
@@ -745,9 +522,8 @@ export default function Home() {
               onClick={() => {
                 if (isSessionLocked) return;
                 if (item.view === "gd-leaderboard") { setView("gd-leaderboard"); loadLeaderboard(); }
-                else if (item.view === "gd-create") { setView("gd-create"); loadTopics(); }
                 else if (item.view === "solo-practice") { setView("solo-practice"); startSoloPractice(); }
-                else if (item.view === "dashboard") { setView("dashboard"); loadInvitations(); }
+                else if (item.view === "dashboard") { setView("dashboard"); }
                 else if (item.view === "gd-live") { setView("gd-live"); loadGdLiveSessions(); }
                 else if (item.view === "gd-live-admin") { setView("gd-live-admin"); loadGdLiveSessions(); }
                 else setView(item.view);
@@ -776,7 +552,7 @@ export default function Home() {
             <button onClick={() => { if (!isSessionLocked) setSidebarOpen(!sidebarOpen); }} className={`p-2 rounded-lg transition-all hover:scale-110 text-white/70 hover:bg-white/10 md:hover:bg-transparent ${isSessionLocked ? "opacity-40 cursor-not-allowed" : ""}`} title={sidebarOpen ? "Close menu" : "Open menu"}>
               {sidebarOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
             </button>
-            <div className="text-sm font-semibold text-white/90">{view === "dashboard" ? "Dashboard" : view === "gd-create" ? "Mock GD" : view === "gd-session" ? "Mock GD Session" : view === "gd-leaderboard" ? "Leaderboard" : view === "solo-practice" ? "Solo Practice" : view === "solo-session" ? "Solo Session" : view === "solo-result" ? "Results" : view === "gd-live" ? "GD" : view === "gd-live-session" ? "GD Session" : view === "gd-live-admin" ? "GD Admin" : ""}</div>
+            <div className="text-sm font-semibold text-white/90">{view === "dashboard" ? "Dashboard" : view === "gd-leaderboard" ? "Leaderboard" : view === "solo-practice" ? "Solo Practice" : view === "solo-session" ? "Solo Session" : view === "solo-result" ? "Results" : view === "gd-live" ? "GD" : view === "gd-live-session" ? "GD Session" : view === "gd-live-admin" ? "GD Admin" : ""}</div>
             <div className="w-10" /> {/* spacer */}
           </div>
           {(success || message) && (
@@ -795,9 +571,8 @@ export default function Home() {
           {/* Dashboard View */}
           {view === "dashboard" && (
             <div className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {[
-                  { icon: <Users className="w-6 h-6" />, label: "Active Sessions", value: sessions.filter(s => s.status !== "completed").length.toString() },
                   { icon: <Trophy className="w-6 h-6" />, label: "Avg Score", value: progress ? `${progress.average_score}` : "0" },
                   { icon: <Award className="w-6 h-6" />, label: "Credits", value: progress ? `${progress.total_credits || 0}` : "0" },
                 ].map((card, idx) => (
@@ -810,236 +585,8 @@ export default function Home() {
                 </div>
               ))}
               </div>
-              {invitations.length > 0 && (
-                <div className="rounded-xl backdrop-blur-xl border border-amber-500/30 bg-amber-500/[0.08] shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-5">
-                  <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2"><Share2 className="w-5 h-5 text-amber-400" /> Received Invitations</h2>
-                  <div className="space-y-3">
-                    {invitations.map(inv => (
-                      <div key={inv.id} className="flex items-center justify-between p-3 rounded-lg bg-white/[0.06] border border-white/10">
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-white">{inv.from_name} <span className="text-xs text-slate-400">({inv.from_register})</span></p>
-                          <p className="text-xs text-slate-400">Topic: {inv.topic}</p>
-                          <p className="text-xs text-slate-500">Code: {inv.session_code}</p>
-                        </div>
-                        <div className="flex gap-2 shrink-0">
-                          <button onClick={() => acceptInvitation(inv.id)} disabled={loading} className="text-xs px-3 py-1.5 rounded-lg bg-gradient-to-r from-emerald-500 to-green-600 text-white disabled:opacity-50 hover:opacity-90 transition">
-                            Accept
-                          </button>
-                          <button onClick={() => declineInvitation(inv.id)} disabled={loading} className="text-xs px-3 py-1.5 rounded-lg bg-white/10 text-slate-300 border border-white/20 hover:bg-white/20 transition">
-                            Decline
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-              <div className={`rounded-xl backdrop-blur-xl border transition-colors duration-500 bg-white/[0.08] border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-5`}>
-                <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2"><Users className="w-5 h-5 text-amber-400" /> Recent Sessions</h2>
-                {sessions.length === 0 && <p className="text-slate-400 text-sm">No sessions yet. Create or join one!</p>}
-                <div className="space-y-2">
-                  {sessions.slice(0, 10).map((s) => (
-                    <div key={s.session_code}>
-                      <div className="flex items-center justify-between p-3 rounded-lg backdrop-blur-sm bg-white/[0.06] hover:bg-white/[0.12] transition cursor-pointer" onClick={() => openSession(s)}>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-white truncate">{s.topic}</p>
-                          <p className="text-xs text-slate-400">Code: {s.session_code} · {s.status} · {s.member_count}/{s.team_size} members</p>
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          {s.status === "waiting" && (
-                            <button onClick={(e) => { e.stopPropagation(); setInviteTarget(inviteTarget === s.session_code ? "" : s.session_code); setSelectedUserIds([]); }} className="p-1.5 rounded-md hover:bg-white/10 text-amber-400" title="Share / Invite">
-                              <Share2 className="h-4 w-4" />
-                            </button>
-                          )}
-                          <span className={`text-xs px-2 py-1 rounded-full ${s.status === "completed" ? "bg-emerald-500/20 text-emerald-300" : s.status === "waiting" ? "bg-amber-500/20 text-amber-300" : "bg-blue-500/20 text-blue-300"}`}>{s.status}</span>
-                        </div>
-                      </div>
-                      {inviteTarget === s.session_code && (
-                        <div className="ml-4 mt-2 mb-2 p-3 rounded-lg backdrop-blur-sm bg-white/[0.04] border border-white/10">
-                          <div className="flex items-center justify-between gap-2 mb-2">
-                            <p className="text-xs font-medium text-amber-300/90">Share session code: <code className="text-white font-mono">{s.session_code}</code></p>
-                            <button onClick={() => { copyCode(s.session_code); }} className="p-1 rounded hover:bg-white/10 text-emerald-300">
-                              {copiedCopyCode === s.session_code ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-                            </button>
-                          </div>
-                          <div className="flex items-center justify-between gap-2 mb-2">
-                            <p className="text-xs font-medium text-amber-300/90 flex items-center gap-1"><Users className="w-3 h-3" /> Invite teammate (max 1)</p>
-                          </div>
-                          <div className="max-h-32 overflow-y-auto space-y-1 mb-2 rounded-lg border border-white/5 p-1">
-                            {allUsers.map(u => (
-                              <label key={u.id} className={`flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer transition ${selectedUserIds.includes(u.id) ? "bg-amber-500/20 border border-amber-500/30" : "bg-white/[0.04] hover:bg-white/[0.08]"}`}>
-                                <input type="checkbox" checked={selectedUserIds.includes(u.id)} onChange={() => setSelectedUserIds(prev => prev.includes(u.id) ? prev.filter(id => id !== u.id) : prev.length < 1 ? [...prev, u.id] : prev)} className="accent-amber-500" />
-                                <span className="text-xs text-white truncate">{u.name}</span>
-                              </label>
-                            ))}
-                          </div>
-                          <button onClick={(e) => { e.stopPropagation(); inviteSelectedUsers(s.session_code); }} disabled={loading || selectedUserIds.length === 0} className="w-full text-xs py-1.5 rounded-lg bg-gradient-to-r from-emerald-500 to-green-600 text-white disabled:opacity-50">
-                            {loading ? <Loader2 className="h-3 w-3 inline animate-spin mr-1" /> : <Users className="h-3 w-3 inline mr-1" />} Send Invite ({selectedUserIds.length})
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
             </div>
           )}
-
-          {/* GD Create/Join View */}
-          {view === "gd-create" && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className={`rounded-xl backdrop-blur-xl border transition-colors duration-500 bg-white/[0.08] border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6`}>
-                <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2"><MessageSquare className="w-5 h-5 text-amber-400" /> Create GD Session</h2>
-                {currentTopic && (
-                  <div className="mb-4 p-4 rounded-lg bg-gradient-to-r from-amber-500/20 to-orange-600/20 border border-amber-500/30">
-                    <p className="text-xs text-amber-300/80 mb-1">Selected Topic</p>
-                    <p className="text-sm font-medium text-white">{currentTopic.topic}</p>
-                    <p className="text-xs text-slate-400 mt-1 capitalize">{currentTopic.category}</p>
-                  </div>
-                )}
-                <div className="space-y-3">
-                  <Button onClick={doRefresh} disabled={loading || refreshCount >= 3} className="w-full bg-white/10 border border-white/20 text-white hover:bg-white/20">
-                    <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} /> Refresh Topic ({3 - refreshCount} left)
-                  </Button>
-                  {lastCreatedCode && (
-                    <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/30">
-                      <p className="text-xs text-emerald-300 mb-1">Session Code</p>
-                      <div className="flex items-center gap-2">
-                        <code className="text-lg font-mono font-bold text-white tracking-widest">{lastCreatedCode}</code>
-                        <button onClick={() => copyCode(lastCreatedCode)} className="p-1.5 rounded-md hover:bg-white/10 text-emerald-300">
-                          {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                  {lastCreatedCode && allUsers.length > 0 && (
-                    <div className="border-t border-white/10 pt-3 mt-3">
-                      <p className="text-xs font-medium text-amber-300/90 mb-2 flex items-center gap-1"><Users className="w-3.5 h-3.5" /> Invite Teammate (max 1, select from registered students)</p>
-                      <div className="max-h-40 overflow-y-auto space-y-1 mb-3 scrollbar-thin rounded-lg border border-white/5 p-1">
-                        {allUsers.map(u => (
-                          <label key={u.id} className={`flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition ${selectedUserIds.includes(u.id) ? "bg-amber-500/20 border border-amber-500/30" : "bg-white/[0.04] hover:bg-white/[0.08]"}`}>
-                            <input type="checkbox" checked={selectedUserIds.includes(u.id)} onChange={() => setSelectedUserIds(prev => prev.includes(u.id) ? prev.filter(id => id !== u.id) : prev.length < 1 ? [...prev, u.id] : prev)} className="accent-amber-500" />
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm text-white truncate">{u.name}</p>
-                              <p className="text-xs text-slate-400">{u.register_number}</p>
-                            </div>
-                          </label>
-                        ))}
-                      </div>
-                      <div className="flex gap-2">
-                        <Button onClick={() => inviteSelectedUsers()} disabled={loading || selectedUserIds.length === 0} className="flex-1 bg-gradient-to-r from-emerald-500 to-green-600 border-0 text-sm">
-                          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Users className="h-4 w-4" />} Send Invite ({selectedUserIds.length})
-                        </Button>
-                        <Button onClick={() => copyCode(lastCreatedCode)} className="bg-white/10 border border-white/20 text-white hover:bg-white/20 text-sm">
-                          {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                        </Button>
-                      </div>
-                      {inviteMessage && <p className="text-xs text-emerald-300 mt-2">{inviteMessage}</p>}
-                    </div>
-                  )}
-                  <Button onClick={createSession} disabled={loading || !currentTopic} className="w-full bg-gradient-to-r from-amber-500 to-orange-600 border-0">
-                    {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />} Create Session
-                  </Button>
-                </div>
-              </div>
-              <div className={`rounded-xl backdrop-blur-xl border transition-colors duration-500 bg-white/[0.08] border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6`}>
-                <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2"><Users className="w-5 h-5 text-amber-400" /> Join Session</h2>
-                <div className="space-y-3">
-                  <Input placeholder="Enter Session Code (e.g. A3F9K2B7X1M4)" value={sessionCodeInput} onChange={(e) => setSessionCodeInput(e.target.value.toUpperCase())} className={`transition-colors duration-500 bg-white/10 border-white/20 text-white placeholder:text-white/40 font-mono tracking-wider`} />
-                  <Button onClick={joinSession} disabled={loading} className="w-full bg-gradient-to-r from-purple-500 to-pink-600 border-0">
-                    {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Users className="h-4 w-4" />} Join Session
-                  </Button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* GD Session View */}
-          {view === "gd-session" && activeSession && (
-            <div className="space-y-4">
-              {/* Motivational Quote */}
-              {gdQuote && (
-                <div className="rounded-xl backdrop-blur-xl bg-white/[0.08] border border-amber-500/30 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-5 text-center">
-                  <p className="text-sm text-amber-300/80 mb-1">Motivational Quote</p>
-                  <p className="text-base font-medium text-white italic">"{gdQuote.quote}"</p>
-                  <p className="text-sm text-amber-300/60 mt-1">— {gdQuote.author}</p>
-                </div>
-              )}
-              <div className={`rounded-xl backdrop-blur-xl border transition-colors duration-500 bg-white/[0.08] border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6`}>
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <h2 className="text-xl font-bold text-white">{activeSession.topic}</h2>
-                    <p className="text-sm text-slate-400 flex items-center gap-1.5">
-                      Code: <code className="font-mono text-white/80">{activeSession.session_code}</code>
-                      <button onClick={() => copyCode(activeSession.session_code)} className="p-0.5 rounded hover:bg-white/10 text-emerald-300 transition" title="Copy code">
-                        {copiedCopyCode === activeSession.session_code ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-                      </button>
-                      · {activeSession.status}
-                    </p>
-                  </div>
-                  <div className="flex gap-2">
-                    {activeSession.status === "waiting" && (
-                      <Button onClick={startGd} disabled={loading} className="bg-gradient-to-r from-emerald-500 to-green-600 border-0">
-                        {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />} Start GD
-                      </Button>
-                    )}
-                    {activeSession.status !== "completed" && !isGdDone && (
-                      <Button onClick={finishGd} disabled={loading} variant="secondary" className="bg-red-500/20 text-red-300 border-red-500/30 hover:bg-red-500/30">End GD</Button>
-                    )}
-                    {isGdDone && (
-                      <Button onClick={() => { if (activeSession) openSession(activeSession); }} className="bg-gradient-to-r from-amber-500 to-orange-600 border-0">
-                        <Trophy className="h-4 w-4" /> View Results
-                      </Button>
-                    )}
-                  </div>
-                </div>
-                {(isPrepPhase || isSpeakingPhase) && (
-                  <div className={`rounded-lg p-4 text-center mb-4 ${isPrepPhase ? "bg-blue-500/20 border border-blue-500/30" : "bg-emerald-500/20 border border-emerald-500/30"}`}>
-                    <p className="text-sm text-slate-300 mb-1">{isPrepPhase ? "Preparation Phase" : "Speaking Phase"}</p>
-                    <p className="text-4xl font-bold text-white font-mono">{formatTime(isPrepPhase ? prepSeconds : speakingSeconds)}</p>
-                  </div>
-                )}
-                {activeSession.status === "waiting" && !isPrepPhase && !isSpeakingPhase && (
-                  <p className="text-slate-400 text-sm mb-4">Waiting for host to start the GD session.</p>
-                )}
-                <div className="mb-4">
-                  <p className="text-sm font-medium text-slate-300 mb-2">Team Members ({activeSession.members?.length || 0})</p>
-                  <div className="flex flex-wrap gap-2">
-                    {activeSession.members?.map((m) => (
-                      <span key={m.id} className="text-xs bg-white/10 text-slate-200 px-3 py-1.5 rounded-full border border-white/10">{m.name}</span>
-                    ))}
-                  </div>
-                </div>
-                {(isPrepPhase || isSpeakingPhase) && (
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2">
-                      <Button onClick={toggleRecording} className={`border-0 ${isRecording ? "bg-red-500 hover:bg-red-600" : "bg-gradient-to-r from-amber-500 to-orange-600"}`}>
-                        {isRecording ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />} {isRecording ? "Stop" : "Record"}
-                      </Button>
-                      {recordingStatus && <span className="text-xs text-slate-400">{recordingStatus}</span>}
-                    </div>
-                    {liveDetectedText && <p className="text-xs text-emerald-300 bg-emerald-500/10 p-2 rounded"><span className="font-medium">Detected:</span> {liveDetectedText}</p>}
-                    <Textarea placeholder="Type or record your speech contribution here..." value={transcript} onChange={(e) => setTranscript(e.target.value)} className={`transition-colors duration-500 bg-white/10 border-white/20 text-white placeholder:text-white/40 min-h-[100px]`} />
-                    <div className="flex justify-between items-center">
-                      <span className="text-xs text-slate-400">{transcript.trim().split(/\s+/).filter(Boolean).length} words</span>
-                      <Button onClick={submitTranscriptForEval} disabled={loading || !transcript.trim()} className="bg-gradient-to-r from-amber-500 to-orange-600 border-0">
-                        {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Award className="h-4 w-4" />} Submit for Evaluation
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </div>
-              {Object.keys(gdTranscripts).length > 0 && (
-                <div className={`rounded-xl backdrop-blur-xl border transition-colors duration-500 bg-white/[0.08] border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-4`}>
-                  <p className="text-sm font-medium text-slate-300 mb-2">Submitted Contributions</p>
-                  {Object.entries(gdTranscripts).map(([sc, txt]) => (
-                    <p key={sc} className="text-xs text-slate-400 bg-white/5 p-2 rounded mb-1">{txt.slice(0, 100)}...</p>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
           {/* Leaderboard View */}
           {view === "gd-leaderboard" && (
             <div className="space-y-6">
