@@ -6,6 +6,7 @@ from mysql.connector import MySQLConnection
 from backend.ai.evaluation import evaluate_transcript
 from backend.database import queries
 from backend.database.db import get_db
+from backend.email_service import send_invitation_email
 from backend.models.schemas import GDSessionCreate, GDTranscriptSubmit, GDLeaderboardEntry
 from backend.security import get_current_user
 
@@ -141,6 +142,16 @@ def invite_to_gd(
             break
         queries.create_gd_invitation(connection, session_code, current_user["id"], uid)
         invited += 1
+        # send email notification
+        invited_user = queries.get_user_by_id(connection, uid)
+        if invited_user:
+            send_invitation_email(
+                to_email=invited_user["email"],
+                to_name=invited_user["name"],
+                from_name=current_user["name"],
+                session_code=session_code,
+                topic=session["topic"],
+            )
 
     return {"message": f"Invitation sent to {invited} user(s)", "invited_count": invited}
 

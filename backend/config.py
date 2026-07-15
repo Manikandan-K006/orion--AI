@@ -16,6 +16,13 @@ class Settings(BaseSettings):
     mysql_password: str = ""
     mysql_database: str = "speaksense_ai"
 
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_from_email: str = ""
+    frontend_url: str = "https://orion-ai-gamma.vercel.app"
+
     upload_dir: str = "uploads"
     report_dir: str = "reports"
 
