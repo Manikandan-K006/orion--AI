@@ -532,8 +532,14 @@ export default function Home() {
         <nav className="flex-1 p-3 space-y-1">
           {[
             { icon: <Users className="w-5 h-5 shrink-0" />, label: "Dashboard", view: "dashboard" as PageView },
-            { icon: <Zap className="w-5 h-5 shrink-0" />, label: "GD", view: "gd-live" as PageView },
-            { icon: <Target className="w-5 h-5 shrink-0" />, label: "Solo Practice", view: "solo-practice" as PageView },
+            ...(user?.role !== "admin" ? [
+              { icon: <Zap className="w-5 h-5 shrink-0" />, label: "GD", view: "gd-live" as PageView },
+              { icon: <Target className="w-5 h-5 shrink-0" />, label: "Solo Practice", view: "solo-practice" as PageView },
+            ] : []),
+            { icon: <Trophy className="w-5 h-5 shrink-0" />, label: "Leaderboard", view: "gd-leaderboard" as PageView },
+            ...(user?.role === "admin" ? [
+              { icon: <Shield className="w-5 h-5 shrink-0" />, label: "Admin", view: "gd-live-admin" as PageView },
+            ] : []),
             { icon: <Trophy className="w-5 h-5 shrink-0" />, label: "Leaderboard", view: "gd-leaderboard" as PageView },
             ...(user?.role === "admin" ? [
               { icon: <Shield className="w-5 h-5 shrink-0" />, label: "Admin", view: "gd-live-admin" as PageView },
@@ -594,19 +600,23 @@ export default function Home() {
           {/* Dashboard View */}
           {view === "dashboard" && (
             <div className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {[
-                  { icon: <Trophy className="w-6 h-6" />, label: "Avg Score", value: progress ? `${progress.average_score}` : "0" },
-                  { icon: <Award className="w-6 h-6" />, label: "Credits", value: progress ? `${progress.total_credits || 0}` : "0" },
-                ].map((card, idx) => (
-                  <div key={card.label} className="rounded-xl backdrop-blur-xl bg-white/[0.08] border border-white/10 p-5 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)]">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="text-white/80">{card.icon}</div>
-                      <span className="text-white/50 text-xs font-medium uppercase tracking-wider">{card.label}</span>
-                    </div>
-                    <p className="text-3xl font-bold text-white">{card.value}</p>
-                </div>
-              ))}
+              <div className="rounded-xl backdrop-blur-xl bg-white/[0.08] border border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6">
+                <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2"><Zap className="w-5 h-5 text-amber-400" /> Conducted GD Sessions</h2>
+                {gdLiveSessions.filter(s => s.status === "completed").length === 0 ? (
+                  <p className="text-slate-400 text-sm py-4 text-center">No completed sessions yet.</p>
+                ) : (
+                  <div className="grid gap-3">
+                    {gdLiveSessions.filter((s: any) => s.status === "completed").map((s: any) => (
+                      <div key={s.session_code} className="flex items-center justify-between p-3 rounded-lg bg-white/[0.06] border border-white/10">
+                        <div>
+                          <p className="text-sm font-medium text-white">Session <code className="font-mono text-amber-300">{s.session_code}</code></p>
+                          <p className="text-xs text-slate-400">{s.participant_count || 0} participants · {s.team_count || 0} teams</p>
+                        </div>
+                        <span className="text-xs px-2 py-1 rounded-full bg-emerald-500/20 text-emerald-300">Completed</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           )}
