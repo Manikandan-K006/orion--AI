@@ -160,6 +160,18 @@ export type ComprehensiveLeaderboard = {
   all_time_achievers: AllTimeAchiever[];
 };
 
+export type GDInvitation = {
+  id: number;
+  session_code: string;
+  status: string;
+  created_at: string;
+  from_user_id: number;
+  from_name: string;
+  from_register: string;
+  topic: string;
+  session_status: string;
+};
+
 export async function apiRequest<T>(path: string, options: RequestInit = {}, token?: string): Promise<T> {
   const response = await fetch(`${API_URL}${path}`, {
     ...options,

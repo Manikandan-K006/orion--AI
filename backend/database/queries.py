@@ -473,3 +473,57 @@ def get_all_time_achievers(connection: MySQLConnection) -> list[dict[str, Any]]:
         ORDER BY total_credits DESC
         LIMIT 10
     """)
+
+
+# ──────────────────────────────────────────────
+# GD Invitations
+# ──────────────────────────────────────────────
+
+def create_gd_invitation(connection: MySQLConnection, session_code: str, from_user_id: int, to_user_id: int) -> int:
+    return execute(connection,
+        "INSERT IGNORE INTO gd_invitations (session_code, from_user_id, to_user_id, status) VALUES (%s, %s, %s, 'pending')",
+        (session_code, from_user_id, to_user_id))
+
+
+def get_pending_invitations(connection: MySQLConnection, user_id: int) -> list[dict[str, Any]]:
+    return fetch_all(connection,
+        "SELECT gi.id, gi.session_code, gi.status, gi.created_at, "
+        "u.id AS from_user_id, u.name AS from_name, u.register_number AS from_register, "
+        "gs.topic, gs.status AS session_status "
+        "FROM gd_invitations gi "
+        "JOIN users u ON gi.from_user_id = u.id "
+        "JOIN gd_sessions gs ON gi.session_code = gs.session_code "
+        "WHERE gi.to_user_id = %s AND gi.status = 'pending' "
+        "ORDER BY gi.created_at DESC",
+        (user_id,))
+
+
+def accept_invitation(connection: MySQLConnection, invitation_id: int, user_id: int) -> bool:
+    inv = fetch_one(connection,
+        "SELECT session_code, to_user_id FROM gd_invitations WHERE id = %s AND status = 'pending'",
+        (invitation_id,))
+    if not inv or inv["to_user_id"] != user_id:
+        return False
+    session = fetch_one(connection, "SELECT team_size FROM gd_sessions WHERE session_code = %s",
+                        (inv["session_code"],))
+    if not session:
+        return False
+    member_count = fetch_one(connection,
+        "SELECT COUNT(*) AS cnt FROM gd_team_members WHERE session_code = %s",
+        (inv["session_code"],))["cnt"]
+    if member_count >= session["team_size"]:
+        return False
+    execute(connection,
+        "INSERT IGNORE INTO gd_team_members (session_code, user_id) VALUES (%s, %s)",
+        (inv["session_code"], user_id))
+    execute(connection,
+        "UPDATE gd_invitations SET status = 'accepted' WHERE id = %s",
+        (invitation_id,))
+    return True
+
+
+def decline_invitation(connection: MySQLConnection, invitation_id: int, user_id: int) -> bool:
+    result = execute(connection,
+        "UPDATE gd_invitations SET status = 'declined' WHERE id = %s AND to_user_id = %s AND status = 'pending'",
+        (invitation_id, user_id))
+    return result > 0

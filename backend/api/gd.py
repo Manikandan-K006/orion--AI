@@ -116,7 +116,7 @@ def invite_to_gd(
     current_user: dict = Depends(get_current_user),
     connection: MySQLConnection = Depends(get_db),
 ) -> dict:
-    """Invite users to a GD session by their user IDs."""
+    """Invite users to a GD session (max 5 invitees, team_size max 6)."""
     session = queries.get_gd_session(connection, session_code)
     if not session:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
@@ -126,21 +126,56 @@ def invite_to_gd(
     user_ids = payload.get("user_ids", [])
     if not user_ids:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No users specified")
+    if len(user_ids) > 5:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Can only invite up to 5 members")
 
     member_count = len(queries.get_gd_team_members(connection, session_code))
-    team_size = session["team_size"]
+    if member_count >= session["team_size"]:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Team is already full")
 
     invited = 0
     for uid in user_ids:
         if uid == current_user["id"]:
             continue
-        if member_count + invited >= team_size:
+        if member_count + invited >= session["team_size"]:
             break
-        if not queries.is_member_of_gd(connection, session_code, uid):
-            queries.join_gd_session(connection, session_code, uid)
-            invited += 1
+        queries.create_gd_invitation(connection, session_code, current_user["id"], uid)
+        invited += 1
 
-    return {"message": f"Invited {invited} user(s) to the session", "invited_count": invited}
+    return {"message": f"Invitation sent to {invited} user(s)", "invited_count": invited}
+
+
+@router.get("/invitations")
+def list_invitations(
+    current_user: dict = Depends(get_current_user),
+    connection: MySQLConnection = Depends(get_db),
+) -> list[dict]:
+    """List pending invitations for the current user."""
+    return queries.get_pending_invitations(connection, current_user["id"])
+
+
+@router.post("/invitations/{invitation_id}/accept")
+def accept_invitation(
+    invitation_id: int,
+    current_user: dict = Depends(get_current_user),
+    connection: MySQLConnection = Depends(get_db),
+) -> dict:
+    """Accept a GD invitation and join the session."""
+    success = queries.accept_invitation(connection, invitation_id, current_user["id"])
+    if not success:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot accept invitation")
+    return {"message": "Joined the session"}
+
+
+@router.post("/invitations/{invitation_id}/decline")
+def decline_invitation(
+    invitation_id: int,
+    current_user: dict = Depends(get_current_user),
+    connection: MySQLConnection = Depends(get_db),
+) -> dict:
+    """Decline a GD invitation."""
+    queries.decline_invitation(connection, invitation_id, current_user["id"])
+    return {"message": "Invitation declined"}
 
 
 @router.post("/sessions/{session_code}/start")

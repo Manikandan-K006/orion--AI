@@ -113,6 +113,19 @@ CREATE TABLE IF NOT EXISTS gd_team_members (
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS gd_invitations (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    session_code VARCHAR(12) NOT NULL,
+    from_user_id INT NOT NULL,
+    to_user_id INT NOT NULL,
+    status ENUM('pending', 'accepted', 'declined') NOT NULL DEFAULT 'pending',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (session_code) REFERENCES gd_sessions(session_code) ON DELETE CASCADE,
+    FOREIGN KEY (from_user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (to_user_id) REFERENCES users(id) ON DELETE CASCADE,
+    UNIQUE KEY (session_code, to_user_id)
+);
+
 CREATE TABLE IF NOT EXISTS gd_evaluation (
     id INT AUTO_INCREMENT PRIMARY KEY,
     session_code VARCHAR(12) NOT NULL,

@@ -7,7 +7,7 @@ import { Bar, BarChart, CartesianGrid, Cell, Legend, PolarAngleAxis, PolarGrid, 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { AllTimeAchiever, ComprehensiveLeaderboard, GDLeaderboardEntry, GDSession, GDTopic, LeaderboardRanking, LeaderboardStats, Progress, SoloQuote, SoloStartResponse, SoloSubmitResponse, User, apiRequest } from "@/lib/api";
+import { AllTimeAchiever, ComprehensiveLeaderboard, GDInvitation, GDLeaderboardEntry, GDSession, GDTopic, LeaderboardRanking, LeaderboardStats, Progress, SoloQuote, SoloStartResponse, SoloSubmitResponse, User, apiRequest } from "@/lib/api";
 
 type PageView = "login" | "dashboard" | "gd-create" | "gd-session" | "gd-leaderboard" | "solo-practice" | "solo-session" | "solo-result";
 
@@ -65,6 +65,7 @@ export default function Home() {
   const audioChunksRef = useRef<Blob[]>([]);
   const [liveDetectedText, setLiveDetectedText] = useState("");
   const [gdQuote, setGdQuote] = useState<{ quote: string; author: string } | null>(null);
+  const [invitations, setInvitations] = useState<GDInvitation[]>([]);
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [pageLoading, setPageLoading] = useState(false);
@@ -96,7 +97,35 @@ export default function Home() {
       if (p) setProgress(p);
       const s = await apiRequest<GDSession[]>("/gd/sessions", {}, t).catch(() => []);
       setSessions(s);
+      const inv = await apiRequest<GDInvitation[]>("/gd/invitations", {}, t).catch(() => []);
+      setInvitations(inv);
     } catch { localStorage.removeItem("mzgd_token"); setView("login"); }
+  }
+
+  async function loadInvitations() {
+    const inv = await apiRequest<GDInvitation[]>("/gd/invitations", {}, token).catch(() => []);
+    setInvitations(inv);
+  }
+
+  async function acceptInvitation(id: number) {
+    setLoading(true);
+    try {
+      await apiRequest(`/gd/invitations/${id}/accept`, { method: "POST" }, token);
+      await loadInvitations();
+      await refreshSessions();
+      setSuccess("Joined the GD session!");
+    } catch (err: any) { setMessage(err.message); }
+    finally { setLoading(false); }
+  }
+
+  async function declineInvitation(id: number) {
+    setLoading(true);
+    try {
+      await apiRequest(`/gd/invitations/${id}/decline`, { method: "POST" }, token);
+      await loadInvitations();
+      setSuccess("Invitation declined");
+    } catch (err: any) { setMessage(err.message); }
+    finally { setLoading(false); }
   }
 
   async function refreshSessions() {
@@ -547,6 +576,7 @@ export default function Home() {
                 if (item.view === "gd-leaderboard") { setView("gd-leaderboard"); loadLeaderboard(); }
                 else if (item.view === "gd-create") { setView("gd-create"); loadTopics(); }
                 else if (item.view === "solo-practice") { setView("solo-practice"); startSoloPractice(); }
+                else if (item.view === "dashboard") { setView("dashboard"); loadInvitations(); }
                 else setView(item.view);
                 setSidebarOpen(false);
               }}
@@ -603,9 +633,33 @@ export default function Home() {
                       <span className="text-white/50 text-xs font-medium uppercase tracking-wider">{card.label}</span>
                     </div>
                     <p className="text-3xl font-bold text-white">{card.value}</p>
-                  </div>
-                ))}
+                </div>
+              ))}
               </div>
+              {invitations.length > 0 && (
+                <div className="rounded-xl backdrop-blur-xl border border-amber-500/30 bg-amber-500/[0.08] shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-5">
+                  <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2"><Share2 className="w-5 h-5 text-amber-400" /> Received Invitations</h2>
+                  <div className="space-y-3">
+                    {invitations.map(inv => (
+                      <div key={inv.id} className="flex items-center justify-between p-3 rounded-lg bg-white/[0.06] border border-white/10">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-white">{inv.from_name} <span className="text-xs text-slate-400">({inv.from_register})</span></p>
+                          <p className="text-xs text-slate-400">Topic: {inv.topic}</p>
+                          <p className="text-xs text-slate-500">Code: {inv.session_code}</p>
+                        </div>
+                        <div className="flex gap-2 shrink-0">
+                          <button onClick={() => acceptInvitation(inv.id)} disabled={loading} className="text-xs px-3 py-1.5 rounded-lg bg-gradient-to-r from-emerald-500 to-green-600 text-white disabled:opacity-50 hover:opacity-90 transition">
+                            Accept
+                          </button>
+                          <button onClick={() => declineInvitation(inv.id)} disabled={loading} className="text-xs px-3 py-1.5 rounded-lg bg-white/10 text-slate-300 border border-white/20 hover:bg-white/20 transition">
+                            Decline
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div className={`rounded-xl backdrop-blur-xl border transition-colors duration-500 bg-white/[0.08] border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-5`}>
                 <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2"><Users className="w-5 h-5 text-amber-400" /> Recent Sessions</h2>
                 {sessions.length === 0 && <p className="text-slate-400 text-sm">No sessions yet. Create or join one!</p>}
@@ -635,12 +689,12 @@ export default function Home() {
                             </button>
                           </div>
                           <div className="flex items-center justify-between gap-2 mb-2">
-                            <p className="text-xs font-medium text-amber-300/90 flex items-center gap-1"><Users className="w-3 h-3" /> Invite teammates</p>
+                            <p className="text-xs font-medium text-amber-300/90 flex items-center gap-1"><Users className="w-3 h-3" /> Invite teammates (max 5)</p>
                           </div>
                           <div className="max-h-32 overflow-y-auto space-y-1 mb-2 rounded-lg border border-white/5 p-1">
                             {allUsers.map(u => (
                               <label key={u.id} className={`flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer transition ${selectedUserIds.includes(u.id) ? "bg-amber-500/20 border border-amber-500/30" : "bg-white/[0.04] hover:bg-white/[0.08]"}`}>
-                                <input type="checkbox" checked={selectedUserIds.includes(u.id)} onChange={() => setSelectedUserIds(prev => prev.includes(u.id) ? prev.filter(id => id !== u.id) : [...prev, u.id])} className="accent-amber-500" />
+                                <input type="checkbox" checked={selectedUserIds.includes(u.id)} onChange={() => setSelectedUserIds(prev => prev.includes(u.id) ? prev.filter(id => id !== u.id) : prev.length < 5 ? [...prev, u.id] : prev)} className="accent-amber-500" />
                                 <span className="text-xs text-white truncate">{u.name}</span>
                               </label>
                             ))}
@@ -686,11 +740,11 @@ export default function Home() {
                   )}
                   {lastCreatedCode && allUsers.length > 0 && (
                     <div className="border-t border-white/10 pt-3 mt-3">
-                      <p className="text-xs font-medium text-amber-300/90 mb-2 flex items-center gap-1"><Users className="w-3.5 h-3.5" /> Invite Teammates (select from registered students)</p>
+                      <p className="text-xs font-medium text-amber-300/90 mb-2 flex items-center gap-1"><Users className="w-3.5 h-3.5" /> Invite Teammates (max 5, select from registered students)</p>
                       <div className="max-h-40 overflow-y-auto space-y-1 mb-3 scrollbar-thin rounded-lg border border-white/5 p-1">
                         {allUsers.map(u => (
                           <label key={u.id} className={`flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition ${selectedUserIds.includes(u.id) ? "bg-amber-500/20 border border-amber-500/30" : "bg-white/[0.04] hover:bg-white/[0.08]"}`}>
-                            <input type="checkbox" checked={selectedUserIds.includes(u.id)} onChange={() => setSelectedUserIds(prev => prev.includes(u.id) ? prev.filter(id => id !== u.id) : [...prev, u.id])} className="accent-amber-500" />
+                            <input type="checkbox" checked={selectedUserIds.includes(u.id)} onChange={() => setSelectedUserIds(prev => prev.includes(u.id) ? prev.filter(id => id !== u.id) : prev.length < 5 ? [...prev, u.id] : prev)} className="accent-amber-500" />
                             <div className="flex-1 min-w-0">
                               <p className="text-sm text-white truncate">{u.name}</p>
                               <p className="text-xs text-slate-400">{u.register_number}</p>
