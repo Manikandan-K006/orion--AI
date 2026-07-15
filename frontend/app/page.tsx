@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircle, Award, Clock, LogOut, MessageSquare, Mic, MicOff, RefreshCw, Trophy, Users, Zap, Loader2, Copy, Check, Target, TrendingUp, ArrowUp, ArrowDown, PanelLeftClose, PanelLeft, Share2, Sparkles, Menu, X } from "lucide-react";
+import { AlertCircle, Award, Clock, LogOut, MessageSquare, Mic, MicOff, RefreshCw, Trophy, Users, Zap, Loader2, Copy, Check, Target, TrendingUp, ArrowUp, ArrowDown, PanelLeftClose, PanelLeft, Share2, Sparkles, Menu, X, Shield } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Bar, BarChart, CartesianGrid, Cell, Legend, PolarAngleAxis, PolarGrid, Radar, RadarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
@@ -27,7 +27,7 @@ const MOTIVATIONAL_PHRASES = [
   "Fantastic! Your hard work is paying off.",
 ];
 
-type PageView = "login" | "dashboard" | "gd-create" | "gd-session" | "gd-leaderboard" | "solo-practice" | "solo-session" | "solo-result";
+type PageView = "login" | "dashboard" | "gd-create" | "gd-session" | "gd-leaderboard" | "solo-practice" | "solo-session" | "solo-result" | "gd-live" | "gd-live-session" | "gd-live-admin";
 
 export default function Home() {
   const [token, setToken] = useState("");
@@ -90,6 +90,15 @@ export default function Home() {
   const [isSessionLocked, setIsSessionLocked] = useState(false);
   const [tabSwitchWarning, setTabSwitchWarning] = useState(false);
   const lockWarningRef = useRef<boolean>(false);
+
+  // GD Live state
+  const [gdLiveCode, setGdLiveCode] = useState("");
+  const [gdLiveJoined, setGdLiveJoined] = useState(false);
+  const [gdLiveSession, setGdLiveSession] = useState<{ session_code: string; status: string; participant_count: number; team_count: number } | null>(null);
+  const [gdLiveMyTeam, setGdLiveMyTeam] = useState<{ team_number: number; topic: string; team_status: string; members: string[] } | null>(null);
+  const [gdLiveSessions, setGdLiveSessions] = useState<any[]>([]);
+  const [gdLiveParticipants, setGdLiveParticipants] = useState<any[]>([]);
+  const [gdLiveCreatedCode, setGdLiveCreatedCode] = useState("");
 
   useEffect(() => {
     if (typeof window !== "undefined" && window.innerWidth >= 768) {
@@ -443,6 +452,101 @@ export default function Home() {
     setSoloSession(null); setSoloResult(null); setSoloQuote(null);
   }
 
+  // ─── GD Live Functions ───
+
+  async function loadGdLiveSessions() {
+    try {
+      const sessions = await apiRequest<any[]>("/gd-live/sessions", {}, token).catch(() => []);
+      setGdLiveSessions(sessions);
+    } catch {}
+  }
+
+  async function createGdLiveSession() {
+    setLoading(true);
+    try {
+      const res = await apiRequest<{ session_code: string }>("/gd-live/sessions", { method: "POST" }, token);
+      setGdLiveCreatedCode(res.session_code);
+      setSuccess(`GD Live session created! Code: ${res.session_code}`);
+      await loadGdLiveSessions();
+    } catch (err: any) { setMessage(err.message); }
+    finally { setLoading(false); }
+  }
+
+  async function joinGdLive() {
+    const code = gdLiveCode.trim();
+    if (!code || code.length !== 4) { setMessage("Enter a 4-digit code"); return; }
+    setLoading(true);
+    try {
+      await apiRequest(`/gd-live/sessions/${code}/join`, { method: "POST" }, token);
+      setGdLiveJoined(true);
+      setGdLiveSession({ session_code: code, status: "waiting", participant_count: 0, team_count: 0 });
+      setSuccess("Joined GD Live session!");
+      // Poll for team assignment
+      const poll = setInterval(async () => {
+        try {
+          const team = await apiRequest<any>(`/gd-live/sessions/${code}/my-team`, {}, token);
+          if (team && team.team_number) {
+            setGdLiveMyTeam(team);
+            setView("gd-live-session");
+            clearInterval(poll);
+          }
+        } catch {}
+      }, 3000);
+    } catch (err: any) { setMessage(err.message); }
+    finally { setLoading(false); }
+  }
+
+  async function assignGdLiveTeams(sessionCode: string) {
+    setLoading(true);
+    try {
+      const res = await apiRequest<{ teams: any[]; message: string }>(`/gd-live/sessions/${sessionCode}/assign-teams`, { method: "POST" }, token);
+      setSuccess(res.message);
+      await loadGdLiveSessions();
+      await loadGdLiveParticipants(sessionCode);
+    } catch (err: any) { setMessage(err.message); }
+    finally { setLoading(false); }
+  }
+
+  async function loadGdLiveParticipants(sessionCode: string) {
+    try {
+      const parts = await apiRequest<any[]>(`/gd-live/sessions/${sessionCode}/participants`, {}, token).catch(() => []);
+      setGdLiveParticipants(parts);
+    } catch {}
+  }
+
+  async function startGdLiveTeam(sessionCode: string, teamNumber: number) {
+    setLoading(true);
+    try {
+      await apiRequest(`/gd-live/sessions/${sessionCode}/start-team/${teamNumber}`, { method: "POST" }, token);
+      setSuccess(`Team ${teamNumber} started!`);
+      await loadGdLiveSessions();
+    } catch (err: any) { setMessage(err.message); }
+    finally { setLoading(false); }
+  }
+
+  async function submitGdLiveTranscript() {
+    if (!gdLiveMyTeam || !gdLiveSession || !transcript.trim()) { setMessage("Write your transcript first"); return; }
+    setLoading(true);
+    try {
+      await apiRequest(`/gd-live/sessions/${gdLiveSession.session_code}/submit-transcript`, {
+        method: "POST", body: JSON.stringify({ transcript })
+      }, token);
+      setSuccess("Transcript submitted!");
+      speak("Your contribution has been recorded.");
+    } catch (err: any) { setMessage(err.message); }
+    finally { setLoading(false); }
+  }
+
+  async function completeGdLiveSession(sessionCode: string) {
+    setLoading(true);
+    try {
+      await apiRequest(`/gd-live/sessions/${sessionCode}/complete`, { method: "POST" }, token);
+      setSuccess("Session completed!");
+      await loadGdLiveSessions();
+    } catch (err: any) { setMessage(err.message); }
+    finally { setLoading(false); }
+  }
+
   // ─── Solo Practice Functions ───
 
   async function startSoloPractice() {
@@ -624,10 +728,17 @@ export default function Home() {
         <nav className="flex-1 p-3 space-y-1">
           {[
             { icon: <Users className="w-5 h-5 shrink-0" />, label: "Dashboard", view: "dashboard" as PageView },
-            { icon: <MessageSquare className="w-5 h-5 shrink-0" />, label: "GD", view: "gd-create" as PageView },
+            { icon: <MessageSquare className="w-5 h-5 shrink-0" />, label: "Mock GD", view: "gd-create" as PageView },
             { icon: <Target className="w-5 h-5 shrink-0" />, label: "Solo Practice", view: "solo-practice" as PageView },
             { icon: <Trophy className="w-5 h-5 shrink-0" />, label: "Leaderboard", view: "gd-leaderboard" as PageView },
-          ].map((item: { icon: React.ReactNode; label: string; view: PageView; badge?: string }) => (
+            ...(user?.role === "admin" ? [
+              { icon: <Zap className="w-5 h-5 shrink-0" />, label: "GD Live", view: "gd-live" as PageView },
+              { icon: <Shield className="w-5 h-5 shrink-0" />, label: "Admin", view: "gd-live-admin" as PageView },
+            ] : []),
+            ...(user?.role !== "admin" ? [
+              { icon: <Zap className="w-5 h-5 shrink-0" />, label: "GD", view: "gd-live" as PageView },
+            ] : []),
+          ].filter(Boolean).map((item: { icon: React.ReactNode; label: string; view: PageView; badge?: string }) => (
             <button
               key={item.label}
               disabled={isSessionLocked}
@@ -637,6 +748,8 @@ export default function Home() {
                 else if (item.view === "gd-create") { setView("gd-create"); loadTopics(); }
                 else if (item.view === "solo-practice") { setView("solo-practice"); startSoloPractice(); }
                 else if (item.view === "dashboard") { setView("dashboard"); loadInvitations(); }
+                else if (item.view === "gd-live") { setView("gd-live"); loadGdLiveSessions(); }
+                else if (item.view === "gd-live-admin") { setView("gd-live-admin"); loadGdLiveSessions(); }
                 else setView(item.view);
                 setSidebarOpen(false);
               }}
@@ -663,7 +776,7 @@ export default function Home() {
             <button onClick={() => { if (!isSessionLocked) setSidebarOpen(!sidebarOpen); }} className={`p-2 rounded-lg transition-all hover:scale-110 text-white/70 hover:bg-white/10 md:hover:bg-transparent ${isSessionLocked ? "opacity-40 cursor-not-allowed" : ""}`} title={sidebarOpen ? "Close menu" : "Open menu"}>
               {sidebarOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
             </button>
-            <div className="text-sm font-semibold text-white/90">{view === "dashboard" ? "Dashboard" : view === "gd-create" ? "New GD" : view === "gd-session" ? "GD Session" : view === "gd-leaderboard" ? "Leaderboard" : view === "solo-practice" ? "Solo Practice" : view === "solo-session" ? "Solo Session" : view === "solo-result" ? "Results" : ""}</div>
+            <div className="text-sm font-semibold text-white/90">{view === "dashboard" ? "Dashboard" : view === "gd-create" ? "Mock GD" : view === "gd-session" ? "Mock GD Session" : view === "gd-leaderboard" ? "Leaderboard" : view === "solo-practice" ? "Solo Practice" : view === "solo-session" ? "Solo Session" : view === "solo-result" ? "Results" : view === "gd-live" ? "GD" : view === "gd-live-session" ? "GD Session" : view === "gd-live-admin" ? "GD Admin" : ""}</div>
             <div className="w-10" /> {/* spacer */}
           </div>
           {(success || message) && (
@@ -1298,6 +1411,211 @@ export default function Home() {
                 <Button onClick={() => { setView("dashboard"); }} variant="secondary" className={`transition-colors duration-500 bg-white/10 text-white border-white/20`}>
                   Back to Dashboard
                 </Button>
+              </div>
+            </div>
+          )}
+
+          {/* ─── GD Live (Join) ─── */}
+          {view === "gd-live" && user?.role !== "admin" && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="rounded-xl backdrop-blur-xl bg-white/[0.08] border border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6">
+                <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2"><Zap className="w-5 h-5 text-amber-400" /> Join GD Session</h2>
+                <p className="text-xs text-slate-400 mb-4">Enter the 4-digit session code shared by your admin to join an anonymous group discussion.</p>
+                <div className="space-y-3">
+                  <Input
+                    placeholder="Enter 4-digit code (e.g. 1234)"
+                    value={gdLiveCode}
+                    onChange={(e) => setGdLiveCode(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                    className="bg-white/10 border-white/20 text-white placeholder:text-white/40 font-mono text-2xl tracking-[0.5em] text-center"
+                    maxLength={4}
+                  />
+                  <Button onClick={joinGdLive} disabled={loading || gdLiveCode.length !== 4} className="w-full bg-gradient-to-r from-amber-500 to-orange-600 border-0 h-12 text-lg">
+                    {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Users className="h-5 w-5" />} Join Session
+                  </Button>
+                </div>
+                {gdLiveJoined && (
+                  <div className="mt-4 p-4 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-center">
+                    <Loader2 className="h-6 w-6 animate-spin mx-auto text-emerald-400 mb-2" />
+                    <p className="text-sm text-emerald-300">Joined! Waiting for admin to assign teams...</p>
+                    <p className="text-xs text-slate-400 mt-1">You will be placed in a team of 3. Your identity is hidden from other members.</p>
+                  </div>
+                )}
+              </div>
+              <div className="rounded-xl backdrop-blur-xl bg-white/[0.08] border border-amber-500/20 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6">
+                <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2"><Shield className="w-5 h-5 text-amber-400" /> Anonymous & Private</h2>
+                <ul className="space-y-3 text-sm text-slate-300">
+                  <li className="flex items-start gap-2">✓ Your name and email are hidden from other participants</li>
+                  <li className="flex items-start gap-2">✓ Teams are formed randomly from all participants</li>
+                  <li className="flex items-start gap-2">✓ Each member is labeled as "Member 1", "Member 2", etc.</li>
+                  <li className="flex items-start gap-2">✓ Only admins can view your identity, department, and year</li>
+                  <li className="flex items-start gap-2">✓ Very easy topics that anyone can talk about</li>
+                </ul>
+              </div>
+            </div>
+          )}
+
+          {/* ─── GD Live Admin ─── */}
+          {view === "gd-live-admin" && user?.role === "admin" && (
+            <div className="space-y-6">
+              <div className="rounded-xl backdrop-blur-xl bg-white/[0.08] border border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6">
+                <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2"><Shield className="w-5 h-5 text-amber-400" /> Admin Portal — GD Live Sessions</h2>
+                <div className="flex items-center gap-3 mb-4">
+                  <Button onClick={createGdLiveSession} disabled={loading} className="bg-gradient-to-r from-emerald-500 to-green-600 border-0">
+                    {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />} Create New Session (4-digit code)
+                  </Button>
+                </div>
+                {gdLiveCreatedCode && (
+                  <div className="mb-4 p-4 rounded-lg bg-emerald-500/10 border border-emerald-500/30 inline-block">
+                    <p className="text-xs text-emerald-300 mb-1">Session Code</p>
+                    <div className="flex items-center gap-2">
+                      <code className="text-3xl font-mono font-bold text-white tracking-[0.3em]">{gdLiveCreatedCode}</code>
+                      <button onClick={() => copyCode(gdLiveCreatedCode)} className="p-1.5 rounded-md hover:bg-white/10 text-emerald-300">
+                        {copied ? <Check className="h-5 w-5" /> : <Copy className="h-5 w-5" />}
+                      </button>
+                    </div>
+                    <p className="text-xs text-slate-400 mt-1">Share this code with students to join</p>
+                  </div>
+                )}
+              </div>
+
+              {gdLiveSessions.map((sess: any) => (
+                <div key={sess.session_code} className="rounded-xl backdrop-blur-xl bg-white/[0.08] border border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h3 className="text-lg font-semibold text-white">Session <code className="font-mono text-amber-300">{sess.session_code}</code></h3>
+                      <p className="text-xs text-slate-400">Status: {sess.status} · {sess.participant_count || 0} participants · {sess.team_count || 0} teams</p>
+                    </div>
+                    <div className="flex gap-2">
+                      {sess.status === "waiting" && sess.participant_count > 0 && (
+                        <Button onClick={() => assignGdLiveTeams(sess.session_code)} disabled={loading} className="bg-gradient-to-r from-purple-500 to-pink-600 border-0 text-xs">
+                          Assign Teams
+                        </Button>
+                      )}
+                      <Button onClick={() => loadGdLiveParticipants(sess.session_code)} disabled={loading} variant="secondary" className="bg-white/10 text-white border-white/20 text-xs">
+                        View
+                      </Button>
+                      {sess.status === "active" && (
+                        <Button onClick={() => completeGdLiveSession(sess.session_code)} disabled={loading} variant="secondary" className="bg-red-500/20 text-red-300 border-red-500/30 text-xs">
+                          End
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Participant list (admin sees real names) */}
+                  {gdLiveParticipants.length > 0 && gdLiveParticipants[0]?.session_code === sess.session_code && (
+                    <div className="mt-4">
+                      <table className="w-full text-xs text-left">
+                        <thead>
+                          <tr className="text-slate-400 border-b border-white/10">
+                            <th className="pb-2 pr-2">Team</th>
+                            <th className="pb-2 pr-2">Label</th>
+                            <th className="pb-2 pr-2">Name</th>
+                            <th className="pb-2 pr-2 hidden md:table-cell">Register</th>
+                            <th className="pb-2 pr-2 hidden md:table-cell">Department</th>
+                            <th className="pb-2 pr-2 hidden md:table-cell">Year</th>
+                            <th className="pb-2 pr-2">Status</th>
+                            <th className="pb-2 pr-2">Action</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {gdLiveParticipants.map((p: any) => (
+                            <tr key={p.id} className="border-b border-white/5 hover:bg-white/[0.06]">
+                              <td className="py-2 pr-2 text-white font-mono">{p.team_number || "-"}</td>
+                              <td className="py-2 pr-2 text-amber-300">{p.anonymous_label || "-"}</td>
+                              <td className="py-2 pr-2 text-white">{p.name}</td>
+                              <td className="py-2 pr-2 text-slate-300 hidden md:table-cell">{p.register_number}</td>
+                              <td className="py-2 pr-2 text-slate-300 hidden md:table-cell">{p.department || "-"}</td>
+                              <td className="py-2 pr-2 text-slate-300 hidden md:table-cell">{p.year || "-"}</td>
+                              <td className="py-2 pr-2">
+                                <span className={`text-xs px-2 py-0.5 rounded-full ${p.status === "completed" ? "bg-emerald-500/20 text-emerald-300" : p.status === "assigned" ? "bg-blue-500/20 text-blue-300" : "bg-amber-500/20 text-amber-300"}`}>{p.status}</span>
+                              </td>
+                              <td className="py-2 pr-2">
+                                {p.team_number && sess.status === "active" && (
+                                  <Button onClick={() => startGdLiveTeam(sess.session_code, p.team_number)} disabled={loading} className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs px-2 py-1 h-auto">
+                                    Start
+                                  </Button>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              ))}
+
+              {gdLiveSessions.length === 0 && (
+                <div className="rounded-xl backdrop-blur-xl bg-white/[0.08] border border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6 text-center">
+                  <p className="text-slate-400 text-sm">No sessions created yet. Create one above!</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ─── GD Live Student View ─── */}
+          {view === "gd-live" && user?.role === "admin" && (
+            <div className="rounded-xl backdrop-blur-xl bg-white/[0.08] border border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6 text-center">
+              <p className="text-slate-400 text-sm">Use the Admin portal to manage GD Live sessions.</p>
+            </div>
+          )}
+
+          {/* ─── GD Live Session (Anonymous Team) ─── */}
+          {view === "gd-live-session" && gdLiveMyTeam && gdLiveSession && (
+            <div className="max-w-3xl mx-auto space-y-4">
+              <div className="rounded-xl backdrop-blur-xl bg-white/[0.08] border border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h2 className="text-xl font-bold text-white">{gdLiveMyTeam.topic}</h2>
+                    <p className="text-sm text-slate-400">Team #{gdLiveMyTeam.team_number} · Session Code: {gdLiveSession.session_code}</p>
+                  </div>
+                </div>
+
+                <div className="mb-4 p-4 rounded-lg bg-gradient-to-r from-amber-500/20 to-orange-600/20 border border-amber-500/30">
+                  <p className="text-xs text-amber-300/80 mb-2">Your Team (Identities Hidden)</p>
+                  <div className="flex flex-wrap gap-2">
+                    {gdLiveMyTeam.members.map((m: string, idx: number) => (
+                      <span key={idx} className="text-sm bg-white/10 text-white px-4 py-2 rounded-full border border-white/20 font-medium">{m}</span>
+                    ))}
+                  </div>
+                </div>
+
+                <p className="text-xs text-slate-400 mb-4">Your name, email, and register number are hidden from other members. Only admins can see your identity.</p>
+
+                {gdLiveMyTeam.team_status === "active" && (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Button onClick={toggleRecording} className={`border-0 ${isRecording ? "bg-red-500 hover:bg-red-600" : "bg-gradient-to-r from-amber-500 to-orange-600"}`}>
+                        {isRecording ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />} {isRecording ? "Stop" : "Record"}
+                      </Button>
+                      {recordingStatus && <span className="text-xs text-slate-400">{recordingStatus}</span>}
+                    </div>
+                    {liveDetectedText && <p className="text-xs text-emerald-300 bg-emerald-500/10 p-2 rounded"><span className="font-medium">Detected:</span> {liveDetectedText}</p>}
+                    <Textarea placeholder="Type your contribution here..." value={transcript} onChange={(e) => setTranscript(e.target.value)} className="bg-white/10 border-white/20 text-white placeholder:text-white/40 min-h-[100px]" />
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs text-slate-400">{transcript.trim().split(/\s+/).filter(Boolean).length} words</span>
+                      <Button onClick={submitGdLiveTranscript} disabled={loading || !transcript.trim()} className="bg-gradient-to-r from-amber-500 to-orange-600 border-0">
+                        {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Award className="h-4 w-4" />} Submit Contribution
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {gdLiveMyTeam.team_status === "waiting" && (
+                  <div className="text-center py-6">
+                    <Loader2 className="h-6 w-6 animate-spin mx-auto text-amber-400 mb-2" />
+                    <p className="text-white font-medium">Waiting for admin to start your team's discussion...</p>
+                    <p className="text-xs text-slate-400 mt-1">The admin will initiate the discussion when ready.</p>
+                  </div>
+                )}
+
+                {gdLiveMyTeam.team_status === "completed" && (
+                  <div className="text-center py-6">
+                    <Award className="h-8 w-8 text-emerald-400 mx-auto mb-2" />
+                    <p className="text-emerald-300 font-medium">Session completed! Your contribution has been recorded.</p>
+                  </div>
+                )}
               </div>
             </div>
           )}

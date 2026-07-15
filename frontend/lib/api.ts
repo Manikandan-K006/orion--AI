@@ -172,6 +172,39 @@ export type GDInvitation = {
   session_status: string;
 };
 
+export type GDLiveSession = {
+  id: number;
+  session_code: string;
+  status: string;
+  total_participants: number;
+  created_by: number;
+  created_at: string;
+  participant_count: number;
+  team_count: number;
+};
+
+export type GDLiveParticipant = {
+  id: number;
+  session_code: string;
+  user_id: number;
+  team_number: number | null;
+  anonymous_label: string | null;
+  transcript: string | null;
+  status: string;
+  created_at: string;
+  name: string;
+  register_number: string;
+  department: string | null;
+  year: string | null;
+};
+
+export type GDLiveMyTeam = {
+  team_number: number;
+  topic: string;
+  team_status: string;
+  members: string[];
+};
+
 export async function apiRequest<T>(path: string, options: RequestInit = {}, token?: string): Promise<T> {
   const response = await fetch(`${API_URL}${path}`, {
     ...options,
