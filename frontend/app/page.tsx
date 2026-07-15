@@ -9,6 +9,24 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { AllTimeAchiever, ComprehensiveLeaderboard, GDInvitation, GDLeaderboardEntry, GDSession, GDTopic, LeaderboardRanking, LeaderboardStats, Progress, SoloQuote, SoloStartResponse, SoloSubmitResponse, User, apiRequest } from "@/lib/api";
 
+function speak(text: string) {
+  if (typeof window === "undefined" || !window.speechSynthesis) return;
+  window.speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.rate = 0.95;
+  utterance.pitch = 1.05;
+  utterance.lang = "en-US";
+  window.speechSynthesis.speak(utterance);
+}
+
+const MOTIVATIONAL_PHRASES = [
+  "Great effort! Keep practicing to improve your skills.",
+  "Well done! Every session makes you better.",
+  "Excellent work! You're on the right track.",
+  "Good job! Consistency is the key to success.",
+  "Fantastic! Your hard work is paying off.",
+];
+
 type PageView = "login" | "dashboard" | "gd-create" | "gd-session" | "gd-leaderboard" | "solo-practice" | "solo-session" | "solo-result";
 
 export default function Home() {
@@ -90,6 +108,7 @@ export default function Home() {
       if (isSessionLocked && document.visibilityState === "hidden") {
         setTabSwitchWarning(true);
         lockWarningRef.current = true;
+        speak("Please return to your session immediately.");
       }
       if (document.visibilityState === "visible" && lockWarningRef.current) {
         setTabSwitchWarning(true);
@@ -306,6 +325,7 @@ export default function Home() {
       setIsPrepPhase(true);
       setPrepSeconds(240);
       setIsSessionLocked(true);
+      speak(`Your GD topic is: ${res.topic}. You have 4 minutes to prepare.`);
       if (timerRef.current) clearInterval(timerRef.current);
       timerRef.current = setInterval(() => {
         setPrepSeconds(prev => {
@@ -315,6 +335,7 @@ export default function Home() {
             setIsSpeakingPhase(true);
             setSpeakingSeconds(960);
             setSuccess("Preparation time over! Start speaking now.");
+            speak("Preparation time is over. Start speaking now.");
             timerRef.current = setInterval(() => {
               setSpeakingSeconds(p => {
                 if (p <= 1) { clearInterval(timerRef.current!); return 0; }
@@ -374,10 +395,12 @@ export default function Home() {
       mediaRecorderRef.current?.stop();
       setIsRecording(false);
       setRecordingStatus("Processing audio...");
+      speak("Recording stopped");
       return;
     }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      speak("Recording started");
       const mediaRecorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
@@ -450,6 +473,7 @@ export default function Home() {
     setSpeakingSeconds(0);
     setView("solo-session");
     setSuccess("You have 4 minutes to prepare. Use the notes area below.");
+    speak(`Your topic is: ${soloSession.topic}. You have 4 minutes to prepare.`);
     if (timerRef.current) clearInterval(timerRef.current);
     timerRef.current = setInterval(() => {
       setPrepSeconds(prev => {
@@ -459,6 +483,7 @@ export default function Home() {
           setIsSpeakingPhase(true);
           setSpeakingSeconds(600);
           setSuccess("Preparation time over! Start speaking now. You have 10 minutes.");
+          speak("Preparation time is over. Start speaking now. You have 10 minutes.");
           timerRef.current = setInterval(() => {
             setSpeakingSeconds(p => {
               if (p <= 1) { clearInterval(timerRef.current!); return 0; }
@@ -481,6 +506,8 @@ export default function Home() {
         body: JSON.stringify({ session_id: soloSession.session_id, transcript })
       }, token);
       setSoloResult(res);
+      const phrase = MOTIVATIONAL_PHRASES[Math.floor(Math.random() * MOTIVATIONAL_PHRASES.length)];
+      speak(phrase);
       if (timerRef.current) clearInterval(timerRef.current);
       setIsPrepPhase(false);
       setIsSpeakingPhase(false);
