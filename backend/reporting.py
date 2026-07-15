@@ -1,12 +1,12 @@
 from pathlib import Path
 
-from reportlab.lib.pagesizes import A4
-from reportlab.pdfgen import canvas
-
 from backend.config import get_settings
 
 
 def generate_pdf_report(session_id: int, student_name: str, score: float, summary: str) -> str:
+    from reportlab.lib.pagesizes import A4
+    from reportlab.pdfgen import canvas
+
     settings = get_settings()
     report_dir = Path(settings.report_dir)
     report_dir.mkdir(parents=True, exist_ok=True)
