@@ -245,7 +245,7 @@ INSERT IGNORE INTO motivational_quotes (id, quote, author) VALUES
 (24, 'Do what you can, with what you have, where you are.', 'Theodore Roosevelt'),
 (25, 'The only impossible journey is the one you never begin.', 'Tony Robbins');
 
--- Easy topics for GD Live (simple enough for anyone)
+-- Discussion topics for GD Live (basic debate/opinion topics)
 CREATE TABLE IF NOT EXISTS gd_easy_topics (
     id INT AUTO_INCREMENT PRIMARY KEY,
     topic VARCHAR(255) NOT NULL,
@@ -253,26 +253,36 @@ CREATE TABLE IF NOT EXISTS gd_easy_topics (
 );
 
 INSERT IGNORE INTO gd_easy_topics (id, topic) VALUES
-(1, 'My favorite animal and why I like it'),
-(2, 'What I like to do on weekends'),
-(3, 'My favorite food'),
-(4, 'A happy memory from my childhood'),
-(5, 'What I want to become when I grow up'),
-(6, 'My best friend'),
-(7, 'A game I love to play'),
-(8, 'My favorite season and why'),
-(9, 'What makes me happy'),
-(10, 'A place I want to visit'),
-(11, 'My favorite subject in school'),
-(12, 'Something I learned recently'),
-(13, 'The best gift I ever received'),
-(14, 'My favorite movie or cartoon'),
-(15, 'What I do to help at home'),
-(16, 'A skill I want to learn'),
-(17, 'My favorite holiday'),
-(18, 'An interesting dream I had'),
-(19, 'A person I admire'),
-(20, 'What peace means to me');
+(1, 'Should mobile phones be allowed in schools?'),
+(2, 'Online learning vs Classroom learning'),
+(3, 'Social media: Boon or Bane?'),
+(4, 'Is reading books better than watching videos?'),
+(5, 'Importance of time management'),
+(6, 'Should homework be compulsory?'),
+(7, 'Advantages and disadvantages of AI'),
+(8, 'Cashless economy'),
+(9, 'Work from home vs Office work'),
+(10, 'Is technology making us lazy?'),
+(11, 'Artificial Intelligence in education'),
+(12, 'Digital India'),
+(13, 'Electric vehicles in India'),
+(14, 'Climate change'),
+(15, 'Women empowerment'),
+(16, 'Skill-based education'),
+(17, 'Startup culture in India'),
+(18, 'Cybersecurity challenges'),
+(19, 'Impact of OTT platforms'),
+(20, 'Role of youth in nation building'),
+(21, 'Is success more important than happiness?'),
+(22, 'Marks vs Skills'),
+(23, 'Can AI replace humans?'),
+(24, 'Should voting be compulsory?'),
+(25, 'Is competition necessary?'),
+(26, 'Leadership vs Teamwork'),
+(27, 'Failure is the key to success'),
+(28, 'Money vs Job satisfaction'),
+(29, 'Should coding be taught from school?'),
+(30, 'Is discipline more important than intelligence?');
 
 -- Anonymous GD Live sessions (4-digit code)
 CREATE TABLE IF NOT EXISTS gd_live_sessions (

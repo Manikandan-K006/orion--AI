@@ -1445,10 +1445,11 @@ export default function Home() {
                 <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2"><Shield className="w-5 h-5 text-amber-400" /> Anonymous & Private</h2>
                 <ul className="space-y-3 text-sm text-slate-300">
                   <li className="flex items-start gap-2">✓ Your name and email are hidden from other participants</li>
-                  <li className="flex items-start gap-2">✓ Teams are formed randomly from all participants</li>
-                  <li className="flex items-start gap-2">✓ Each member is labeled as "Member 1", "Member 2", etc.</li>
+                  <li className="flex items-start gap-2">✓ Teams of 3 are formed randomly from all participants</li>
+                  <li className="flex items-start gap-2">✓ Each member is labeled as "Member 1", "Member 2", "Member 3"</li>
+                  <li className="flex items-start gap-2">✓ Each team gets a separate discussion topic</li>
                   <li className="flex items-start gap-2">✓ Only admins can view your identity, department, and year</li>
-                  <li className="flex items-start gap-2">✓ Very easy topics that anyone can talk about</li>
+                  <li className="flex items-start gap-2">✓ Topics are basic opinion/debate subjects everyone can talk about</li>
                 </ul>
               </div>
             </div>
