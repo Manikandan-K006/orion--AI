@@ -442,7 +442,7 @@ export default function Home() {
 
   if (!user) {
     return (
-      <div className="min-h-screen flex items-center justify-center relative overflow-hidden">
+      <div className={`min-h-screen flex items-center justify-center relative overflow-hidden ${theme === "dark" ? "dark" : ""}`}>
         <div className="absolute inset-0">
           <img src={theme === "dark" ? "/login_dark_bg.jpeg" : "/4k_BG.jpeg"} alt="" className="w-full h-full object-cover animate-ken-burns" />
           <div className={`absolute inset-0 ${theme === "dark" ? "bg-gradient-to-b from-black/70 via-black/50 to-black/70" : "bg-white/30"}`} />
