@@ -1329,6 +1329,50 @@ export default function Home() {
                       </table>
                     </div>
                   )}
+
+                  {/* Leaderboard for this session */}
+                  {gdLiveLeaderboard.length > 0 && gdLiveLeaderboardViewCode === sess.session_code && (
+                    <div className="mt-6">
+                      <h4 className="text-sm font-semibold text-black dark:text-white mb-3 flex items-center gap-2">
+                        <Trophy className="w-4 h-4 text-amber-400" /> Leaderboard — Session {sess.session_code}
+                      </h4>
+                      <table className="w-full text-xs text-left">
+                        <thead>
+                          <tr className="text-gray-700 dark:text-slate-400 border-b border-white/10">
+                            <th className="pb-2 pr-2">Rank</th>
+                            <th className="pb-2 pr-2">Name</th>
+                            <th className="pb-2 pr-2 hidden md:table-cell">Register</th>
+                            <th className="pb-2 pr-2">Team</th>
+                            <th className="pb-2 pr-2">Label</th>
+                            <th className="pb-2 pr-2">Score</th>
+                            <th className="pb-2 pr-2">Credits</th>
+                            <th className="pb-2 pr-2">Transcript</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {gdLiveLeaderboard.map((entry, idx) => (
+                            <tr key={entry.id} className={`border-b border-white/5 hover:bg-white/[0.06] ${idx === 0 ? "bg-amber-500/10" : ""}`}>
+                              <td className="py-2 pr-2">
+                                <span className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-xs font-bold ${idx === 0 ? "bg-amber-500 text-black dark:text-white" : idx === 1 ? "bg-slate-400 text-black dark:text-white" : idx === 2 ? "bg-orange-500 text-black dark:text-white" : "bg-white/10 text-gray-700 dark:text-slate-300"}`}>{idx + 1}</span>
+                              </td>
+                              <td className="py-2 pr-2 text-black dark:text-white font-medium">{entry.name}</td>
+                              <td className="py-2 pr-2 text-gray-700 dark:text-slate-300 hidden md:table-cell">{entry.register_number}</td>
+                              <td className="py-2 pr-2 text-amber-300 font-mono">{entry.team_number}</td>
+                              <td className="py-2 pr-2 text-purple-300">{entry.anonymous_label || "-"}</td>
+                              <td className="py-2 pr-2 text-emerald-300 font-semibold">{entry.overall_score.toFixed(1)}</td>
+                              <td className="py-2 pr-2 text-amber-300">{entry.credential_points.toFixed(1)}</td>
+                              <td className="py-2 pr-2">
+                                <details className="cursor-pointer">
+                                  <summary className="text-amber-300 hover:text-amber-200 text-xs">View</summary>
+                                  <p className="mt-1 text-gray-700 dark:text-slate-400 whitespace-pre-wrap max-w-xs">{entry.transcript || "N/A"}</p>
+                                </details>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
               ))}
 
