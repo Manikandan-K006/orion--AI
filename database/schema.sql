@@ -320,4 +320,26 @@ CREATE TABLE IF NOT EXISTS gd_live_participants (
     FOREIGN KEY (user_id) REFERENCES users(id)
 );
 
+-- AI evaluations for GD Live participants
+CREATE TABLE IF NOT EXISTS gd_live_evaluations (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    session_code VARCHAR(4) NOT NULL,
+    user_id INT NOT NULL,
+    team_number INT NOT NULL,
+    transcript TEXT NOT NULL,
+    overall_score FLOAT DEFAULT 0,
+    fluency_score FLOAT DEFAULT 0,
+    grammar_score FLOAT DEFAULT 0,
+    accent_score FLOAT DEFAULT 0,
+    relevance_score FLOAT DEFAULT 0,
+    content_quality FLOAT DEFAULT 0,
+    credential_points FLOAT DEFAULT 0,
+    weaknesses TEXT,
+    improvement_tips TEXT,
+    evaluated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (session_code) REFERENCES gd_live_sessions(session_code) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    UNIQUE KEY (session_code, user_id)
+);
+
 -- Students are seeded via backend/seed.py with proper bcrypt hashes

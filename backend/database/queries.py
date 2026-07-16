@@ -658,6 +658,66 @@ def complete_live_session(connection: MySQLConnection, session_code: str) -> boo
 
 
 def delete_live_session(connection: MySQLConnection, session_code: str) -> None:
+    execute(connection, "DELETE FROM gd_live_evaluations WHERE session_code = %s", (session_code,))
     execute(connection, "DELETE FROM gd_live_participants WHERE session_code = %s", (session_code,))
     execute(connection, "DELETE FROM gd_live_teams WHERE session_code = %s", (session_code,))
     execute(connection, "DELETE FROM gd_live_sessions WHERE session_code = %s", (session_code,))
+
+
+def get_live_session_by_code(connection: MySQLConnection, session_code: str) -> dict[str, Any] | None:
+    return fetch_one(connection,
+        "SELECT * FROM gd_live_sessions WHERE session_code = %s", (session_code,))
+
+
+def get_live_team_participants(connection: MySQLConnection, session_code: str, team_number: int) -> list[dict[str, Any]]:
+    return fetch_all(connection,
+        "SELECT * FROM gd_live_participants WHERE session_code = %s AND team_number = %s",
+        (session_code, team_number))
+
+
+def check_team_all_completed(connection: MySQLConnection, session_code: str, team_number: int) -> bool:
+    row = fetch_one(connection,
+        "SELECT COUNT(*) AS total, SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS done "
+        "FROM gd_live_participants WHERE session_code = %s AND team_number = %s",
+        (session_code, team_number))
+    return row is not None and row["total"] > 0 and row["total"] == row["done"]
+
+
+def save_live_evaluation(connection: MySQLConnection, session_code: str, user_id: int,
+                         team_number: int, transcript: str,
+                         overall_score: float, fluency_score: float,
+                         grammar_score: float, accent_score: float,
+                         relevance_score: float, content_quality: float,
+                         credential_points: float,
+                         weaknesses: str, improvement_tips: str) -> int:
+    return execute(connection,
+        "INSERT INTO gd_live_evaluations (session_code, user_id, team_number, transcript, "
+        "overall_score, fluency_score, grammar_score, accent_score, "
+        "relevance_score, content_quality, credential_points, weaknesses, improvement_tips) "
+        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
+        "ON DUPLICATE KEY UPDATE "
+        "overall_score=VALUES(overall_score), fluency_score=VALUES(fluency_score), "
+        "grammar_score=VALUES(grammar_score), accent_score=VALUES(accent_score), "
+        "relevance_score=VALUES(relevance_score), content_quality=VALUES(content_quality), "
+        "credential_points=VALUES(credential_points), weaknesses=VALUES(weaknesses), "
+        "improvement_tips=VALUES(improvement_tips), transcript=VALUES(transcript), evaluated_at=CURRENT_TIMESTAMP",
+        (session_code, user_id, team_number, transcript,
+         overall_score, fluency_score, grammar_score, accent_score,
+         relevance_score, content_quality, credential_points, weaknesses, improvement_tips))
+
+
+def get_live_evaluation_for_user(connection: MySQLConnection, session_code: str, user_id: int) -> dict[str, Any] | None:
+    return fetch_one(connection,
+        "SELECT e.*, ls.status AS session_status FROM gd_live_evaluations e "
+        "JOIN gd_live_sessions ls ON ls.session_code = e.session_code "
+        "WHERE e.session_code = %s AND e.user_id = %s",
+        (session_code, user_id))
+
+
+def get_live_leaderboard(connection: MySQLConnection, session_code: str) -> list[dict[str, Any]]:
+    return fetch_all(connection,
+        "SELECT e.*, u.name, u.register_number, lp.anonymous_label FROM gd_live_evaluations e "
+        "JOIN users u ON u.id = e.user_id "
+        "LEFT JOIN gd_live_participants lp ON lp.session_code = e.session_code AND lp.user_id = e.user_id "
+        "WHERE e.session_code = %s ORDER BY e.overall_score DESC",
+        (session_code,))

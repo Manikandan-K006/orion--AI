@@ -205,6 +205,50 @@ export type GDLiveMyTeam = {
   members: string[];
 };
 
+export type GDLiveTeamStatus = {
+  team_number: number | null;
+  my_status: string;
+  members_total: number;
+  members_done: number;
+  all_completed: boolean;
+};
+
+export type GDLiveEvaluation = {
+  id: number;
+  session_code: string;
+  user_id: number;
+  team_number: number;
+  transcript: string;
+  overall_score: number;
+  fluency_score: number;
+  grammar_score: number;
+  accent_score: number;
+  relevance_score: number;
+  content_quality: number;
+  credential_points: number;
+  weaknesses: string;
+  improvement_tips: string;
+  evaluated_at: string;
+  session_status?: string;
+};
+
+export type GDLiveLeaderboardEntry = {
+  id: number;
+  session_code: string;
+  user_id: number;
+  team_number: number;
+  overall_score: number;
+  fluency_score: number;
+  grammar_score: number;
+  accent_score: number;
+  relevance_score: number;
+  content_quality: number;
+  credential_points: number;
+  name: string;
+  register_number: string;
+  anonymous_label: string | null;
+};
+
 export async function apiRequest<T>(path: string, options: RequestInit = {}, token?: string): Promise<T> {
   const response = await fetch(`${API_URL}${path}`, {
     ...options,

@@ -7,7 +7,7 @@ import { Bar, BarChart, CartesianGrid, Cell, Legend, PolarAngleAxis, PolarGrid, 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { AllTimeAchiever, ComprehensiveLeaderboard, LeaderboardRanking, LeaderboardStats, Progress, SoloQuote, SoloStartResponse, SoloSubmitResponse, User, apiRequest } from "@/lib/api";
+import { AllTimeAchiever, ComprehensiveLeaderboard, GDLiveEvaluation, GDLiveLeaderboardEntry, GDLiveTeamStatus, LeaderboardRanking, LeaderboardStats, Progress, SoloQuote, SoloStartResponse, SoloSubmitResponse, User, apiRequest } from "@/lib/api";
 
 function speak(text: string) {
   if (typeof window === "undefined" || !window.speechSynthesis) return;
@@ -27,7 +27,7 @@ const MOTIVATIONAL_PHRASES = [
   "Fantastic! Your hard work is paying off.",
 ];
 
-type PageView = "login" | "dashboard" | "gd-leaderboard" | "solo-practice" | "solo-session" | "solo-result" | "gd-live" | "gd-live-session" | "gd-live-admin";
+type PageView = "login" | "dashboard" | "gd-leaderboard" | "solo-practice" | "solo-session" | "solo-result" | "gd-live" | "gd-live-session" | "gd-live-results" | "gd-live-admin";
 
 export default function Home() {
   const [token, setToken] = useState("");
@@ -100,6 +100,13 @@ export default function Home() {
   const [gdLiveSessions, setGdLiveSessions] = useState<any[]>([]);
   const [gdLiveParticipants, setGdLiveParticipants] = useState<any[]>([]);
   const [gdLiveCreatedCode, setGdLiveCreatedCode] = useState("");
+  const [gdLivePrepSeconds, setGdLivePrepSeconds] = useState(0);
+  const [gdLiveIsPrepPhase, setGdLiveIsPrepPhase] = useState(false);
+  const [gdLiveIsSpeakingPhase, setGdLiveIsSpeakingPhase] = useState(false);
+  const [gdLiveTeamStatus, setGdLiveTeamStatus] = useState<GDLiveTeamStatus | null>(null);
+  const [gdLiveMyResult, setGdLiveMyResult] = useState<GDLiveEvaluation | null>(null);
+  const [gdLiveLeaderboard, setGdLiveLeaderboard] = useState<GDLiveLeaderboardEntry[]>([]);
+  const [gdLiveLeaderboardViewCode, setGdLiveLeaderboardViewCode] = useState("");
 
   useEffect(() => {
     if (typeof window !== "undefined" && window.innerWidth >= 768) {
@@ -274,19 +281,49 @@ export default function Home() {
       setGdLiveJoined(true);
       setGdLiveSession({ session_code: code, status: "waiting", participant_count: 0, team_count: 0 });
       setSuccess("Joined GD Live session!");
-      // Poll for team assignment
-      const poll = setInterval(async () => {
-        try {
-          const team = await apiRequest<any>(`/gd-live/sessions/${code}/my-team`, {}, token);
-          if (team && team.team_number) {
-            setGdLiveMyTeam(team);
-            setView("gd-live-session");
-            clearInterval(poll);
-          }
-        } catch {}
-      }, 3000);
+      setView("gd-live-session");
+      // Load team / topic immediately
+      await loadGdLiveTeamInfo(code);
     } catch (err: any) { setMessage(err.message); }
     finally { setLoading(false); }
+  }
+
+  async function loadGdLiveTeamInfo(code: string) {
+    // Poll for team assignment
+    const poll = setInterval(async () => {
+      try {
+        const team = await apiRequest<any>(`/gd-live/sessions/${code}/my-team`, {}, token);
+        if (team && team.team_number) {
+          setGdLiveMyTeam(team);
+          clearInterval(poll);
+        }
+      } catch {}
+    }, 2000);
+  }
+
+  function startGdLivePrep() {
+    if (!gdLiveMyTeam) { setMessage("Wait for team assignment first"); return; }
+    setGdLiveIsPrepPhase(true);
+    setGdLivePrepSeconds(180);
+    setIsSessionLocked(true);
+    setTranscript("");
+    setGdLiveIsSpeakingPhase(false);
+    setSuccess("You have 3 minutes to prepare. Think about the topic and organize your thoughts.");
+    speak("You have 3 minutes to prepare. Think about the topic and organize your thoughts.");
+    if (timerRef.current) clearInterval(timerRef.current);
+    timerRef.current = setInterval(() => {
+      setGdLivePrepSeconds(prev => {
+        if (prev <= 1) {
+          clearInterval(timerRef.current!);
+          setGdLiveIsPrepPhase(false);
+          setGdLiveIsSpeakingPhase(true);
+          setSuccess("Preparation time over! Start speaking now. Record your speech.");
+          speak("Preparation time over. Start speaking now.");
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
   }
 
   async function assignGdLiveTeams(sessionCode: string) {
@@ -317,15 +354,69 @@ export default function Home() {
     finally { setLoading(false); }
   }
 
-  async function submitGdLiveTranscript() {
+  async function submitGdLiveAndEvaluate() {
     if (!gdLiveMyTeam || !gdLiveSession || !transcript.trim()) { setMessage("Write your transcript first"); return; }
     setLoading(true);
     try {
-      await apiRequest(`/gd-live/sessions/${gdLiveSession.session_code}/submit-transcript`, {
-        method: "POST", body: JSON.stringify({ transcript })
-      }, token);
-      setSuccess("Transcript submitted!");
-      speak("Your contribution has been recorded.");
+      const res = await apiRequest<{ message: string; all_completed: boolean; evaluation: GDLiveEvaluation }>(
+        `/gd-live/sessions/${gdLiveSession.session_code}/submit-and-evaluate`,
+        { method: "POST", body: JSON.stringify({ transcript }) }, token);
+      setGdLiveMyResult(res.evaluation);
+      setSuccess(res.message);
+      speak("Transcript submitted and evaluated.");
+      if (timerRef.current) clearInterval(timerRef.current);
+      setGdLiveIsPrepPhase(false);
+      setGdLiveIsSpeakingPhase(false);
+      setIsSessionLocked(false);
+      if (res.all_completed) {
+        setSuccess("All team members completed! Redirecting to results...");
+        // small delay then show results
+        setTimeout(() => setView("gd-live-results"), 1500);
+      } else {
+        // Start polling for team completion
+        setSuccess("Transcript submitted! Waiting for team members to finish...");
+        const poll = setInterval(async () => {
+          try {
+            const status = await apiRequest<GDLiveTeamStatus>(
+              `/gd-live/sessions/${gdLiveSession.session_code}/my-team-status`, {}, token);
+            setGdLiveTeamStatus(status);
+            if (status.all_completed) {
+              clearInterval(poll);
+              setSuccess("All team members completed! Viewing results.");
+              setView("gd-live-results");
+            }
+          } catch {}
+        }, 3000);
+      }
+    } catch (err: any) { setMessage(err.message); }
+    finally { setLoading(false); }
+  }
+
+  async function loadGdLiveTeamStatus() {
+    if (!gdLiveSession) return;
+    try {
+      const status = await apiRequest<GDLiveTeamStatus>(
+        `/gd-live/sessions/${gdLiveSession.session_code}/my-team-status`, {}, token);
+      setGdLiveTeamStatus(status);
+    } catch {}
+  }
+
+  async function loadGdLiveMyResult() {
+    if (!gdLiveSession) return;
+    try {
+      const res = await apiRequest<GDLiveEvaluation>(
+        `/gd-live/sessions/${gdLiveSession.session_code}/my-result`, {}, token);
+      setGdLiveMyResult(res);
+    } catch {}
+  }
+
+  async function loadGdLiveLeaderboard(sessionCode: string) {
+    setLoading(true);
+    try {
+      const data = await apiRequest<GDLiveLeaderboardEntry[]>(
+        `/gd-live/sessions/${sessionCode}/leaderboard`, {}, token);
+      setGdLiveLeaderboard(data);
+      setGdLiveLeaderboardViewCode(sessionCode);
     } catch (err: any) { setMessage(err.message); }
     finally { setLoading(false); }
   }
@@ -448,7 +539,7 @@ export default function Home() {
           <div className={`absolute inset-0 ${theme === "dark" ? "bg-gradient-to-b from-black/60 via-black/40 to-black/60" : "bg-white/30"}`} />
         </div>
         {/* Theme toggle */}
-        <button onClick={toggleTheme} className="fixed top-4 right-4 z-20 p-2.5 rounded-xl backdrop-blur-xl bg-white/10 border border-white/20 text-gray-900 dark:text-white hover:bg-white/20 transition-all">
+        <button onClick={toggleTheme} className="fixed top-4 right-4 z-20 p-2.5 rounded-xl backdrop-blur-xl bg-white/10 border border-white/20 text-black dark:text-white hover:bg-white/20 transition-all">
           {theme === "dark" ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
         </button>
         <div className="relative z-10 w-full max-w-sm md:max-w-md mx-3 md:mx-4">
@@ -457,8 +548,8 @@ export default function Home() {
               <div className="absolute inset-0 bg-gradient-to-r from-purple-500/30 to-blue-500/30 rounded-full blur-3xl animate-pulse" style={{ width: "150%", height: "150%", left: "-25%", top: "-25%" }} />
               <img src="/MZ_logo_DB.webp" alt="Mount Zion Logo" className="w-20 h-20 md:w-28 md:h-28 rounded-2xl mx-auto shadow-2xl shadow-purple-500/40 object-cover animate-float relative" />
             </div>
-            <h1 className={`text-2xl md:text-4xl font-bold mb-1 md:mb-2 drop-shadow-lg ${theme === "dark" ? "text-gray-900 dark:text-white" : "text-gray-900"}`}>MZ Orator</h1>
-            <p className={`text-xs md:text-base drop-shadow ${theme === "dark" ? "text-purple-200/80" : "text-gray-600"}`}>AI Group Discussion Platform</p>
+            <h1 className={`text-2xl md:text-4xl font-bold mb-1 md:mb-2 drop-shadow-lg ${theme === "dark" ? "text-black dark:text-white" : "text-black"}`}>MZ Orator</h1>
+            <p className={`text-xs md:text-base drop-shadow ${theme === "dark" ? "text-purple-200/80" : "text-gray-700"}`}>AI Group Discussion Platform</p>
           </div>
           <div className={`backdrop-blur-xl rounded-2xl p-5 md:p-8 shadow-[0_8px_32px_0_rgba(0,0,0,0.1)] border ${theme === "dark" ? "bg-white/20 border-white/20" : "bg-white/80 border-white/70"}`}>
             {/* Login tabs */}
@@ -466,7 +557,7 @@ export default function Home() {
               <button
                 onClick={() => { setLoginTab("student"); setMessage(""); }}
                 className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium rounded-lg transition-all duration-300 ${
-                  loginTab === "student" ? "backdrop-blur-xl bg-white/30 text-gray-900 dark:text-white shadow-lg border border-white/30" : theme === "dark" ? "text-gray-300 hover:text-white hover:bg-white/10" : "text-gray-500 hover:text-gray-800 hover:bg-black/5"
+                  loginTab === "student" ? "backdrop-blur-xl bg-white/30 text-black dark:text-white shadow-lg border border-white/30" : theme === "dark" ? "text-gray-300 hover:text-white hover:bg-white/10" : "text-gray-500 hover:text-gray-800 hover:bg-black/5"
                 }`}
               >
                 <Users className="w-4 h-4" /> Student Login
@@ -474,7 +565,7 @@ export default function Home() {
               <button
                 onClick={() => { setLoginTab("admin"); setMessage(""); }}
                 className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium rounded-lg transition-all duration-300 ${
-                  loginTab === "admin" ? "backdrop-blur-xl bg-white/30 text-gray-900 dark:text-white shadow-lg border border-white/30" : theme === "dark" ? "text-gray-300 hover:text-white hover:bg-white/10" : "text-gray-500 hover:text-gray-800 hover:bg-black/5"
+                  loginTab === "admin" ? "backdrop-blur-xl bg-white/30 text-black dark:text-white shadow-lg border border-white/30" : theme === "dark" ? "text-gray-300 hover:text-white hover:bg-white/10" : "text-gray-500 hover:text-gray-800 hover:bg-black/5"
                 }`}
               >
                 <Shield className="w-4 h-4" /> Admin Login
@@ -489,7 +580,7 @@ export default function Home() {
                   placeholder={loginTab === "student" ? "911724205001" : "12345"}
                   value={loginTab === "student" ? studentRegisterNumber : adminRegisterNumber}
                   onChange={(e) => loginTab === "student" ? setStudentRegisterNumber(e.target.value) : setAdminRegisterNumber(e.target.value)}
-                  className={`backdrop-blur-md ${theme === "dark" ? "bg-white/20 border-white/30 text-gray-900 dark:text-white placeholder:text-white/50" : "bg-white/90 border-gray-300 text-gray-900 placeholder:text-gray-400"}`}
+                  className={`backdrop-blur-md ${theme === "dark" ? "bg-white/20 border-white/30 text-black dark:text-white placeholder:text-white/50" : "bg-white/90 border-gray-300 text-black placeholder:text-gray-400"}`}
                 />
               </div>
               <div>
@@ -499,19 +590,19 @@ export default function Home() {
                   placeholder={loginTab === "student" ? "Default: Password123" : "Mzorator@admin"}
                   value={loginTab === "student" ? studentPassword : adminPassword}
                   onChange={(e) => loginTab === "student" ? setStudentPassword(e.target.value) : setAdminPassword(e.target.value)}
-                  className={`backdrop-blur-md ${theme === "dark" ? "bg-white/20 border-white/30 text-gray-900 dark:text-white placeholder:text-white/50" : "bg-white/90 border-gray-300 text-gray-900 placeholder:text-gray-400"}`}
+                  className={`backdrop-blur-md ${theme === "dark" ? "bg-white/20 border-white/30 text-black dark:text-white placeholder:text-white/50" : "bg-white/90 border-gray-300 text-black placeholder:text-gray-400"}`}
                 />
               </div>
               {loginTab === "admin" && (
                 <div className={`rounded-lg backdrop-blur-md p-3 ${theme === "dark" ? "bg-amber-500/[0.08] border border-amber-500/20" : "bg-amber-500/20 border border-amber-500/30"}`}>
                   <p className={`text-xs ${theme === "dark" ? "text-amber-300/90" : "text-amber-800"}`}>
                     <Shield className="w-3 h-3 inline mr-1" />
-                    Admin demo: SPR <code className="text-gray-900 dark:text-white font-mono">12345</code> / Password <code className="text-gray-900 dark:text-white font-mono">Mzorator@admin</code>
+                    Admin demo: SPR <code className="text-black dark:text-white font-mono">12345</code> / Password <code className="text-black dark:text-white font-mono">Mzorator@admin</code>
                   </p>
                 </div>
               )}
               <Button
-                className="group relative w-full backdrop-blur-xl bg-gradient-to-r from-amber-500/80 via-orange-500/80 to-amber-500/80 hover:from-amber-600 hover:via-orange-600 hover:to-amber-600 text-gray-900 dark:text-white border-0 h-12 text-lg font-semibold shadow-lg shadow-orange-500/30 overflow-hidden rounded-xl transition-all duration-300 hover:shadow-orange-400/40 hover:scale-[1.02] active:scale-95"
+                className="group relative w-full backdrop-blur-xl bg-gradient-to-r from-amber-500/80 via-orange-500/80 to-amber-500/80 hover:from-amber-600 hover:via-orange-600 hover:to-amber-600 text-black dark:text-white border-0 h-12 text-lg font-semibold shadow-lg shadow-orange-500/30 overflow-hidden rounded-xl transition-all duration-300 hover:shadow-orange-400/40 hover:scale-[1.02] active:scale-95"
                 onClick={handleLogin}
                 disabled={loading}
               >
@@ -546,7 +637,7 @@ export default function Home() {
       </div>
 
       {/* Theme toggle */}
-      <button onClick={toggleTheme} className="fixed top-4 right-4 z-50 p-2.5 rounded-xl backdrop-blur-xl bg-white/10 border border-white/20 text-gray-900 dark:text-white hover:bg-white/20 transition-all" title="Toggle theme">
+      <button onClick={toggleTheme} className="fixed top-4 right-4 z-50 p-2.5 rounded-xl backdrop-blur-xl bg-white/10 border border-white/20 text-black dark:text-white hover:bg-white/20 transition-all" title="Toggle theme">
         {theme === "dark" ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
       </button>
 
@@ -561,11 +652,11 @@ export default function Home() {
           <div className="flex items-center gap-3">
             <img src="/MZ_logo_DB.webp" alt="Mount Zion Logo" className="w-10 h-10 rounded-xl object-cover shadow-lg shrink-0" />
             <div className="truncate">
-              <p className={`text-sm font-bold ${theme === "dark" ? "text-gray-900 dark:text-white" : "text-gray-900"}`}>MZ Orator</p>
-              <p className={`text-xs ${theme === "dark" ? "text-purple-300/60" : "text-gray-500"}`}>{user.name}</p>
+              <p className={`text-sm font-bold ${theme === "dark" ? "text-black dark:text-white" : "text-black"}`}>MZ Orator</p>
+              <p className={`text-xs ${theme === "dark" ? "text-purple-300/60" : "text-gray-700"}`}>{user.name}</p>
             </div>
           </div>
-          <button className="p-2 text-gray-900 dark:text-white/60 hover:text-gray-900 dark:text-white hover:bg-white/10 rounded-lg" onClick={() => setSidebarOpen(false)}><X className="w-5 h-5" /></button>
+          <button className="p-2 text-black dark:text-white/60 hover:text-black dark:text-white hover:bg-white/10 rounded-lg" onClick={() => setSidebarOpen(false)}><X className="w-5 h-5" /></button>
         </div>
         <nav className="flex-1 p-3 space-y-1">
           {[
@@ -592,11 +683,11 @@ export default function Home() {
                 else setView(item.view);
                 setSidebarOpen(false);
               }}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all whitespace-nowrap ${view === item.view ? "bg-amber-500/20 text-amber-300 border border-amber-500/30" : theme === "dark" ? "text-gray-700 dark:text-slate-300 hover:bg-white/5 hover:text-gray-900 dark:text-white" : "text-gray-600 hover:bg-black/5 hover:text-gray-900"} ${isSessionLocked ? "opacity-40 cursor-not-allowed" : ""}`}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all whitespace-nowrap ${view === item.view ? "bg-amber-500/20 text-amber-300 border border-amber-500/30" : theme === "dark" ? "text-gray-700 dark:text-slate-300 hover:bg-white/5 hover:text-black dark:text-white" : "text-gray-700 hover:bg-black/5 hover:text-black"} ${isSessionLocked ? "opacity-40 cursor-not-allowed" : ""}`}
             >
               {item.icon}
               <span>{item.label}</span>
-              {item.badge && <span className="ml-auto bg-amber-500 text-gray-900 dark:text-white text-xs px-2 py-0.5 rounded-full">{item.badge}</span>}
+              {item.badge && <span className="ml-auto bg-amber-500 text-black dark:text-white text-xs px-2 py-0.5 rounded-full">{item.badge}</span>}
             </button>
           ))}
         </nav>
@@ -618,21 +709,21 @@ export default function Home() {
         <div className="p-4 md:p-6 max-w-6xl mx-auto">
           {/* Top bar */}
           <div className={`flex items-center justify-between mb-4 sticky top-0 z-10 py-2 -mx-4 px-4 md:px-0 md:py-0 md:mx-0 backdrop-blur-xl ${theme === "dark" ? "bg-white/85 dark:bg-white/[0.04]" : "bg-white/90"}`}>
-            <button onClick={() => { if (!isSessionLocked) setSidebarOpen(!sidebarOpen); }} className={`p-2 rounded-lg transition-all hover:scale-110 ${theme === "dark" ? "text-gray-900 dark:text-white/70 hover:bg-white/10" : "text-gray-700 hover:bg-black/10"} ${isSessionLocked ? "opacity-40 cursor-not-allowed" : ""}`} title={sidebarOpen ? "Close menu" : "Open menu"}>
+            <button onClick={() => { if (!isSessionLocked) setSidebarOpen(!sidebarOpen); }} className={`p-2 rounded-lg transition-all hover:scale-110 ${theme === "dark" ? "text-black dark:text-white/70 hover:bg-white/10" : "text-gray-700 hover:bg-black/10"} ${isSessionLocked ? "opacity-40 cursor-not-allowed" : ""}`} title={sidebarOpen ? "Close menu" : "Open menu"}>
               {sidebarOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
             </button>
-            <div className={`text-sm font-semibold ${theme === "dark" ? "text-gray-900 dark:text-white/90" : "text-gray-800"}`}>{view === "dashboard" ? "Dashboard" : view === "gd-leaderboard" ? "Leaderboard" : view === "solo-practice" ? "Solo Practice" : view === "solo-session" ? "Solo Session" : view === "solo-result" ? "Results" : view === "gd-live" ? "GD" : view === "gd-live-session" ? "GD Session" : view === "gd-live-admin" ? "GD Admin" : ""}</div>
+            <div className={`text-sm font-semibold ${theme === "dark" ? "text-black dark:text-white/90" : "text-gray-800"}`}>{view === "dashboard" ? "Dashboard" : view === "gd-leaderboard" ? "Leaderboard" : view === "solo-practice" ? "Solo Practice" : view === "solo-session" ? "Solo Session" : view === "solo-result" ? "Results" : view === "gd-live" ? "GD" : view === "gd-live-session" ? "GD Room" : view === "gd-live-results" ? "GD Results" : view === "gd-live-admin" ? "GD Admin" : ""}</div>
             <div className="w-10" /> {/* spacer */}
           </div>
           {(success || message) && (
             <div className={`mb-4 flex items-center gap-2 rounded-xl p-4 text-sm backdrop-blur-md transition-colors duration-500 ${success ? "bg-emerald-500/10 text-emerald-200 border border-emerald-500/20" : "bg-red-500/10 text-red-200 border border-red-500/20"}`}>
               {success ? <Zap className="h-4 w-4 shrink-0" /> : <AlertCircle className="h-4 w-4 shrink-0" />}
               <span>{success || message}</span>
-              <button onClick={() => { setMessage(""); setSuccess(""); }} className="ml-auto text-gray-900 dark:text-white/50 hover:text-gray-900 dark:text-white">&times;</button>
+              <button onClick={() => { setMessage(""); setSuccess(""); }} className="ml-auto text-black dark:text-white/50 hover:text-black dark:text-white">&times;</button>
             </div>
           )}
           {pageLoading && (
-            <div className="mb-4 flex items-center gap-2 rounded-xl p-3 text-sm backdrop-blur-md bg-white/[0.06] text-gray-900 dark:text-white/70 border border-white/10">
+            <div className="mb-4 flex items-center gap-2 rounded-xl p-3 text-sm backdrop-blur-md bg-white/[0.06] text-black dark:text-white/70 border border-white/10">
               <Loader2 className="h-4 w-4 animate-spin shrink-0" /> Loading...
             </div>
           )}
@@ -642,7 +733,7 @@ export default function Home() {
             <div className="space-y-6">
               {/* General Rules Notice */}
               <div className="rounded-xl backdrop-blur-xl bg-amber-500/[0.06] border border-amber-500/20 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6">
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2"><AlertCircle className="w-5 h-5 text-amber-400" /> General Rules — Before Starting</h2>
+                <h2 className="text-lg font-semibold text-black dark:text-white mb-4 flex items-center gap-2"><AlertCircle className="w-5 h-5 text-amber-400" /> General Rules — Before Starting</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2">
                   {[
                     "Read the instructions before beginning.",
@@ -668,16 +759,16 @@ export default function Home() {
                 </div>
               </div>
               <div className="rounded-xl backdrop-blur-xl bg-white/85 dark:bg-white/[0.08] border border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6">
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2"><Zap className="w-5 h-5 text-amber-400" /> Attended GD Sessions</h2>
+                <h2 className="text-lg font-semibold text-black dark:text-white mb-4 flex items-center gap-2"><Zap className="w-5 h-5 text-amber-400" /> Attended GD Sessions</h2>
                 {gdLiveSessions.filter(s => s.status === "completed").length === 0 ? (
-                  <p className="text-gray-600 dark:text-slate-400 text-sm py-4 text-center">No completed sessions yet.</p>
+                  <p className="text-gray-700 dark:text-slate-400 text-sm py-4 text-center">No completed sessions yet.</p>
                 ) : (
                   <div className="grid gap-3">
                     {gdLiveSessions.filter((s: any) => s.status === "completed").map((s: any) => (
                       <div key={s.session_code} className="flex items-center justify-between p-3 rounded-lg bg-white/[0.06] border border-white/10">
                         <div>
-                          <p className="text-sm font-medium text-gray-900 dark:text-white">Session <code className="font-mono text-amber-300">{s.session_code}</code></p>
-                          <p className="text-xs text-gray-600 dark:text-slate-400">{s.participant_count || 0} participants · {s.team_count || 0} teams</p>
+                          <p className="text-sm font-medium text-black dark:text-white">Session <code className="font-mono text-amber-300">{s.session_code}</code></p>
+                          <p className="text-xs text-gray-700 dark:text-slate-400">{s.participant_count || 0} participants · {s.team_count || 0} teams</p>
                         </div>
                         <span className="text-xs px-2 py-1 rounded-full bg-emerald-500/20 text-emerald-300">Completed</span>
                       </div>
@@ -693,31 +784,31 @@ export default function Home() {
               {/* Header */}
               <div className={`rounded-xl backdrop-blur-xl border transition-colors duration-500 bg-white/85 dark:bg-white/[0.08] border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6`}>
                 <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
-                  <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2"><Trophy className="w-6 h-6 text-amber-400" /> Leaderboard</h2>
-                  <Button onClick={() => setView("dashboard")} variant="secondary" className="bg-white/10 text-gray-900 dark:text-white border-white/20 text-sm">Back</Button>
+                  <h2 className="text-xl font-bold text-black dark:text-white flex items-center gap-2"><Trophy className="w-6 h-6 text-amber-400" /> Leaderboard</h2>
+                  <Button onClick={() => setView("dashboard")} variant="secondary" className="bg-white/10 text-black dark:text-white border-white/20 text-sm">Back</Button>
                 </div>
                 {/* Filter Pills */}
                 <div className="flex flex-wrap gap-2 mb-2">
-                  <span className="text-xs text-gray-600 dark:text-slate-400 mr-1 self-center">Department:</span>
+                  <span className="text-xs text-gray-700 dark:text-slate-400 mr-1 self-center">Department:</span>
                   {(lbData?.departments || ["ALL"]).map(d => (
                     <button key={d} onClick={() => loadLeaderboard(d, lbYear, lbTimeframe)}
                       className={`text-xs px-3 py-1 rounded-full border transition ${lbDepartment === d ? "bg-amber-500/30 border-amber-500/50 text-amber-200" : "bg-white/5 border-white/10 text-gray-700 dark:text-slate-300 hover:bg-white/10"}`}>{d}</button>
                   ))}
                 </div>
                 <div className="flex flex-wrap gap-2 mb-2">
-                  <span className="text-xs text-gray-600 dark:text-slate-400 mr-1 self-center">Year:</span>
+                  <span className="text-xs text-gray-700 dark:text-slate-400 mr-1 self-center">Year:</span>
                   {(lbData?.years || ["ALL"]).map(y => (
                     <button key={y} onClick={() => loadLeaderboard(lbDepartment, y, lbTimeframe)}
                       className={`text-xs px-3 py-1 rounded-full border transition ${lbYear === y ? "bg-amber-500/30 border-amber-500/50 text-amber-200" : "bg-white/5 border-white/10 text-gray-700 dark:text-slate-300 hover:bg-white/10"}`}>{y}</button>
                   ))}
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <span className="text-xs text-gray-600 dark:text-slate-400 mr-1 self-center">Time:</span>
+                  <span className="text-xs text-gray-700 dark:text-slate-400 mr-1 self-center">Time:</span>
                   {[{ v: "all", l: "All Time" }, { v: "this_month", l: "This Month" }, { v: "past_month", l: "Past Month" }].map(t => (
                     <button key={t.v} onClick={() => loadLeaderboard(lbDepartment, lbYear, t.v)}
                       className={`text-xs px-3 py-1 rounded-full border transition ${lbTimeframe === t.v ? "bg-amber-500/30 border-amber-500/50 text-amber-200" : "bg-white/5 border-white/10 text-gray-700 dark:text-slate-300 hover:bg-white/10"}`}>{t.l}</button>
                   ))}
-                  <span className="text-xs text-gray-600 dark:text-slate-400 ml-auto self-center">Overall Score by Credit Points</span>
+                  <span className="text-xs text-gray-700 dark:text-slate-400 ml-auto self-center">Overall Score by Credit Points</span>
                 </div>
               </div>
 
@@ -731,7 +822,7 @@ export default function Home() {
                     { label: "Total Interviews Today", value: lbData.stats.total_interviews, icon: <MessageSquare className="w-5 h-5" />, color: "text-cyan-400" },
                   ].map(c => (
                     <div key={c.label} className="rounded-xl backdrop-blur-xl bg-white/85 dark:bg-white/[0.08] border border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-4">
-                      <div className="flex items-center gap-2 text-gray-600 dark:text-slate-400 text-xs mb-2">{c.icon} {c.label}</div>
+                      <div className="flex items-center gap-2 text-gray-700 dark:text-slate-400 text-xs mb-2">{c.icon} {c.label}</div>
                       <p className={`text-2xl font-bold ${c.color}`}>{typeof c.value === "number" && c.label !== "Active Participants" && c.label !== "Total Interviews Today" ? c.value.toFixed(1) : c.value}</p>
                     </div>
                   ))}
@@ -741,10 +832,10 @@ export default function Home() {
               {/* Ranking Table */}
               {lbData && lbData.rankings.length > 0 && (
                 <div className="rounded-xl backdrop-blur-xl border transition-colors duration-500 bg-white/85 dark:bg-white/[0.08] border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-4 md:p-5 overflow-x-auto">
-                  <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2"><Award className="w-4 h-4 text-amber-400" /> Rankings</h3>
+                  <h3 className="text-sm font-semibold text-black dark:text-white mb-3 flex items-center gap-2"><Award className="w-4 h-4 text-amber-400" /> Rankings</h3>
                   <table className="w-full text-xs md:text-sm text-left min-w-[600px]">
                     <thead>
-                      <tr className="text-gray-600 dark:text-slate-400 text-xs border-b border-white/10">
+                      <tr className="text-gray-700 dark:text-slate-400 text-xs border-b border-white/10">
                         <th className="pb-2 pr-2">Rank</th>
                         <th className="pb-2 pr-2">Name</th>
                         <th className="pb-2 pr-2 hidden md:table-cell">Department</th>
@@ -760,9 +851,9 @@ export default function Home() {
                       {lbData.rankings.map((r) => (
                         <tr key={r.id} className={`border-b border-white/5 hover:bg-white/[0.06] transition ${r.rank <= 3 ? "bg-amber-500/10" : ""}`}>
                           <td className="py-3 pr-2">
-                            <span className={`inline-flex items-center justify-center w-6 h-6 md:w-7 md:h-7 rounded-full text-xs font-bold ${r.rank === 1 ? "bg-amber-500 text-gray-900 dark:text-white" : r.rank === 2 ? "bg-slate-400 text-gray-900 dark:text-white" : r.rank === 3 ? "bg-orange-500 text-gray-900 dark:text-white" : "bg-white/10 text-gray-700 dark:text-slate-300"}`}>{r.rank}</span>
+                            <span className={`inline-flex items-center justify-center w-6 h-6 md:w-7 md:h-7 rounded-full text-xs font-bold ${r.rank === 1 ? "bg-amber-500 text-black dark:text-white" : r.rank === 2 ? "bg-slate-400 text-black dark:text-white" : r.rank === 3 ? "bg-orange-500 text-black dark:text-white" : "bg-white/10 text-gray-700 dark:text-slate-300"}`}>{r.rank}</span>
                           </td>
-                          <td className="py-3 pr-2 text-gray-900 dark:text-white font-medium whitespace-nowrap text-xs md:text-sm">{r.name}</td>
+                          <td className="py-3 pr-2 text-black dark:text-white font-medium whitespace-nowrap text-xs md:text-sm">{r.name}</td>
                           <td className="py-3 pr-2 text-gray-700 dark:text-slate-300 text-xs md:text-sm hidden md:table-cell">{r.department}</td>
                           <td className="py-3 pr-2 text-gray-700 dark:text-slate-300 text-xs md:text-sm hidden md:table-cell">{r.year}</td>
                           <td className="py-3 pr-2 text-amber-300 font-semibold text-xs md:text-sm">{r.total_credits}</td>
@@ -779,25 +870,25 @@ export default function Home() {
 
               {lbData && lbData.rankings.length === 0 && (
                 <div className={`rounded-xl backdrop-blur-xl border transition-colors duration-500 bg-white/85 dark:bg-white/[0.08] border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6 text-center`}>
-                  <p className="text-gray-600 dark:text-slate-400 text-sm">No evaluations found for the selected filters.</p>
+                  <p className="text-gray-700 dark:text-slate-400 text-sm">No evaluations found for the selected filters.</p>
                 </div>
               )}
 
               {/* All Time Achievers */}
               {lbData && lbData.all_time_achievers.length > 0 && (
                 <div className={`rounded-xl backdrop-blur-xl border transition-colors duration-500 bg-white/85 dark:bg-white/[0.08] border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-5`}>
-                  <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2"><Award className="w-4 h-4 text-amber-400" /> All Time Achievers</h3>
+                  <h3 className="text-sm font-semibold text-black dark:text-white mb-3 flex items-center gap-2"><Award className="w-4 h-4 text-amber-400" /> All Time Achievers</h3>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                     {lbData.all_time_achievers.map((a) => (
                       <div key={a.id} className={`flex items-center gap-3 p-3 rounded-xl ${a.rank === 1 ? "bg-gradient-to-r from-amber-500/20 to-orange-600/10 border border-amber-500/30" : "bg-white/[0.06] border border-white/10"}`}>
-                        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg font-bold shrink-0 ${a.rank === 1 ? "bg-amber-500 text-gray-900 dark:text-white" : a.rank === 2 ? "bg-slate-400 text-gray-900 dark:text-white" : a.rank === 3 ? "bg-orange-500 text-gray-900 dark:text-white" : "bg-white/10 text-gray-700 dark:text-slate-300"}`}>{a.rank}</div>
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg font-bold shrink-0 ${a.rank === 1 ? "bg-amber-500 text-black dark:text-white" : a.rank === 2 ? "bg-slate-400 text-black dark:text-white" : a.rank === 3 ? "bg-orange-500 text-black dark:text-white" : "bg-white/10 text-gray-700 dark:text-slate-300"}`}>{a.rank}</div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">{a.name}</p>
-                          <p className="text-xs text-gray-600 dark:text-slate-400">{a.department} · {a.year}</p>
+                          <p className="text-sm font-semibold text-black dark:text-white truncate">{a.name}</p>
+                          <p className="text-xs text-gray-700 dark:text-slate-400">{a.department} · {a.year}</p>
                         </div>
                         <div className="text-right shrink-0">
                           <p className="text-sm font-bold text-emerald-300">{a.total_credits}</p>
-                          <p className="text-xs text-gray-600 dark:text-slate-400">{a.sessions_completed} sessions</p>
+                          <p className="text-xs text-gray-700 dark:text-slate-400">{a.sessions_completed} sessions</p>
                         </div>
                       </div>
                     ))}
@@ -811,8 +902,8 @@ export default function Home() {
           {view === "solo-practice" && !soloSession && (
             <div className="rounded-xl backdrop-blur-xl bg-white/85 dark:bg-white/[0.08] border border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6 text-center">
               <Loader2 className="h-8 w-8 animate-spin mx-auto text-amber-400 mb-3" />
-              <p className="text-gray-900 dark:text-white font-medium">Preparing your solo practice...</p>
-              <p className="text-sm text-gray-600 dark:text-slate-400 mt-1">Loading your topic and motivational quote</p>
+              <p className="text-black dark:text-white font-medium">Preparing your solo practice...</p>
+              <p className="text-sm text-gray-700 dark:text-slate-400 mt-1">Loading your topic and motivational quote</p>
             </div>
           )}
           {view === "solo-practice" && soloSession && (
@@ -821,24 +912,24 @@ export default function Home() {
               {soloQuote && (
                 <div className="rounded-xl backdrop-blur-xl bg-white/85 dark:bg-white/[0.08] border border-purple-500/30 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6 text-center">
                   <p className="text-sm text-purple-300/80 mb-2">Motivational Quote</p>
-                  <p className="text-lg font-medium text-gray-900 dark:text-white italic">"{soloQuote.quote}"</p>
+                  <p className="text-lg font-medium text-black dark:text-white italic">"{soloQuote.quote}"</p>
                   <p className="text-sm text-purple-300/60 mt-2">— {soloQuote.author}</p>
                 </div>
               )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className={`rounded-xl backdrop-blur-xl border transition-colors duration-500 bg-white/85 dark:bg-white/[0.08] border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6`}>
-                  <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2"><Target className="w-5 h-5 text-amber-400" /> Solo Practice</h2>
+                  <h2 className="text-lg font-semibold text-black dark:text-white mb-4 flex items-center gap-2"><Target className="w-5 h-5 text-amber-400" /> Solo Practice</h2>
                   <div className="mb-4 p-4 rounded-lg bg-gradient-to-r from-amber-500/20 to-orange-600/20 border border-amber-500/30">
                     <p className="text-xs text-amber-300/80 mb-1">Your Topic</p>
-                    <p className="text-sm font-medium text-gray-900 dark:text-white">{soloSession.topic}</p>
+                    <p className="text-sm font-medium text-black dark:text-white">{soloSession.topic}</p>
                   </div>
-                  <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400 mb-4">
+                  <div className="flex items-center gap-2 text-sm text-gray-700 dark:text-slate-400 mb-4">
                     <Clock className="w-4 h-4" /> Session #{soloSession.session_number} · 4 min prep · 10 min speak
                   </div>
                   <details className="mb-4 group">
                     <summary className="text-xs text-amber-300/80 cursor-pointer hover:text-amber-300 select-none">Solo Practice Rules ▼</summary>
-                    <div className="mt-3 space-y-1.5 text-xs text-gray-600 dark:text-slate-400 pl-2 border-l border-amber-500/20">
+                    <div className="mt-3 space-y-1.5 text-xs text-gray-700 dark:text-slate-400 pl-2 border-l border-amber-500/20">
                       {[
                         "Speak naturally and confidently.",
                         "Answer using your own words.",
@@ -861,15 +952,15 @@ export default function Home() {
                 </div>
 
                 <div className={`rounded-xl backdrop-blur-xl border transition-colors duration-500 bg-white/85 dark:bg-white/[0.08] border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6`}>
-                  <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2"><TrendingUp className="w-5 h-5 text-amber-400" /> Your Progress</h2>
+                  <h2 className="text-lg font-semibold text-black dark:text-white mb-4 flex items-center gap-2"><TrendingUp className="w-5 h-5 text-amber-400" /> Your Progress</h2>
                   {soloSession.is_new_user ? (
                     <div className="text-center py-6">
-                      <p className="text-gray-900 dark:text-white font-medium mb-2">Welcome to Solo Practice!</p>
-                      <p className="text-sm text-gray-600 dark:text-slate-400">This is your first session. AI will evaluate your fluency, grammar, accent, and delivery.</p>
+                      <p className="text-black dark:text-white font-medium mb-2">Welcome to Solo Practice!</p>
+                      <p className="text-sm text-gray-700 dark:text-slate-400">This is your first session. AI will evaluate your fluency, grammar, accent, and delivery.</p>
                     </div>
                   ) : soloSession.last_session ? (
                     <div className="space-y-3">
-                      <p className="text-sm text-gray-600 dark:text-slate-400">Previous Session Scores</p>
+                      <p className="text-sm text-gray-700 dark:text-slate-400">Previous Session Scores</p>
                       <div className="grid grid-cols-2 gap-2">
                         {[
                           { label: "Overall", value: soloSession.last_session.overall_score, color: "text-amber-300" },
@@ -878,7 +969,7 @@ export default function Home() {
                           { label: "Delivery", value: soloSession.last_session.delivery_score, color: "text-cyan-300" },
                         ].map(s => (
                           <div key={s.label} className="backdrop-blur-sm bg-white/[0.06] rounded-lg p-3 text-center">
-                            <p className="text-xs text-gray-600 dark:text-slate-400">{s.label}</p>
+                            <p className="text-xs text-gray-700 dark:text-slate-400">{s.label}</p>
                             <p className={`text-lg font-bold ${s.color}`}>{s.value}</p>
                           </div>
                         ))}
@@ -892,7 +983,7 @@ export default function Home() {
                     </div>
                   ) : (
                     <div className="text-center py-6">
-                      <p className="text-sm text-gray-600 dark:text-slate-400">Complete your first session to see progress.</p>
+                      <p className="text-sm text-gray-700 dark:text-slate-400">Complete your first session to see progress.</p>
                     </div>
                   )}
                 </div>
@@ -906,8 +997,8 @@ export default function Home() {
               <div className={`rounded-xl backdrop-blur-xl border transition-colors duration-500 bg-white/85 dark:bg-white/[0.08] border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6`}>
                 <div className="flex items-center justify-between mb-4">
                   <div>
-                    <h2 className="text-xl font-bold text-gray-900 dark:text-white">{soloSession.topic}</h2>
-                    <p className="text-sm text-gray-600 dark:text-slate-400">Session #{soloSession.session_number} · Solo Practice</p>
+                    <h2 className="text-xl font-bold text-black dark:text-white">{soloSession.topic}</h2>
+                    <p className="text-sm text-gray-700 dark:text-slate-400">Session #{soloSession.session_number} · Solo Practice</p>
                   </div>
                   <div className="flex gap-2">
                     {isSpeakingPhase && (
@@ -920,13 +1011,13 @@ export default function Home() {
                 {(isPrepPhase || isSpeakingPhase) && (
                   <div className={`rounded-lg p-4 text-center mb-4 ${isPrepPhase ? "bg-blue-500/20 border border-blue-500/30" : "bg-emerald-500/20 border border-emerald-500/30"}`}>
                     <p className="text-sm text-gray-700 dark:text-slate-300 mb-1">{isPrepPhase ? "Preparation Phase — Think & Take Notes" : "Speaking Phase — Deliver Your Thoughts"}</p>
-                    <p className="text-4xl font-bold text-gray-900 dark:text-white font-mono">{formatTime(isPrepPhase ? prepSeconds : speakingSeconds)}</p>
+                    <p className="text-4xl font-bold text-black dark:text-white font-mono">{formatTime(isPrepPhase ? prepSeconds : speakingSeconds)}</p>
                   </div>
                 )}
                 <div className="mb-4">
                   <p className="text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Your Topic</p>
                   <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
-                    <p className="text-sm text-gray-900 dark:text-white">{soloSession.topic}</p>
+                    <p className="text-sm text-black dark:text-white">{soloSession.topic}</p>
                   </div>
                 </div>
                 <div className="space-y-3">
@@ -934,7 +1025,7 @@ export default function Home() {
                     <Button onClick={toggleRecording} className={`border-0 ${isRecording ? "bg-red-500 hover:bg-red-600" : "bg-gradient-to-r from-amber-500 to-orange-600"}`}>
                       {isRecording ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />} {isRecording ? "Stop" : "Record"}
                     </Button>
-                    {recordingStatus && <span className="text-xs text-gray-600 dark:text-slate-400">{recordingStatus}</span>}
+                    {recordingStatus && <span className="text-xs text-gray-700 dark:text-slate-400">{recordingStatus}</span>}
                     <span className="ml-auto text-xs text-slate-500">{isPrepPhase ? "Prepare your thoughts..." : "Speak clearly into the mic..."}</span>
                   </div>
                   {liveDetectedText && <p className="text-xs text-emerald-300 bg-emerald-500/10 p-2 rounded"><span className="font-medium">Detected:</span> {liveDetectedText}</p>}
@@ -942,12 +1033,12 @@ export default function Home() {
                     placeholder={isPrepPhase ? "Jot down notes and key points for your speech..." : "Type or record your speech here..."}
                     value={transcript}
                     onChange={(e) => setTranscript(e.target.value)}
-                    className={`transition-colors duration-500 bg-white/10 border-white/20 text-gray-900 dark:text-white placeholder:text-gray-900 dark:text-white/40 min-h-[150px]`}
+                    className={`transition-colors duration-500 bg-white/10 border-white/20 text-black dark:text-white placeholder:text-black dark:text-white/40 min-h-[150px]`}
                   />
                   <div className="flex justify-between items-center">
-                    <span className="text-xs text-gray-600 dark:text-slate-400">{transcript.trim().split(/\s+/).filter(Boolean).length} words</span>
+                    <span className="text-xs text-gray-700 dark:text-slate-400">{transcript.trim().split(/\s+/).filter(Boolean).length} words</span>
                     <div className="flex gap-2">
-                      <Button onClick={() => { setView("solo-practice"); if (timerRef.current) clearInterval(timerRef.current); setIsPrepPhase(false); setIsSpeakingPhase(false); }} variant="secondary" className={`transition-colors duration-500 bg-white/10 text-gray-900 dark:text-white border-white/20`}>
+                      <Button onClick={() => { setView("solo-practice"); if (timerRef.current) clearInterval(timerRef.current); setIsPrepPhase(false); setIsSpeakingPhase(false); }} variant="secondary" className={`transition-colors duration-500 bg-white/10 text-black dark:text-white border-white/20`}>
                         Cancel
                       </Button>
                       <Button onClick={submitSoloPractice} disabled={loading || transcript.trim().length < 10} className="bg-gradient-to-r from-amber-500 to-orange-600 border-0">
@@ -966,7 +1057,7 @@ export default function Home() {
               {/* Quote */}
               {soloQuote && (
                 <div className="rounded-xl backdrop-blur-xl bg-white/85 dark:bg-white/[0.08] border border-purple-500/30 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-4 text-center">
-                  <p className="text-sm text-gray-900 dark:text-white/80 italic">"{soloQuote.quote}"</p>
+                  <p className="text-sm text-black dark:text-white/80 italic">"{soloQuote.quote}"</p>
                   <p className="text-xs text-purple-300/60 mt-1">— {soloQuote.author}</p>
                 </div>
               )}
@@ -975,12 +1066,12 @@ export default function Home() {
               <div className={`rounded-xl backdrop-blur-xl border transition-colors duration-500 bg-white/85 dark:bg-white/[0.08] border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6`}>
                 <div className="flex items-center justify-between mb-4">
                   <div>
-                    <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2"><Target className="w-6 h-6 text-amber-400" /> Practice Results</h2>
-                    <p className="text-sm text-gray-600 dark:text-slate-400">{soloSession.topic} · Session #{soloSession.session_number}</p>
+                    <h2 className="text-xl font-bold text-black dark:text-white flex items-center gap-2"><Target className="w-6 h-6 text-amber-400" /> Practice Results</h2>
+                    <p className="text-sm text-gray-700 dark:text-slate-400">{soloSession.topic} · Session #{soloSession.session_number}</p>
                   </div>
                   <div className="text-right">
                     <p className="text-3xl font-bold text-amber-300">{soloResult.overall_score}</p>
-                    <p className="text-xs text-gray-600 dark:text-slate-400">Overall Score</p>
+                    <p className="text-xs text-gray-700 dark:text-slate-400">Overall Score</p>
                   </div>
                 </div>
 
@@ -1045,7 +1136,7 @@ export default function Home() {
               {/* Improvement Comparison */}
               {soloResult.last_session && (
                 <div className={`rounded-xl backdrop-blur-xl border transition-colors duration-500 bg-white/85 dark:bg-white/[0.08] border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6`}>
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2"><TrendingUp className="w-5 h-5 text-amber-400" /> Improvement from Last Session</h3>
+                  <h3 className="text-lg font-semibold text-black dark:text-white mb-4 flex items-center gap-2"><TrendingUp className="w-5 h-5 text-amber-400" /> Improvement from Last Session</h3>
                   <div className="grid grid-cols-4 gap-3">
                     {[
                       { label: "Overall", current: soloResult.overall_score, prev: soloResult.last_session.overall_score },
@@ -1056,8 +1147,8 @@ export default function Home() {
                       const diff = s.current - s.prev;
                       return (
                         <div key={s.label} className="backdrop-blur-sm bg-white/[0.06] rounded-lg p-3 text-center">
-                          <p className="text-xs text-gray-600 dark:text-slate-400">{s.label}</p>
-                          <p className="text-lg font-bold text-gray-900 dark:text-white">{s.current}</p>
+                          <p className="text-xs text-gray-700 dark:text-slate-400">{s.label}</p>
+                          <p className="text-lg font-bold text-black dark:text-white">{s.current}</p>
                           <p className={`text-xs flex items-center justify-center gap-1 ${diff >= 0 ? "text-emerald-400" : "text-red-400"}`}>
                             {diff >= 0 ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />}
                             {Math.abs(diff).toFixed(1)} pts
@@ -1074,7 +1165,7 @@ export default function Home() {
                 <Button onClick={startSoloPractice} className="bg-gradient-to-r from-amber-500 to-orange-600 border-0">
                   <Target className="h-4 w-4 mr-2" /> Practice Again
                 </Button>
-                <Button onClick={() => { setView("dashboard"); }} variant="secondary" className={`transition-colors duration-500 bg-white/10 text-gray-900 dark:text-white border-white/20`}>
+                <Button onClick={() => { setView("dashboard"); }} variant="secondary" className={`transition-colors duration-500 bg-white/10 text-black dark:text-white border-white/20`}>
                   Back to Dashboard
                 </Button>
               </div>
@@ -1085,14 +1176,14 @@ export default function Home() {
           {view === "gd-live" && user?.role !== "admin" && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="rounded-xl backdrop-blur-xl bg-white/85 dark:bg-white/[0.08] border border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6">
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2"><Zap className="w-5 h-5 text-amber-400" /> Join GD Session</h2>
-                <p className="text-xs text-gray-600 dark:text-slate-400 mb-4">Enter the 4-digit session code shared by your admin to join an anonymous group discussion.</p>
+                <h2 className="text-lg font-semibold text-black dark:text-white mb-4 flex items-center gap-2"><Zap className="w-5 h-5 text-amber-400" /> Join GD Session</h2>
+                <p className="text-xs text-gray-700 dark:text-slate-400 mb-4">Enter the 4-digit session code shared by your admin to join an anonymous group discussion.</p>
                 <div className="space-y-3">
                   <Input
                     placeholder="Enter 4-digit code (e.g. 1234)"
                     value={gdLiveCode}
                     onChange={(e) => setGdLiveCode(e.target.value.replace(/\D/g, "").slice(0, 4))}
-                    className="bg-white/10 border-white/20 text-gray-900 dark:text-white placeholder:text-gray-900 dark:text-white/40 font-mono text-2xl tracking-[0.5em] text-center"
+                    className="bg-white/10 border-white/20 text-black dark:text-white placeholder:text-black dark:text-white/40 font-mono text-2xl tracking-[0.5em] text-center"
                     maxLength={4}
                   />
                   <Button onClick={joinGdLive} disabled={loading || gdLiveCode.length !== 4} className="w-full bg-gradient-to-r from-amber-500 to-orange-600 border-0 h-12 text-lg">
@@ -1103,12 +1194,12 @@ export default function Home() {
                   <div className="mt-4 p-4 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-center">
                     <Loader2 className="h-6 w-6 animate-spin mx-auto text-emerald-400 mb-2" />
                     <p className="text-sm text-emerald-300">Joined! Waiting for admin to assign teams...</p>
-                    <p className="text-xs text-gray-600 dark:text-slate-400 mt-1">You will be placed in a team of 3. Your identity is hidden from other members.</p>
+                    <p className="text-xs text-gray-700 dark:text-slate-400 mt-1">You will be placed in a team of 3. Your identity is hidden from other members.</p>
                   </div>
                 )}
               </div>
               <div className="rounded-xl backdrop-blur-xl bg-white/85 dark:bg-white/[0.08] border border-amber-500/20 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6">
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2"><Shield className="w-5 h-5 text-amber-400" /> Anonymous & Private</h2>
+                <h2 className="text-lg font-semibold text-black dark:text-white mb-4 flex items-center gap-2"><Shield className="w-5 h-5 text-amber-400" /> Anonymous & Private</h2>
                 <ul className="space-y-3 text-sm text-gray-700 dark:text-slate-300">
                   <li className="flex items-start gap-2">✓ Your name and email are hidden from other participants</li>
                   <li className="flex items-start gap-2">✓ Teams of 3 are formed randomly from all participants</li>
@@ -1119,7 +1210,7 @@ export default function Home() {
                   </ul>
                 </div>
                 <div className="rounded-xl backdrop-blur-xl bg-white/85 dark:bg-white/[0.08] border border-amber-500/20 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6">
-                  <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2"><MessageSquare className="w-5 h-5 text-amber-400" /> Group Discussion Rules</h2>
+                  <h2 className="text-lg font-semibold text-black dark:text-white mb-4 flex items-center gap-2"><MessageSquare className="w-5 h-5 text-amber-400" /> Group Discussion Rules</h2>
                   <div className="space-y-1.5 text-sm text-gray-700 dark:text-slate-300">
                     {[
                       "Join the discussion before the scheduled start time.",
@@ -1145,7 +1236,7 @@ export default function Home() {
           {view === "gd-live-admin" && user?.role === "admin" && (
             <div className="space-y-6">
               <div className="rounded-xl backdrop-blur-xl bg-white/85 dark:bg-white/[0.08] border border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6">
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2"><Shield className="w-5 h-5 text-amber-400" /> Admin Portal — GD Live Sessions</h2>
+                <h2 className="text-lg font-semibold text-black dark:text-white mb-4 flex items-center gap-2"><Shield className="w-5 h-5 text-amber-400" /> Admin Portal — GD Live Sessions</h2>
                 <div className="flex items-center gap-3 mb-4">
                   <Button onClick={createGdLiveSession} disabled={loading} className="bg-gradient-to-r from-emerald-500 to-green-600 border-0">
                     {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />} Create New Session (4-digit code)
@@ -1155,12 +1246,12 @@ export default function Home() {
                   <div className="mb-4 p-4 rounded-lg bg-emerald-500/10 border border-emerald-500/30 inline-block">
                     <p className="text-xs text-emerald-300 mb-1">Session Code</p>
                     <div className="flex items-center gap-2">
-                      <code className="text-3xl font-mono font-bold text-gray-900 dark:text-white tracking-[0.3em]">{gdLiveCreatedCode}</code>
+                      <code className="text-3xl font-mono font-bold text-black dark:text-white tracking-[0.3em]">{gdLiveCreatedCode}</code>
                       <button onClick={() => copyCode(gdLiveCreatedCode)} className="p-1.5 rounded-md hover:bg-white/10 text-emerald-300">
                         {copied ? <Check className="h-5 w-5" /> : <Copy className="h-5 w-5" />}
                       </button>
                     </div>
-                    <p className="text-xs text-gray-600 dark:text-slate-400 mt-1">Share this code with students to join</p>
+                    <p className="text-xs text-gray-700 dark:text-slate-400 mt-1">Share this code with students to join</p>
                   </div>
                 )}
               </div>
@@ -1169,8 +1260,8 @@ export default function Home() {
                 <div key={sess.session_code} className="rounded-xl backdrop-blur-xl bg-white/85 dark:bg-white/[0.08] border border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6">
                   <div className="flex items-center justify-between mb-4">
                     <div>
-                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Session <code className="font-mono text-amber-300">{sess.session_code}</code></h3>
-                      <p className="text-xs text-gray-600 dark:text-slate-400">Status: {sess.status} · {sess.participant_count || 0} participants · {sess.team_count || 0} teams</p>
+                      <h3 className="text-lg font-semibold text-black dark:text-white">Session <code className="font-mono text-amber-300">{sess.session_code}</code></h3>
+                      <p className="text-xs text-gray-700 dark:text-slate-400">Status: {sess.status} · {sess.participant_count || 0} participants · {sess.team_count || 0} teams</p>
                     </div>
                     <div className="flex gap-2">
                       {sess.status === "waiting" && sess.participant_count > 0 && (
@@ -1178,9 +1269,14 @@ export default function Home() {
                           Assign Teams
                         </Button>
                       )}
-                      <Button onClick={() => loadGdLiveParticipants(sess.session_code)} disabled={loading} variant="secondary" className="bg-white/10 text-gray-900 dark:text-white border-white/20 text-xs">
+                      <Button onClick={() => loadGdLiveParticipants(sess.session_code)} disabled={loading} variant="secondary" className="bg-white/10 text-black dark:text-white border-white/20 text-xs">
                         View
                       </Button>
+                      {sess.status !== "waiting" && (
+                        <Button onClick={() => loadGdLiveLeaderboard(sess.session_code)} disabled={loading} variant="secondary" className="bg-amber-500/20 text-amber-300 border-amber-500/30 text-xs">
+                          <Trophy className="w-3 h-3 mr-1" /> Leaderboard
+                        </Button>
+                      )}
                       {sess.status === "active" && (
                         <Button onClick={() => completeGdLiveSession(sess.session_code)} disabled={loading} variant="secondary" className="bg-red-500/20 text-red-300 border-red-500/30 text-xs">
                           End
@@ -1197,7 +1293,7 @@ export default function Home() {
                     <div className="mt-4">
                       <table className="w-full text-xs text-left">
                         <thead>
-                          <tr className="text-gray-600 dark:text-slate-400 border-b border-white/10">
+                          <tr className="text-gray-700 dark:text-slate-400 border-b border-white/10">
                             <th className="pb-2 pr-2">Team</th>
                             <th className="pb-2 pr-2">Label</th>
                             <th className="pb-2 pr-2">Name</th>
@@ -1211,9 +1307,9 @@ export default function Home() {
                         <tbody>
                           {gdLiveParticipants.map((p: any) => (
                             <tr key={p.id} className="border-b border-white/5 hover:bg-white/[0.06]">
-                              <td className="py-2 pr-2 text-gray-900 dark:text-white font-mono">{p.team_number || "-"}</td>
+                              <td className="py-2 pr-2 text-black dark:text-white font-mono">{p.team_number || "-"}</td>
                               <td className="py-2 pr-2 text-amber-300">{p.anonymous_label || "-"}</td>
-                              <td className="py-2 pr-2 text-gray-900 dark:text-white">{p.name}</td>
+                              <td className="py-2 pr-2 text-black dark:text-white">{p.name}</td>
                               <td className="py-2 pr-2 text-gray-700 dark:text-slate-300 hidden md:table-cell">{p.register_number}</td>
                               <td className="py-2 pr-2 text-gray-700 dark:text-slate-300 hidden md:table-cell">{p.department || "-"}</td>
                               <td className="py-2 pr-2 text-gray-700 dark:text-slate-300 hidden md:table-cell">{p.year || "-"}</td>
@@ -1238,7 +1334,7 @@ export default function Home() {
 
               {gdLiveSessions.length === 0 && (
                 <div className="rounded-xl backdrop-blur-xl bg-white/85 dark:bg-white/[0.08] border border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6 text-center">
-                  <p className="text-gray-600 dark:text-slate-400 text-sm">No sessions created yet. Create one above!</p>
+                  <p className="text-gray-700 dark:text-slate-400 text-sm">No sessions created yet. Create one above!</p>
                 </div>
               )}
             </div>
@@ -1247,65 +1343,211 @@ export default function Home() {
           {/* ─── GD Live Student View ─── */}
           {view === "gd-live" && user?.role === "admin" && (
             <div className="rounded-xl backdrop-blur-xl bg-white/85 dark:bg-white/[0.08] border border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6 text-center">
-              <p className="text-gray-600 dark:text-slate-400 text-sm">Use the Admin portal to manage GD Live sessions.</p>
+              <p className="text-gray-700 dark:text-slate-400 text-sm">Use the Admin portal to manage GD Live sessions.</p>
             </div>
           )}
 
           {/* ─── GD Live Session (Anonymous Team) ─── */}
-          {view === "gd-live-session" && gdLiveMyTeam && gdLiveSession && (
+          {view === "gd-live-session" && gdLiveSession && (
+            <div className="max-w-3xl mx-auto space-y-4">
+              <div className="rounded-xl backdrop-blur-xl bg-white/85 dark:bg-white/[0.08] border border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6">
+                {/* Team not yet assigned */}
+                {!gdLiveMyTeam && (
+                  <div className="text-center py-8">
+                    <Loader2 className="h-8 w-8 animate-spin mx-auto text-amber-400 mb-3" />
+                    <p className="text-black dark:text-white font-medium">Joined session <code className="text-amber-300 font-mono">{gdLiveSession.session_code}</code></p>
+                    <p className="text-sm text-gray-700 dark:text-slate-400 mt-1">Waiting for admin to assign teams...</p>
+                  </div>
+                )}
+
+                {/* Team assigned - show room */}
+                {gdLiveMyTeam && (
+                  <>
+                    {/* Topic + Team Info */}
+                    <div className="flex items-center justify-between mb-4">
+                      <div>
+                        <h2 className="text-xl font-bold text-black dark:text-white">{gdLiveMyTeam.topic}</h2>
+                        <p className="text-sm text-gray-700 dark:text-slate-400">Team #{gdLiveMyTeam.team_number} · Session Code: {gdLiveSession.session_code}</p>
+                      </div>
+                      <span className={`text-xs px-2 py-1 rounded-full ${gdLiveMyTeam.team_status === "active" ? "bg-emerald-500/20 text-emerald-300" : gdLiveMyTeam.team_status === "completed" ? "bg-blue-500/20 text-blue-300" : "bg-amber-500/20 text-amber-300"}`}>
+                        {gdLiveMyTeam.team_status === "active" ? "Live" : gdLiveMyTeam.team_status === "completed" ? "Done" : "Waiting"}
+                      </span>
+                    </div>
+
+                    <div className="mb-4 p-4 rounded-lg bg-gradient-to-r from-amber-500/20 to-orange-600/20 border border-amber-500/30">
+                      <p className="text-xs text-amber-300/80 mb-2">Your Team (Identities Hidden)</p>
+                      <div className="flex flex-wrap gap-2">
+                        {gdLiveMyTeam.members.map((m: string, idx: number) => (
+                          <span key={idx} className="text-sm bg-white/10 text-black dark:text-white px-4 py-2 rounded-full border border-white/20 font-medium">{m}</span>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Phase: Waiting for team start */}
+                    {gdLiveMyTeam.team_status === "waiting" && !gdLiveIsPrepPhase && !gdLiveIsSpeakingPhase && (
+                      <div className="text-center py-6">
+                        <Loader2 className="h-6 w-6 animate-spin mx-auto text-amber-400 mb-2" />
+                        <p className="text-black dark:text-white font-medium">Waiting for admin to start your team's discussion...</p>
+                        <p className="text-xs text-gray-700 dark:text-slate-400 mt-1">The admin will initiate the discussion when ready.</p>
+                      </div>
+                    )}
+
+                    {/* Phase: Preparation (3 min countdown) */}
+                    {gdLiveIsPrepPhase && (
+                      <div className="text-center py-6">
+                        <div className="relative inline-flex items-center justify-center mb-4">
+                          <svg className="w-24 h-24 -rotate-90" viewBox="0 0 100 100">
+                            <circle cx="50" cy="50" r="45" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="6" />
+                            <circle cx="50" cy="50" r="45" fill="none" stroke="#f59e0b" strokeWidth="6"
+                              strokeDasharray={`${2 * Math.PI * 45}`}
+                              strokeDashoffset={`${2 * Math.PI * 45 * (1 - gdLivePrepSeconds / 180)}`}
+                              strokeLinecap="round" className="transition-all duration-1000" />
+                          </svg>
+                          <span className="absolute text-3xl font-bold text-amber-400">{formatTime(gdLivePrepSeconds)}</span>
+                        </div>
+                        <p className="text-black dark:text-white font-medium">Preparation Phase</p>
+                        <p className="text-sm text-gray-700 dark:text-slate-400 mt-1">Think about the topic and organize your thoughts. Speaking starts automatically after the timer.</p>
+                      </div>
+                    )}
+
+                    {/* Phase: Speaking */}
+                    {gdLiveIsSpeakingPhase && (
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-3 mb-2">
+                          <span className="text-sm font-medium text-emerald-400 flex items-center gap-1"><Mic className="w-4 h-4" /> Speaking Phase</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button onClick={toggleRecording} className={`border-0 ${isRecording ? "bg-red-500 hover:bg-red-600" : "bg-gradient-to-r from-amber-500 to-orange-600"}`}>
+                            {isRecording ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />} {isRecording ? "Stop" : "Record"}
+                          </Button>
+                          {recordingStatus && <span className="text-xs text-gray-700 dark:text-slate-400">{recordingStatus}</span>}
+                        </div>
+                        {liveDetectedText && <p className="text-xs text-emerald-300 bg-emerald-500/10 p-2 rounded"><span className="font-medium">Detected:</span> {liveDetectedText}</p>}
+                        <Textarea placeholder="Type or record your speech here..." value={transcript}
+                          onChange={(e) => setTranscript(e.target.value)}
+                          className="bg-white/10 border-white/20 text-black dark:text-white placeholder:text-black dark:text-white/40 min-h-[120px]" />
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs text-gray-700 dark:text-slate-400">{transcript.trim().split(/\s+/).filter(Boolean).length} words</span>
+                          <Button onClick={submitGdLiveAndEvaluate} disabled={loading || !transcript.trim()}
+                            className="bg-gradient-to-r from-amber-500 to-orange-600 border-0">
+                            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Award className="h-4 w-4" />} Submit & Evaluate
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Phase: Waiting for team after submission */}
+                    {!gdLiveIsPrepPhase && !gdLiveIsSpeakingPhase && gdLiveMyTeam.team_status === "active" && gdLiveMyResult && !gdLiveTeamStatus?.all_completed && (
+                      <div className="text-center py-6">
+                        <Loader2 className="h-6 w-6 animate-spin mx-auto text-amber-400 mb-2" />
+                        <p className="text-black dark:text-white font-medium">You're done! Waiting for team members...</p>
+                        {gdLiveTeamStatus && (
+                          <p className="text-sm text-gray-700 dark:text-slate-400 mt-1">
+                            {gdLiveTeamStatus.members_done} of {gdLiveTeamStatus.members_total} members completed
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* GD Live Results */}
+          {view === "gd-live-results" && gdLiveSession && (
             <div className="max-w-3xl mx-auto space-y-4">
               <div className="rounded-xl backdrop-blur-xl bg-white/85 dark:bg-white/[0.08] border border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6">
                 <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <h2 className="text-xl font-bold text-gray-900 dark:text-white">{gdLiveMyTeam.topic}</h2>
-                    <p className="text-sm text-gray-600 dark:text-slate-400">Team #{gdLiveMyTeam.team_number} · Session Code: {gdLiveSession.session_code}</p>
-                  </div>
+                  <h2 className="text-xl font-bold text-black dark:text-white flex items-center gap-2">
+                    <Award className="w-6 h-6 text-amber-400" /> GD Results
+                  </h2>
+                  <Button onClick={() => { setView("dashboard"); loadGdLiveSessions(); }}
+                    variant="secondary" className="bg-white/10 text-black dark:text-white border-white/20 text-sm">
+                    Dashboard
+                  </Button>
                 </div>
+                <p className="text-sm text-gray-700 dark:text-slate-400 mb-4">Session Code: <code className="text-amber-300 font-mono">{gdLiveSession.session_code}</code></p>
 
-                <div className="mb-4 p-4 rounded-lg bg-gradient-to-r from-amber-500/20 to-orange-600/20 border border-amber-500/30">
-                  <p className="text-xs text-amber-300/80 mb-2">Your Team (Identities Hidden)</p>
-                  <div className="flex flex-wrap gap-2">
-                    {gdLiveMyTeam.members.map((m: string, idx: number) => (
-                      <span key={idx} className="text-sm bg-white/10 text-gray-900 dark:text-white px-4 py-2 rounded-full border border-white/20 font-medium">{m}</span>
-                    ))}
-                  </div>
-                </div>
-
-                <p className="text-xs text-gray-600 dark:text-slate-400 mb-4">Your name, email, and register number are hidden from other members. Only admins can see your identity.</p>
-
-                {gdLiveMyTeam.team_status === "active" && (
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2">
-                      <Button onClick={toggleRecording} className={`border-0 ${isRecording ? "bg-red-500 hover:bg-red-600" : "bg-gradient-to-r from-amber-500 to-orange-600"}`}>
-                        {isRecording ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />} {isRecording ? "Stop" : "Record"}
-                      </Button>
-                      {recordingStatus && <span className="text-xs text-gray-600 dark:text-slate-400">{recordingStatus}</span>}
-                    </div>
-                    {liveDetectedText && <p className="text-xs text-emerald-300 bg-emerald-500/10 p-2 rounded"><span className="font-medium">Detected:</span> {liveDetectedText}</p>}
-                    <Textarea placeholder="Type your contribution here..." value={transcript} onChange={(e) => setTranscript(e.target.value)} className="bg-white/10 border-white/20 text-gray-900 dark:text-white placeholder:text-gray-900 dark:text-white/40 min-h-[100px]" />
-                    <div className="flex justify-between items-center">
-                      <span className="text-xs text-gray-600 dark:text-slate-400">{transcript.trim().split(/\s+/).filter(Boolean).length} words</span>
-                      <Button onClick={submitGdLiveTranscript} disabled={loading || !transcript.trim()} className="bg-gradient-to-r from-amber-500 to-orange-600 border-0">
-                        {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Award className="h-4 w-4" />} Submit Contribution
-                      </Button>
-                    </div>
-                  </div>
-                )}
-
-                {gdLiveMyTeam.team_status === "waiting" && (
+                {!gdLiveMyResult && (
                   <div className="text-center py-6">
                     <Loader2 className="h-6 w-6 animate-spin mx-auto text-amber-400 mb-2" />
-                    <p className="text-gray-900 dark:text-white font-medium">Waiting for admin to start your team's discussion...</p>
-                    <p className="text-xs text-gray-600 dark:text-slate-400 mt-1">The admin will initiate the discussion when ready.</p>
+                    <p className="text-black dark:text-white font-medium">Loading your results...</p>
                   </div>
                 )}
 
-                {gdLiveMyTeam.team_status === "completed" && (
-                  <div className="text-center py-6">
-                    <Award className="h-8 w-8 text-emerald-400 mx-auto mb-2" />
-                    <p className="text-emerald-300 font-medium">Session completed! Your contribution has been recorded.</p>
+                {gdLiveMyResult && (
+                  <div className="space-y-4">
+                    {/* Score Card */}
+                    <div className="text-center p-6 rounded-xl bg-gradient-to-r from-amber-500/20 to-orange-600/20 border border-amber-500/30">
+                      <p className="text-5xl font-bold text-amber-400 mb-1">{gdLiveMyResult.overall_score.toFixed(1)}</p>
+                      <p className="text-sm text-amber-300/80">Overall Score</p>
+                      <p className="text-xs text-gray-700 dark:text-slate-400 mt-2">
+                        <Trophy className="w-3 h-3 inline mr-1" />
+                        {gdLiveMyResult.credential_points.toFixed(1)} Credential Points
+                      </p>
+                    </div>
+
+                    {/* Score Bars */}
+                    <div className="space-y-2">
+                      {[
+                        { label: "Fluency", value: gdLiveMyResult.fluency_score, color: "bg-emerald-500" },
+                        { label: "Grammar", value: gdLiveMyResult.grammar_score, color: "bg-purple-500" },
+                        { label: "Accent", value: gdLiveMyResult.accent_score, color: "bg-blue-500" },
+                        { label: "Relevance", value: gdLiveMyResult.relevance_score, color: "bg-amber-500" },
+                        { label: "Content Quality", value: gdLiveMyResult.content_quality, color: "bg-cyan-500" },
+                      ].map(s => (
+                        <div key={s.label}>
+                          <div className="flex justify-between text-xs text-gray-700 dark:text-slate-400 mb-1">
+                            <span>{s.label}</span>
+                            <span>{s.value.toFixed(1)}%</span>
+                          </div>
+                          <div className="w-full bg-white/10 rounded-full h-2">
+                            <div className={`${s.color} h-2 rounded-full transition-all duration-500`} style={{ width: `${s.value}%` }} />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Weaknesses + Tips */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="p-4 rounded-lg bg-red-500/10 border border-red-500/20">
+                        <p className="text-xs font-medium text-red-300 mb-2">Areas to Improve</p>
+                        <ul className="space-y-1">
+                          {gdLiveMyResult.weaknesses.split("; ").map((w, i) => (
+                            <li key={i} className="text-xs text-red-200/80 flex items-start gap-1">
+                              <span className="text-red-400 shrink-0">•</span> {w}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                      <div className="p-4 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                        <p className="text-xs font-medium text-emerald-300 mb-2">Improvement Tips</p>
+                        <ul className="space-y-1">
+                          {gdLiveMyResult.improvement_tips.split("; ").map((t, i) => (
+                            <li key={i} className="text-xs text-emerald-200/80 flex items-start gap-1">
+                              <span className="text-emerald-400 shrink-0">•</span> {t}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+
+                    {/* Transcript */}
+                    <div className="p-4 rounded-lg bg-white/[0.06] border border-white/10">
+                      <p className="text-xs font-medium text-gray-700 dark:text-slate-300 mb-2">Your Transcript</p>
+                      <p className="text-xs text-gray-700 dark:text-slate-400 whitespace-pre-wrap">{gdLiveMyResult.transcript}</p>
+                    </div>
                   </div>
                 )}
+
+                {/* Leaderboard link for viewing results */}
+                <div className="mt-4 text-center">
+                  <Button onClick={() => { setView("dashboard"); loadGdLiveSessions(); }}
+                    className="bg-gradient-to-r from-amber-500 to-orange-600 border-0">
+                    Back to Dashboard
+                  </Button>
+                </div>
               </div>
             </div>
           )}
@@ -1314,7 +1556,7 @@ export default function Home() {
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
               <div className="bg-slate-900 border border-red-500/40 rounded-2xl p-6 max-w-sm mx-4 shadow-2xl text-center">
                 <AlertCircle className="w-12 h-12 text-red-400 mx-auto mb-3" />
-                <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">Stay Focused!</h3>
+                <h3 className="text-lg font-bold text-black dark:text-white mb-2">Stay Focused!</h3>
                 <p className="text-sm text-gray-700 dark:text-slate-300 mb-4">You left the session tab. Please return to the MZ Orator tab immediately to continue your assessment.</p>
                 <Button onClick={() => setTabSwitchWarning(false)} className="w-full bg-gradient-to-r from-amber-500 to-orange-600 border-0">
                   I'm back, continue
