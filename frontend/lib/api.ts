@@ -247,6 +247,7 @@ export type GDLiveLeaderboardEntry = {
   name: string;
   register_number: string;
   anonymous_label: string | null;
+  transcript?: string;
 };
 
 export async function apiRequest<T>(path: string, options: RequestInit = {}, token?: string): Promise<T> {
