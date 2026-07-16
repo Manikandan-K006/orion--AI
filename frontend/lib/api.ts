@@ -1,4 +1,4 @@
-const API_URL = "https://orion-ai-2udw.onrender.com";
+const API_URL = "http://localhost:8000";
 
 export type User = {
   id: number;
