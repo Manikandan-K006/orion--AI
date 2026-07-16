@@ -445,7 +445,7 @@ export default function Home() {
       <div className={`min-h-screen flex items-center justify-center relative overflow-hidden ${theme === "dark" ? "dark" : ""}`}>
         <div className="absolute inset-0">
           <img src={theme === "dark" ? "/login_dark_bg.jpeg" : "/4k_BG.jpeg"} alt="" className="w-full h-full object-cover animate-ken-burns" />
-          <div className={`absolute inset-0 ${theme === "dark" ? "bg-gradient-to-b from-black/70 via-black/50 to-black/70" : "bg-white/30"}`} />
+          <div className={`absolute inset-0 ${theme === "dark" ? "bg-gradient-to-b from-black/60 via-black/40 to-black/60" : "bg-white/30"}`} />
         </div>
         {/* Theme toggle */}
         <button onClick={toggleTheme} className="fixed top-4 right-4 z-20 p-2.5 rounded-xl backdrop-blur-xl bg-white/10 border border-white/20 text-gray-900 dark:text-white hover:bg-white/20 transition-all">
@@ -460,13 +460,13 @@ export default function Home() {
             <h1 className={`text-2xl md:text-4xl font-bold mb-1 md:mb-2 drop-shadow-lg ${theme === "dark" ? "text-gray-900 dark:text-white" : "text-gray-900"}`}>MZ Orator</h1>
             <p className={`text-xs md:text-base drop-shadow ${theme === "dark" ? "text-purple-200/80" : "text-gray-600"}`}>AI Group Discussion Platform</p>
           </div>
-          <div className={`backdrop-blur-xl rounded-2xl p-5 md:p-8 shadow-[0_8px_32px_0_rgba(0,0,0,0.1)] border ${theme === "dark" ? "bg-white/[0.08] border-white/20" : "bg-white/40 border-white/60"}`}>
+          <div className={`backdrop-blur-xl rounded-2xl p-5 md:p-8 shadow-[0_8px_32px_0_rgba(0,0,0,0.1)] border ${theme === "dark" ? "bg-white/20 border-white/20" : "bg-white/40 border-white/60"}`}>
             {/* Login tabs */}
-            <div className={`flex mb-6 backdrop-blur-md rounded-xl p-1 border ${theme === "dark" ? "bg-white/[0.04] border-white/10" : "bg-black/[0.04] border-black/10"}`}>
+            <div className={`flex mb-6 backdrop-blur-md rounded-xl p-1 border ${theme === "dark" ? "bg-white/10 border-white/20" : "bg-black/[0.04] border-black/10"}`}>
               <button
                 onClick={() => { setLoginTab("student"); setMessage(""); }}
                 className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium rounded-lg transition-all duration-300 ${
-                  loginTab === "student" ? "backdrop-blur-xl bg-white/20 text-gray-900 dark:text-white shadow-lg border border-white/20" : theme === "dark" ? "text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:text-white hover:bg-white/5" : "text-gray-500 hover:text-gray-800 hover:bg-black/5"
+                  loginTab === "student" ? "backdrop-blur-xl bg-white/30 text-gray-900 dark:text-white shadow-lg border border-white/30" : theme === "dark" ? "text-gray-300 hover:text-white hover:bg-white/10" : "text-gray-500 hover:text-gray-800 hover:bg-black/5"
                 }`}
               >
                 <Users className="w-4 h-4" /> Student Login
@@ -474,7 +474,7 @@ export default function Home() {
               <button
                 onClick={() => { setLoginTab("admin"); setMessage(""); }}
                 className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium rounded-lg transition-all duration-300 ${
-                  loginTab === "admin" ? "backdrop-blur-xl bg-white/20 text-gray-900 dark:text-white shadow-lg border border-white/20" : theme === "dark" ? "text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:text-white hover:bg-white/5" : "text-gray-500 hover:text-gray-800 hover:bg-black/5"
+                  loginTab === "admin" ? "backdrop-blur-xl bg-white/30 text-gray-900 dark:text-white shadow-lg border border-white/30" : theme === "dark" ? "text-gray-300 hover:text-white hover:bg-white/10" : "text-gray-500 hover:text-gray-800 hover:bg-black/5"
                 }`}
               >
                 <Shield className="w-4 h-4" /> Admin Login
@@ -482,24 +482,24 @@ export default function Home() {
             </div>
             <div className="space-y-4 md:space-y-5">
               <div>
-                <label className={`block text-xs md:text-sm font-medium mb-1 md:mb-1.5 ${theme === "dark" ? "text-purple-200" : "text-gray-700"}`}>
+                <label className={`block text-xs md:text-sm font-medium mb-1 md:mb-1.5 ${theme === "dark" ? "text-purple-100" : "text-gray-700"}`}>
                   {loginTab === "student" ? "Register Number" : "SPR Number"}
                 </label>
                 <Input
                   placeholder={loginTab === "student" ? "911724205001" : "12345"}
                   value={loginTab === "student" ? studentRegisterNumber : adminRegisterNumber}
                   onChange={(e) => loginTab === "student" ? setStudentRegisterNumber(e.target.value) : setAdminRegisterNumber(e.target.value)}
-                  className={`backdrop-blur-md ${theme === "dark" ? "bg-white/[0.06] border-white/20 text-gray-900 dark:text-white placeholder:text-white/40" : "bg-white/60 border-gray-300 text-gray-900 placeholder:text-gray-400"}`}
+                  className={`backdrop-blur-md ${theme === "dark" ? "bg-white/20 border-white/30 text-gray-900 dark:text-white placeholder:text-white/50" : "bg-white/60 border-gray-300 text-gray-900 placeholder:text-gray-400"}`}
                 />
               </div>
               <div>
-                <label className={`block text-sm font-medium mb-1.5 ${theme === "dark" ? "text-purple-200" : "text-gray-700"}`}>Password</label>
+                <label className={`block text-sm font-medium mb-1.5 ${theme === "dark" ? "text-purple-100" : "text-gray-700"}`}>Password</label>
                 <Input
                   type="password"
                   placeholder={loginTab === "student" ? "Default: Password123" : "Mzorator@admin"}
                   value={loginTab === "student" ? studentPassword : adminPassword}
                   onChange={(e) => loginTab === "student" ? setStudentPassword(e.target.value) : setAdminPassword(e.target.value)}
-                  className={`backdrop-blur-md ${theme === "dark" ? "bg-white/[0.06] border-white/20 text-gray-900 dark:text-white placeholder:text-white/40" : "bg-white/60 border-gray-300 text-gray-900 placeholder:text-gray-400"}`}
+                  className={`backdrop-blur-md ${theme === "dark" ? "bg-white/20 border-white/30 text-gray-900 dark:text-white placeholder:text-white/50" : "bg-white/60 border-gray-300 text-gray-900 placeholder:text-gray-400"}`}
                 />
               </div>
               {loginTab === "admin" && (
