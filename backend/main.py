@@ -1,3 +1,6 @@
+import logging
+import sys
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -5,6 +8,9 @@ from fastapi.staticfiles import StaticFiles
 
 from backend.api import auth, gd, gd_live, interviews, progress, questions, reports, solo
 from backend.config import get_settings
+
+logging.basicConfig(level=logging.INFO, stream=sys.stdout, format="%(asctime)s %(levelname)s %(message)s")
+logger = logging.getLogger("speaksense")
 
 settings = get_settings()
 
@@ -20,8 +26,9 @@ app.add_middleware(
 
 
 @app.exception_handler(Exception)
-async def unhandled_exception_handler(_: Request, __: Exception) -> JSONResponse:
-    return JSONResponse(status_code=500, content={"detail": "Internal server error"})
+async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    logger.error("Unhandled error on %s %s: %s %s", request.method, request.url.path, type(exc).__name__, exc)
+    return JSONResponse(status_code=500, content={"detail": f"Internal server error: {type(exc).__name__}: {exc}"})
 
 
 @app.get("/health", tags=["System"])
