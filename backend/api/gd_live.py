@@ -127,3 +127,15 @@ def complete_live_session(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only admins can complete sessions")
     queries.complete_live_session(connection, session_code)
     return {"message": "Session completed"}
+
+
+@router.delete("/sessions/{session_code}")
+def delete_live_session(
+    session_code: str,
+    current_user: dict = Depends(get_current_user),
+    connection: MySQLConnection = Depends(get_db),
+) -> dict:
+    if current_user.get("role") != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only admins can delete sessions")
+    queries.delete_live_session(connection, session_code)
+    return {"message": "Session deleted"}

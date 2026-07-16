@@ -37,8 +37,10 @@ export default function Home() {
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const [registerNumber, setRegisterNumber] = useState("");
-  const [password, setPassword] = useState("");
+  const [studentRegisterNumber, setStudentRegisterNumber] = useState("");
+  const [studentPassword, setStudentPassword] = useState("");
+  const [adminRegisterNumber, setAdminRegisterNumber] = useState("");
+  const [adminPassword, setAdminPassword] = useState("");
   const [loginTab, setLoginTab] = useState<"student" | "admin">("student");
 
   const [progress, setProgress] = useState<Progress | null>(null);
@@ -139,12 +141,14 @@ export default function Home() {
   }
 
   async function handleLogin() {
-    if (!registerNumber.trim()) { setMessage("Enter your register number / SPR number"); return; }
+    const rn = loginTab === "student" ? studentRegisterNumber : adminRegisterNumber;
+    const pw = loginTab === "student" ? (studentPassword || "Password123") : adminPassword;
+    if (!rn.trim()) { setMessage("Enter your register number / SPR number"); return; }
     setLoading(true); setMessage(""); setSuccess("");
     try {
       const res = await apiRequest<{ access_token: string; user: User }>("/login/register-number", {
         method: "POST",
-        body: JSON.stringify({ register_number: registerNumber, password: password || "Password123" })
+        body: JSON.stringify({ register_number: rn, password: loginTab === "student" ? (pw || "Password123") : pw })
       });
       localStorage.setItem("mzgd_token", res.access_token);
       setToken(res.access_token);
@@ -322,6 +326,17 @@ export default function Home() {
     finally { setLoading(false); }
   }
 
+  async function deleteGdLiveSession(sessionCode: string) {
+    if (!confirm(`Delete session ${sessionCode}? This cannot be undone.`)) return;
+    setLoading(true);
+    try {
+      await apiRequest(`/gd-live/sessions/${sessionCode}`, { method: "DELETE" }, token);
+      setSuccess(`Session ${sessionCode} deleted.`);
+      await loadGdLiveSessions();
+    } catch (err: any) { setMessage(err.message); }
+    finally { setLoading(false); }
+  }
+
   // ─── Solo Practice Functions ───
 
   async function startSoloPractice() {
@@ -454,8 +469,8 @@ export default function Home() {
                 </label>
                 <Input
                   placeholder={loginTab === "student" ? "911724205001" : "12345"}
-                  value={registerNumber}
-                  onChange={(e) => setRegisterNumber(e.target.value)}
+                  value={loginTab === "student" ? studentRegisterNumber : adminRegisterNumber}
+                  onChange={(e) => loginTab === "student" ? setStudentRegisterNumber(e.target.value) : setAdminRegisterNumber(e.target.value)}
                   className="bg-white/5 border-white/20 text-white placeholder:text-white/40"
                 />
               </div>
@@ -464,8 +479,8 @@ export default function Home() {
                 <Input
                   type="password"
                   placeholder={loginTab === "student" ? "Default: Password123" : "Mzorator@admin"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  value={loginTab === "student" ? studentPassword : adminPassword}
+                  onChange={(e) => loginTab === "student" ? setStudentPassword(e.target.value) : setAdminPassword(e.target.value)}
                   className="bg-white/5 border-white/20 text-white placeholder:text-white/40"
                 />
               </div>
@@ -624,7 +639,7 @@ export default function Home() {
                 </div>
               </div>
               <div className="rounded-xl backdrop-blur-xl bg-white/[0.08] border border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6">
-                <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2"><Zap className="w-5 h-5 text-amber-400" /> Conducted GD Sessions</h2>
+                <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2"><Zap className="w-5 h-5 text-amber-400" /> Attended GD Sessions</h2>
                 {gdLiveSessions.filter(s => s.status === "completed").length === 0 ? (
                   <p className="text-slate-400 text-sm py-4 text-center">No completed sessions yet.</p>
                 ) : (
@@ -1142,6 +1157,9 @@ export default function Home() {
                           End
                         </Button>
                       )}
+                      <Button onClick={() => deleteGdLiveSession(sess.session_code)} disabled={loading} variant="secondary" className="bg-red-500/10 text-red-400 border-red-500/20 text-xs">
+                        Delete
+                      </Button>
                     </div>
                   </div>
 

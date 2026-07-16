@@ -655,3 +655,9 @@ def complete_live_session(connection: MySQLConnection, session_code: str) -> boo
     r = execute(connection,
         "UPDATE gd_live_sessions SET status = 'completed' WHERE session_code = %s", (session_code,))
     return r > 0
+
+
+def delete_live_session(connection: MySQLConnection, session_code: str) -> None:
+    execute(connection, "DELETE FROM gd_live_participants WHERE session_code = %s", (session_code,))
+    execute(connection, "DELETE FROM gd_live_teams WHERE session_code = %s", (session_code,))
+    execute(connection, "DELETE FROM gd_live_sessions WHERE session_code = %s", (session_code,))
