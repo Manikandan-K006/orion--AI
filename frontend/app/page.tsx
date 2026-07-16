@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircle, Award, Clock, LogOut, MessageSquare, Mic, MicOff, Trophy, Users, Zap, Loader2, Copy, Check, Target, TrendingUp, ArrowUp, ArrowDown, Sparkles, Menu, X, Shield } from "lucide-react";
+import { AlertCircle, Award, Clock, LogOut, MessageSquare, Mic, MicOff, Trophy, Users, Zap, Loader2, Copy, Check, Target, TrendingUp, ArrowUp, ArrowDown, Sparkles, Menu, X, Shield, Sun, Moon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Bar, BarChart, CartesianGrid, Cell, Legend, PolarAngleAxis, PolarGrid, Radar, RadarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
@@ -42,6 +42,20 @@ export default function Home() {
   const [adminRegisterNumber, setAdminRegisterNumber] = useState("");
   const [adminPassword, setAdminPassword] = useState("");
   const [loginTab, setLoginTab] = useState<"student" | "admin">("student");
+  const [theme, setTheme] = useState<"light" | "dark">("dark");
+
+  useEffect(() => {
+    const saved = localStorage.getItem("mzgd_theme") as "light" | "dark" | null;
+    if (saved) setTheme(saved);
+  }, []);
+
+  function toggleTheme() {
+    setTheme(t => {
+      const next = t === "dark" ? "light" : "dark";
+      localStorage.setItem("mzgd_theme", next);
+      return next;
+    });
+  }
 
   const [progress, setProgress] = useState<Progress | null>(null);
   const [transcript, setTranscript] = useState("");
@@ -430,25 +444,29 @@ export default function Home() {
     return (
       <div className="min-h-screen flex items-center justify-center relative overflow-hidden">
         <div className="absolute inset-0">
-          <img src="/4k_BG.jpeg" alt="" className="w-full h-full object-cover animate-ken-burns" />
-          <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/50 to-black/70" />
+          <img src={theme === "dark" ? "/login_dark_bg.jpeg" : "/4k_BG.jpeg"} alt="" className="w-full h-full object-cover animate-ken-burns" />
+          <div className={`absolute inset-0 ${theme === "dark" ? "bg-gradient-to-b from-black/70 via-black/50 to-black/70" : "bg-white/30"}`} />
         </div>
+        {/* Theme toggle */}
+        <button onClick={toggleTheme} className="fixed top-4 right-4 z-20 p-2.5 rounded-xl backdrop-blur-xl bg-white/10 border border-white/20 text-white hover:bg-white/20 transition-all">
+          {theme === "dark" ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+        </button>
         <div className="relative z-10 w-full max-w-sm md:max-w-md mx-3 md:mx-4">
           <div className="text-center mb-6 md:mb-10">
             <div className="relative inline-block mb-3 md:mb-5">
               <div className="absolute inset-0 bg-gradient-to-r from-purple-500/30 to-blue-500/30 rounded-full blur-3xl animate-pulse" style={{ width: "150%", height: "150%", left: "-25%", top: "-25%" }} />
               <img src="/MZ_logo_DB.webp" alt="Mount Zion Logo" className="w-20 h-20 md:w-28 md:h-28 rounded-2xl mx-auto shadow-2xl shadow-purple-500/40 object-cover animate-float relative" />
             </div>
-            <h1 className="text-2xl md:text-4xl font-bold mb-1 md:mb-2 text-white drop-shadow-lg">MZ Orator</h1>
-            <p className="text-xs md:text-base text-purple-200/80 drop-shadow">AI Group Discussion Platform</p>
+            <h1 className={`text-2xl md:text-4xl font-bold mb-1 md:mb-2 drop-shadow-lg ${theme === "dark" ? "text-white" : "text-gray-900"}`}>MZ Orator</h1>
+            <p className={`text-xs md:text-base drop-shadow ${theme === "dark" ? "text-purple-200/80" : "text-gray-600"}`}>AI Group Discussion Platform</p>
           </div>
-          <div className="backdrop-blur-xl bg-white/[0.08] rounded-2xl p-5 md:p-8 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] border border-white/20">
+          <div className={`backdrop-blur-xl rounded-2xl p-5 md:p-8 shadow-[0_8px_32px_0_rgba(0,0,0,0.1)] border ${theme === "dark" ? "bg-white/[0.08] border-white/20" : "bg-white/40 border-white/60"}`}>
             {/* Login tabs */}
-            <div className="flex mb-6 backdrop-blur-md bg-white/[0.04] rounded-xl p-1 border border-white/10">
+            <div className={`flex mb-6 backdrop-blur-md rounded-xl p-1 border ${theme === "dark" ? "bg-white/[0.04] border-white/10" : "bg-black/[0.04] border-black/10"}`}>
               <button
                 onClick={() => { setLoginTab("student"); setMessage(""); }}
                 className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium rounded-lg transition-all duration-300 ${
-                  loginTab === "student" ? "backdrop-blur-xl bg-white/20 text-white shadow-lg border border-white/20" : "text-slate-400 hover:text-white hover:bg-white/5"
+                  loginTab === "student" ? "backdrop-blur-xl bg-white/20 text-white shadow-lg border border-white/20" : theme === "dark" ? "text-slate-400 hover:text-white hover:bg-white/5" : "text-gray-500 hover:text-gray-800 hover:bg-black/5"
                 }`}
               >
                 <Users className="w-4 h-4" /> Student Login
@@ -456,7 +474,7 @@ export default function Home() {
               <button
                 onClick={() => { setLoginTab("admin"); setMessage(""); }}
                 className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium rounded-lg transition-all duration-300 ${
-                  loginTab === "admin" ? "backdrop-blur-xl bg-white/20 text-white shadow-lg border border-white/20" : "text-slate-400 hover:text-white hover:bg-white/5"
+                  loginTab === "admin" ? "backdrop-blur-xl bg-white/20 text-white shadow-lg border border-white/20" : theme === "dark" ? "text-slate-400 hover:text-white hover:bg-white/5" : "text-gray-500 hover:text-gray-800 hover:bg-black/5"
                 }`}
               >
                 <Shield className="w-4 h-4" /> Admin Login
@@ -464,29 +482,29 @@ export default function Home() {
             </div>
             <div className="space-y-4 md:space-y-5">
               <div>
-                <label className="block text-xs md:text-sm font-medium mb-1 md:mb-1.5 text-purple-200">
+                <label className={`block text-xs md:text-sm font-medium mb-1 md:mb-1.5 ${theme === "dark" ? "text-purple-200" : "text-gray-700"}`}>
                   {loginTab === "student" ? "Register Number" : "SPR Number"}
                 </label>
                 <Input
                   placeholder={loginTab === "student" ? "911724205001" : "12345"}
                   value={loginTab === "student" ? studentRegisterNumber : adminRegisterNumber}
                   onChange={(e) => loginTab === "student" ? setStudentRegisterNumber(e.target.value) : setAdminRegisterNumber(e.target.value)}
-                  className="backdrop-blur-md bg-white/[0.06] border-white/20 text-white placeholder:text-white/40"
+                  className={`backdrop-blur-md ${theme === "dark" ? "bg-white/[0.06] border-white/20 text-white placeholder:text-white/40" : "bg-white/60 border-gray-300 text-gray-900 placeholder:text-gray-400"}`}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1.5 text-purple-200">Password</label>
+                <label className={`block text-sm font-medium mb-1.5 ${theme === "dark" ? "text-purple-200" : "text-gray-700"}`}>Password</label>
                 <Input
                   type="password"
                   placeholder={loginTab === "student" ? "Default: Password123" : "Mzorator@admin"}
                   value={loginTab === "student" ? studentPassword : adminPassword}
                   onChange={(e) => loginTab === "student" ? setStudentPassword(e.target.value) : setAdminPassword(e.target.value)}
-                  className="backdrop-blur-md bg-white/[0.06] border-white/20 text-white placeholder:text-white/40"
+                  className={`backdrop-blur-md ${theme === "dark" ? "bg-white/[0.06] border-white/20 text-white placeholder:text-white/40" : "bg-white/60 border-gray-300 text-gray-900 placeholder:text-gray-400"}`}
                 />
               </div>
               {loginTab === "admin" && (
-                <div className="rounded-lg backdrop-blur-md bg-amber-500/[0.08] border border-amber-500/20 p-3">
-                  <p className="text-xs text-amber-300/90">
+                <div className={`rounded-lg backdrop-blur-md p-3 ${theme === "dark" ? "bg-amber-500/[0.08] border border-amber-500/20" : "bg-amber-500/20 border border-amber-500/30"}`}>
+                  <p className={`text-xs ${theme === "dark" ? "text-amber-300/90" : "text-amber-800"}`}>
                     <Shield className="w-3 h-3 inline mr-1" />
                     Admin demo: SPR <code className="text-white font-mono">12345</code> / Password <code className="text-white font-mono">Mzorator@admin</code>
                   </p>
@@ -523,9 +541,14 @@ export default function Home() {
     <div className="min-h-screen flex relative overflow-hidden">
       {/* Animated background */}
       <div className="fixed inset-0">
-        <img src="/animated_gd_bg.jpeg" alt="" className="w-full h-full object-cover animate-ken-burns" />
-        <div className="absolute inset-0 bg-black/60" />
+        <img src={theme === "dark" ? "/animated_gd_bg.jpeg" : "/gd_light_bg.jpeg"} alt="" className="w-full h-full object-cover animate-ken-burns" />
+        <div className={`absolute inset-0 ${theme === "dark" ? "bg-black/60" : "bg-white/40"}`} />
       </div>
+
+      {/* Theme toggle */}
+      <button onClick={toggleTheme} className="fixed top-4 right-4 z-50 p-2.5 rounded-xl backdrop-blur-xl bg-white/10 border border-white/20 text-white hover:bg-white/20 transition-all" title="Toggle theme">
+        {theme === "dark" ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+      </button>
 
       {/* Mobile backdrop overlay when sidebar open */}
       {sidebarOpen && (
@@ -533,13 +556,13 @@ export default function Home() {
       )}
 
       {/* Sidebar */}
-      <aside className={`fixed z-30 h-full backdrop-blur-xl bg-white/[0.08] border-r border-white/10 transition-all duration-300 ease-in-out flex flex-col shrink-0 ${sidebarOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full"}`} style={{ width: "16rem" }}>
+      <aside className={`fixed z-30 h-full backdrop-blur-xl border-r border-white/10 transition-all duration-300 ease-in-out flex flex-col shrink-0 ${theme === "dark" ? "bg-white/[0.08]" : "bg-white/70"} ${sidebarOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full"}`} style={{ width: "16rem" }}>
         <div className="flex items-center justify-between p-4 md:p-5 border-b border-white/10">
           <div className="flex items-center gap-3">
             <img src="/MZ_logo_DB.webp" alt="Mount Zion Logo" className="w-10 h-10 rounded-xl object-cover shadow-lg shrink-0" />
             <div className="truncate">
-              <p className="text-sm font-bold text-white">MZ Orator</p>
-              <p className="text-xs text-purple-300/60">{user.name}</p>
+              <p className={`text-sm font-bold ${theme === "dark" ? "text-white" : "text-gray-900"}`}>MZ Orator</p>
+              <p className={`text-xs ${theme === "dark" ? "text-purple-300/60" : "text-gray-500"}`}>{user.name}</p>
             </div>
           </div>
           <button className="p-2 text-white/60 hover:text-white hover:bg-white/10 rounded-lg" onClick={() => setSidebarOpen(false)}><X className="w-5 h-5" /></button>
@@ -569,7 +592,7 @@ export default function Home() {
                 else setView(item.view);
                 setSidebarOpen(false);
               }}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all whitespace-nowrap ${view === item.view ? "bg-amber-500/20 text-amber-300 border border-amber-500/30" : "text-slate-300 hover:bg-white/5 hover:text-white"} ${isSessionLocked ? "opacity-40 cursor-not-allowed" : ""}`}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all whitespace-nowrap ${view === item.view ? "bg-amber-500/20 text-amber-300 border border-amber-500/30" : theme === "dark" ? "text-slate-300 hover:bg-white/5 hover:text-white" : "text-gray-600 hover:bg-black/5 hover:text-gray-900"} ${isSessionLocked ? "opacity-40 cursor-not-allowed" : ""}`}
             >
               {item.icon}
               <span>{item.label}</span>
@@ -578,7 +601,7 @@ export default function Home() {
           ))}
         </nav>
         <div className="p-3 border-t border-white/10 space-y-2">
-          <button onClick={logout} disabled={isSessionLocked} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all whitespace-nowrap ${isSessionLocked ? "text-slate-600 cursor-not-allowed" : "text-red-300 hover:bg-red-500/10"}`}>
+          <button onClick={logout} disabled={isSessionLocked} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all whitespace-nowrap ${isSessionLocked ? "text-slate-600 cursor-not-allowed" : theme === "dark" ? "text-red-300 hover:bg-red-500/10" : "text-red-600 hover:bg-red-500/10"}`}>
             <LogOut className="w-5 h-5 shrink-0" /> Sign Out
           </button>
         </div>
