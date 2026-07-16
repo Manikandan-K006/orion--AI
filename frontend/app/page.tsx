@@ -442,21 +442,21 @@ export default function Home() {
             <h1 className="text-2xl md:text-4xl font-bold mb-1 md:mb-2 text-white drop-shadow-lg">MZ Orator</h1>
             <p className="text-xs md:text-base text-purple-200/80 drop-shadow">AI Group Discussion Platform</p>
           </div>
-          <div className="bg-white/10 backdrop-blur-xl rounded-2xl p-5 md:p-8 shadow-2xl border border-white/20">
+          <div className="backdrop-blur-xl bg-white/[0.08] rounded-2xl p-5 md:p-8 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] border border-white/20">
             {/* Login tabs */}
-            <div className="flex mb-6 bg-white/5 rounded-xl p-1 border border-white/10">
+            <div className="flex mb-6 backdrop-blur-md bg-white/[0.04] rounded-xl p-1 border border-white/10">
               <button
                 onClick={() => { setLoginTab("student"); setMessage(""); }}
-                className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium rounded-lg transition ${
-                  loginTab === "student" ? "bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-lg shadow-orange-500/30" : "text-slate-400 hover:text-white"
+                className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium rounded-lg transition-all duration-300 ${
+                  loginTab === "student" ? "backdrop-blur-xl bg-white/20 text-white shadow-lg border border-white/20" : "text-slate-400 hover:text-white hover:bg-white/5"
                 }`}
               >
                 <Users className="w-4 h-4" /> Student Login
               </button>
               <button
                 onClick={() => { setLoginTab("admin"); setMessage(""); }}
-                className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium rounded-lg transition ${
-                  loginTab === "admin" ? "bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-lg shadow-orange-500/30" : "text-slate-400 hover:text-white"
+                className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium rounded-lg transition-all duration-300 ${
+                  loginTab === "admin" ? "backdrop-blur-xl bg-white/20 text-white shadow-lg border border-white/20" : "text-slate-400 hover:text-white hover:bg-white/5"
                 }`}
               >
                 <Shield className="w-4 h-4" /> Admin Login
@@ -471,7 +471,7 @@ export default function Home() {
                   placeholder={loginTab === "student" ? "911724205001" : "12345"}
                   value={loginTab === "student" ? studentRegisterNumber : adminRegisterNumber}
                   onChange={(e) => loginTab === "student" ? setStudentRegisterNumber(e.target.value) : setAdminRegisterNumber(e.target.value)}
-                  className="bg-white/5 border-white/20 text-white placeholder:text-white/40"
+                  className="backdrop-blur-md bg-white/[0.06] border-white/20 text-white placeholder:text-white/40"
                 />
               </div>
               <div>
@@ -481,11 +481,11 @@ export default function Home() {
                   placeholder={loginTab === "student" ? "Default: Password123" : "Mzorator@admin"}
                   value={loginTab === "student" ? studentPassword : adminPassword}
                   onChange={(e) => loginTab === "student" ? setStudentPassword(e.target.value) : setAdminPassword(e.target.value)}
-                  className="bg-white/5 border-white/20 text-white placeholder:text-white/40"
+                  className="backdrop-blur-md bg-white/[0.06] border-white/20 text-white placeholder:text-white/40"
                 />
               </div>
               {loginTab === "admin" && (
-                <div className="rounded-lg bg-amber-500/10 border border-amber-500/30 p-3">
+                <div className="rounded-lg backdrop-blur-md bg-amber-500/[0.08] border border-amber-500/20 p-3">
                   <p className="text-xs text-amber-300/90">
                     <Shield className="w-3 h-3 inline mr-1" />
                     Admin demo: SPR <code className="text-white font-mono">12345</code> / Password <code className="text-white font-mono">Mzorator@admin</code>
@@ -493,7 +493,7 @@ export default function Home() {
                 </div>
               )}
               <Button
-                className="group relative w-full bg-gradient-to-r from-amber-500 via-orange-500 to-amber-500 hover:from-amber-600 hover:via-orange-600 hover:to-amber-600 text-white border-0 h-12 text-lg font-semibold shadow-lg shadow-orange-500/30 overflow-hidden rounded-xl transition-all duration-300 hover:shadow-orange-400/40 hover:scale-[1.02] active:scale-95"
+                className="group relative w-full backdrop-blur-xl bg-gradient-to-r from-amber-500/80 via-orange-500/80 to-amber-500/80 hover:from-amber-600 hover:via-orange-600 hover:to-amber-600 text-white border-0 h-12 text-lg font-semibold shadow-lg shadow-orange-500/30 overflow-hidden rounded-xl transition-all duration-300 hover:shadow-orange-400/40 hover:scale-[1.02] active:scale-95"
                 onClick={handleLogin}
                 disabled={loading}
               >
@@ -508,7 +508,7 @@ export default function Home() {
                 )}
               </Button>
               {message && (
-                <div className="flex items-center gap-2 rounded-lg p-3 text-sm bg-red-500/20 text-red-200">
+                <div className="flex items-center gap-2 rounded-lg p-3 text-sm backdrop-blur-md bg-red-500/10 text-red-200 border border-red-500/20">
                   <AlertCircle className="h-4 w-4 shrink-0" /> {message}
                 </div>
               )}
@@ -529,11 +529,11 @@ export default function Home() {
 
       {/* Mobile backdrop overlay when sidebar open */}
       {sidebarOpen && (
-        <div className="md:hidden fixed inset-0 z-20 bg-black/50" onClick={() => setSidebarOpen(false)} />
+        <div className="fixed inset-0 z-20 bg-black/50" onClick={() => setSidebarOpen(false)} />
       )}
 
       {/* Sidebar */}
-      <aside className={`fixed md:relative z-30 h-full bg-slate-900/95 md:bg-slate-900/80 border-r border-white/10 transition-transform duration-300 ease-in-out flex flex-col shrink-0 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"} md:translate-x-0`} style={{ width: "16rem" }}>
+      <aside className={`fixed z-30 h-full backdrop-blur-xl bg-white/[0.08] border-r border-white/10 transition-all duration-300 ease-in-out flex flex-col shrink-0 ${sidebarOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full"}`} style={{ width: "16rem" }}>
         <div className="flex items-center justify-between p-4 md:p-5 border-b border-white/10">
           <div className="flex items-center gap-3">
             <img src="/MZ_logo_DB.webp" alt="Mount Zion Logo" className="w-10 h-10 rounded-xl object-cover shadow-lg shrink-0" />
@@ -542,7 +542,7 @@ export default function Home() {
               <p className="text-xs text-purple-300/60">{user.name}</p>
             </div>
           </div>
-          <button className="md:hidden p-2 text-white/60 hover:text-white hover:bg-white/10 rounded-lg" onClick={() => setSidebarOpen(false)}><X className="w-5 h-5" /></button>
+          <button className="p-2 text-white/60 hover:text-white hover:bg-white/10 rounded-lg" onClick={() => setSidebarOpen(false)}><X className="w-5 h-5" /></button>
         </div>
         <nav className="flex-1 p-3 space-y-1">
           {[
@@ -587,23 +587,23 @@ export default function Home() {
       {/* Main Content */}
       <main className="flex-1 overflow-auto min-h-screen">
         <div className="p-4 md:p-6 max-w-6xl mx-auto">
-          {/* Mobile top bar */}
-          <div className="flex items-center justify-between mb-4 md:mb-4 sticky top-0 z-10 md:static bg-slate-900/80 md:bg-transparent py-2 -mx-4 px-4 md:px-0 md:py-0 md:mx-0 backdrop-blur-md md:backdrop-blur-none">
-            <button onClick={() => { if (!isSessionLocked) setSidebarOpen(!sidebarOpen); }} className={`p-2 rounded-lg transition-all hover:scale-110 text-white/70 hover:bg-white/10 md:hover:bg-transparent ${isSessionLocked ? "opacity-40 cursor-not-allowed" : ""}`} title={sidebarOpen ? "Close menu" : "Open menu"}>
+          {/* Top bar */}
+          <div className="flex items-center justify-between mb-4 sticky top-0 z-10 py-2 -mx-4 px-4 md:px-0 md:py-0 md:mx-0 backdrop-blur-xl bg-white/[0.04]">
+            <button onClick={() => { if (!isSessionLocked) setSidebarOpen(!sidebarOpen); }} className={`p-2 rounded-lg transition-all hover:scale-110 text-white/70 hover:bg-white/10 ${isSessionLocked ? "opacity-40 cursor-not-allowed" : ""}`} title={sidebarOpen ? "Close menu" : "Open menu"}>
               {sidebarOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
             </button>
             <div className="text-sm font-semibold text-white/90">{view === "dashboard" ? "Dashboard" : view === "gd-leaderboard" ? "Leaderboard" : view === "solo-practice" ? "Solo Practice" : view === "solo-session" ? "Solo Session" : view === "solo-result" ? "Results" : view === "gd-live" ? "GD" : view === "gd-live-session" ? "GD Session" : view === "gd-live-admin" ? "GD Admin" : ""}</div>
             <div className="w-10" /> {/* spacer */}
           </div>
           {(success || message) && (
-            <div className={`mb-4 flex items-center gap-2 rounded-xl p-4 text-sm transition-colors duration-500 ${success ? "bg-emerald-500/20 text-emerald-200 border border-emerald-500/30" : "bg-red-500/20 text-red-200 border border-red-500/30"}`}>
+            <div className={`mb-4 flex items-center gap-2 rounded-xl p-4 text-sm backdrop-blur-md transition-colors duration-500 ${success ? "bg-emerald-500/10 text-emerald-200 border border-emerald-500/20" : "bg-red-500/10 text-red-200 border border-red-500/20"}`}>
               {success ? <Zap className="h-4 w-4 shrink-0" /> : <AlertCircle className="h-4 w-4 shrink-0" />}
               <span>{success || message}</span>
               <button onClick={() => { setMessage(""); setSuccess(""); }} className="ml-auto text-white/50 hover:text-white">&times;</button>
             </div>
           )}
           {pageLoading && (
-            <div className="mb-4 flex items-center gap-2 rounded-xl p-3 text-sm bg-white/10 text-white/70 border border-white/10">
+            <div className="mb-4 flex items-center gap-2 rounded-xl p-3 text-sm backdrop-blur-md bg-white/[0.06] text-white/70 border border-white/10">
               <Loader2 className="h-4 w-4 animate-spin shrink-0" /> Loading...
             </div>
           )}
