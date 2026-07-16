@@ -1436,6 +1436,17 @@ export default function Home() {
                       </div>
                     )}
 
+                    {/* Phase: Ready to prepare (team is active, prep not started) */}
+                    {gdLiveMyTeam.team_status === "active" && !gdLiveIsPrepPhase && !gdLiveIsSpeakingPhase && !gdLiveMyResult && (
+                      <div className="text-center py-6">
+                        <p className="text-black dark:text-white font-medium mb-2">Your team discussion is live!</p>
+                        <p className="text-sm text-gray-700 dark:text-slate-400 mb-4">You have 3 minutes to prepare before speaking. Read the topic carefully.</p>
+                        <Button onClick={startGdLivePrep} className="bg-gradient-to-r from-emerald-500 to-green-600 border-0">
+                          <Clock className="h-4 w-4 mr-2" /> Begin 3-Minute Preparation
+                        </Button>
+                      </div>
+                    )}
+
                     {/* Phase: Preparation (3 min countdown) */}
                     {gdLiveIsPrepPhase && (
                       <div className="text-center py-6">
