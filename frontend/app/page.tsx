@@ -489,7 +489,7 @@ export default function Home() {
                   placeholder={loginTab === "student" ? "911724205001" : "12345"}
                   value={loginTab === "student" ? studentRegisterNumber : adminRegisterNumber}
                   onChange={(e) => loginTab === "student" ? setStudentRegisterNumber(e.target.value) : setAdminRegisterNumber(e.target.value)}
-                  className={`backdrop-blur-md ${theme === "dark" ? "bg-white/[0.06] border-white/20 text-gray-900 dark:text-white placeholder:text-gray-900 dark:text-white/40" : "bg-white/60 border-gray-300 text-gray-900 placeholder:text-gray-400"}`}
+                  className={`backdrop-blur-md ${theme === "dark" ? "bg-white/[0.06] border-white/20 text-gray-900 dark:text-white placeholder:text-white/40" : "bg-white/60 border-gray-300 text-gray-900 placeholder:text-gray-400"}`}
                 />
               </div>
               <div>
@@ -499,7 +499,7 @@ export default function Home() {
                   placeholder={loginTab === "student" ? "Default: Password123" : "Mzorator@admin"}
                   value={loginTab === "student" ? studentPassword : adminPassword}
                   onChange={(e) => loginTab === "student" ? setStudentPassword(e.target.value) : setAdminPassword(e.target.value)}
-                  className={`backdrop-blur-md ${theme === "dark" ? "bg-white/[0.06] border-white/20 text-gray-900 dark:text-white placeholder:text-gray-900 dark:text-white/40" : "bg-white/60 border-gray-300 text-gray-900 placeholder:text-gray-400"}`}
+                  className={`backdrop-blur-md ${theme === "dark" ? "bg-white/[0.06] border-white/20 text-gray-900 dark:text-white placeholder:text-white/40" : "bg-white/60 border-gray-300 text-gray-900 placeholder:text-gray-400"}`}
                 />
               </div>
               {loginTab === "admin" && (
