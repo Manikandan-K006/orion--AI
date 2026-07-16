@@ -611,11 +611,11 @@ export default function Home() {
       <main className="flex-1 overflow-auto min-h-screen">
         <div className="p-4 md:p-6 max-w-6xl mx-auto">
           {/* Top bar */}
-          <div className="flex items-center justify-between mb-4 sticky top-0 z-10 py-2 -mx-4 px-4 md:px-0 md:py-0 md:mx-0 backdrop-blur-xl bg-white/[0.04]">
-            <button onClick={() => { if (!isSessionLocked) setSidebarOpen(!sidebarOpen); }} className={`p-2 rounded-lg transition-all hover:scale-110 text-white/70 hover:bg-white/10 ${isSessionLocked ? "opacity-40 cursor-not-allowed" : ""}`} title={sidebarOpen ? "Close menu" : "Open menu"}>
+          <div className={`flex items-center justify-between mb-4 sticky top-0 z-10 py-2 -mx-4 px-4 md:px-0 md:py-0 md:mx-0 backdrop-blur-xl ${theme === "dark" ? "bg-white/[0.04]" : "bg-white/60"}`}>
+            <button onClick={() => { if (!isSessionLocked) setSidebarOpen(!sidebarOpen); }} className={`p-2 rounded-lg transition-all hover:scale-110 ${theme === "dark" ? "text-white/70 hover:bg-white/10" : "text-gray-700 hover:bg-black/10"} ${isSessionLocked ? "opacity-40 cursor-not-allowed" : ""}`} title={sidebarOpen ? "Close menu" : "Open menu"}>
               {sidebarOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
             </button>
-            <div className="text-sm font-semibold text-white/90">{view === "dashboard" ? "Dashboard" : view === "gd-leaderboard" ? "Leaderboard" : view === "solo-practice" ? "Solo Practice" : view === "solo-session" ? "Solo Session" : view === "solo-result" ? "Results" : view === "gd-live" ? "GD" : view === "gd-live-session" ? "GD Session" : view === "gd-live-admin" ? "GD Admin" : ""}</div>
+            <div className={`text-sm font-semibold ${theme === "dark" ? "text-white/90" : "text-gray-800"}`}>{view === "dashboard" ? "Dashboard" : view === "gd-leaderboard" ? "Leaderboard" : view === "solo-practice" ? "Solo Practice" : view === "solo-session" ? "Solo Session" : view === "solo-result" ? "Results" : view === "gd-live" ? "GD" : view === "gd-live-session" ? "GD Session" : view === "gd-live-admin" ? "GD Admin" : ""}</div>
             <div className="w-10" /> {/* spacer */}
           </div>
           {(success || message) && (
