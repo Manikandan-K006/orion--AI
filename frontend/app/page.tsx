@@ -460,7 +460,7 @@ export default function Home() {
             <h1 className={`text-2xl md:text-4xl font-bold mb-1 md:mb-2 drop-shadow-lg ${theme === "dark" ? "text-gray-900 dark:text-white" : "text-gray-900"}`}>MZ Orator</h1>
             <p className={`text-xs md:text-base drop-shadow ${theme === "dark" ? "text-purple-200/80" : "text-gray-600"}`}>AI Group Discussion Platform</p>
           </div>
-          <div className={`backdrop-blur-xl rounded-2xl p-5 md:p-8 shadow-[0_8px_32px_0_rgba(0,0,0,0.1)] border ${theme === "dark" ? "bg-white/20 border-white/20" : "bg-white/40 border-white/60"}`}>
+          <div className={`backdrop-blur-xl rounded-2xl p-5 md:p-8 shadow-[0_8px_32px_0_rgba(0,0,0,0.1)] border ${theme === "dark" ? "bg-white/20 border-white/20" : "bg-white/80 border-white/70"}`}>
             {/* Login tabs */}
             <div className={`flex mb-6 backdrop-blur-md rounded-xl p-1 border ${theme === "dark" ? "bg-white/10 border-white/20" : "bg-black/[0.04] border-black/10"}`}>
               <button
@@ -489,7 +489,7 @@ export default function Home() {
                   placeholder={loginTab === "student" ? "911724205001" : "12345"}
                   value={loginTab === "student" ? studentRegisterNumber : adminRegisterNumber}
                   onChange={(e) => loginTab === "student" ? setStudentRegisterNumber(e.target.value) : setAdminRegisterNumber(e.target.value)}
-                  className={`backdrop-blur-md ${theme === "dark" ? "bg-white/20 border-white/30 text-gray-900 dark:text-white placeholder:text-white/50" : "bg-white/60 border-gray-300 text-gray-900 placeholder:text-gray-400"}`}
+                  className={`backdrop-blur-md ${theme === "dark" ? "bg-white/20 border-white/30 text-gray-900 dark:text-white placeholder:text-white/50" : "bg-white/90 border-gray-300 text-gray-900 placeholder:text-gray-400"}`}
                 />
               </div>
               <div>
@@ -499,7 +499,7 @@ export default function Home() {
                   placeholder={loginTab === "student" ? "Default: Password123" : "Mzorator@admin"}
                   value={loginTab === "student" ? studentPassword : adminPassword}
                   onChange={(e) => loginTab === "student" ? setStudentPassword(e.target.value) : setAdminPassword(e.target.value)}
-                  className={`backdrop-blur-md ${theme === "dark" ? "bg-white/20 border-white/30 text-gray-900 dark:text-white placeholder:text-white/50" : "bg-white/60 border-gray-300 text-gray-900 placeholder:text-gray-400"}`}
+                  className={`backdrop-blur-md ${theme === "dark" ? "bg-white/20 border-white/30 text-gray-900 dark:text-white placeholder:text-white/50" : "bg-white/90 border-gray-300 text-gray-900 placeholder:text-gray-400"}`}
                 />
               </div>
               {loginTab === "admin" && (
@@ -556,7 +556,7 @@ export default function Home() {
       )}
 
       {/* Sidebar */}
-      <aside className={`fixed z-30 h-full backdrop-blur-xl border-r border-white/10 transition-all duration-300 ease-in-out flex flex-col shrink-0 ${theme === "dark" ? "bg-white/[0.08]" : "bg-white/70"} ${sidebarOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full"}`} style={{ width: "16rem" }}>
+      <aside className={`fixed z-30 h-full backdrop-blur-xl border-r border-white/10 transition-all duration-300 ease-in-out flex flex-col shrink-0 ${theme === "dark" ? "bg-white/85 dark:bg-white/[0.08]" : "bg-white/90"} ${sidebarOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full"}`} style={{ width: "16rem" }}>
         <div className="flex items-center justify-between p-4 md:p-5 border-b border-white/10">
           <div className="flex items-center gap-3">
             <img src="/MZ_logo_DB.webp" alt="Mount Zion Logo" className="w-10 h-10 rounded-xl object-cover shadow-lg shrink-0" />
@@ -617,7 +617,7 @@ export default function Home() {
         `}</style>
         <div className="p-4 md:p-6 max-w-6xl mx-auto">
           {/* Top bar */}
-          <div className={`flex items-center justify-between mb-4 sticky top-0 z-10 py-2 -mx-4 px-4 md:px-0 md:py-0 md:mx-0 backdrop-blur-xl ${theme === "dark" ? "bg-white/[0.04]" : "bg-white/60"}`}>
+          <div className={`flex items-center justify-between mb-4 sticky top-0 z-10 py-2 -mx-4 px-4 md:px-0 md:py-0 md:mx-0 backdrop-blur-xl ${theme === "dark" ? "bg-white/85 dark:bg-white/[0.04]" : "bg-white/90"}`}>
             <button onClick={() => { if (!isSessionLocked) setSidebarOpen(!sidebarOpen); }} className={`p-2 rounded-lg transition-all hover:scale-110 ${theme === "dark" ? "text-gray-900 dark:text-white/70 hover:bg-white/10" : "text-gray-700 hover:bg-black/10"} ${isSessionLocked ? "opacity-40 cursor-not-allowed" : ""}`} title={sidebarOpen ? "Close menu" : "Open menu"}>
               {sidebarOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
             </button>
@@ -667,7 +667,7 @@ export default function Home() {
                   </p>
                 </div>
               </div>
-              <div className="rounded-xl backdrop-blur-xl bg-white/[0.08] border border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6">
+              <div className="rounded-xl backdrop-blur-xl bg-white/85 dark:bg-white/[0.08] border border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6">
                 <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2"><Zap className="w-5 h-5 text-amber-400" /> Attended GD Sessions</h2>
                 {gdLiveSessions.filter(s => s.status === "completed").length === 0 ? (
                   <p className="text-gray-600 dark:text-slate-400 text-sm py-4 text-center">No completed sessions yet.</p>
@@ -691,7 +691,7 @@ export default function Home() {
           {view === "gd-leaderboard" && (
             <div className="space-y-6">
               {/* Header */}
-              <div className={`rounded-xl backdrop-blur-xl border transition-colors duration-500 bg-white/[0.08] border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6`}>
+              <div className={`rounded-xl backdrop-blur-xl border transition-colors duration-500 bg-white/85 dark:bg-white/[0.08] border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6`}>
                 <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
                   <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2"><Trophy className="w-6 h-6 text-amber-400" /> Leaderboard</h2>
                   <Button onClick={() => setView("dashboard")} variant="secondary" className="bg-white/10 text-gray-900 dark:text-white border-white/20 text-sm">Back</Button>
@@ -730,7 +730,7 @@ export default function Home() {
                     { label: "Average Score", value: lbData.stats.average_score, icon: <TrendingUp className="w-5 h-5" />, color: "text-purple-400" },
                     { label: "Total Interviews Today", value: lbData.stats.total_interviews, icon: <MessageSquare className="w-5 h-5" />, color: "text-cyan-400" },
                   ].map(c => (
-                    <div key={c.label} className="rounded-xl backdrop-blur-xl bg-white/[0.08] border border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-4">
+                    <div key={c.label} className="rounded-xl backdrop-blur-xl bg-white/85 dark:bg-white/[0.08] border border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-4">
                       <div className="flex items-center gap-2 text-gray-600 dark:text-slate-400 text-xs mb-2">{c.icon} {c.label}</div>
                       <p className={`text-2xl font-bold ${c.color}`}>{typeof c.value === "number" && c.label !== "Active Participants" && c.label !== "Total Interviews Today" ? c.value.toFixed(1) : c.value}</p>
                     </div>
@@ -740,7 +740,7 @@ export default function Home() {
 
               {/* Ranking Table */}
               {lbData && lbData.rankings.length > 0 && (
-                <div className="rounded-xl backdrop-blur-xl border transition-colors duration-500 bg-white/[0.08] border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-4 md:p-5 overflow-x-auto">
+                <div className="rounded-xl backdrop-blur-xl border transition-colors duration-500 bg-white/85 dark:bg-white/[0.08] border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-4 md:p-5 overflow-x-auto">
                   <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2"><Award className="w-4 h-4 text-amber-400" /> Rankings</h3>
                   <table className="w-full text-xs md:text-sm text-left min-w-[600px]">
                     <thead>
@@ -778,14 +778,14 @@ export default function Home() {
               )}
 
               {lbData && lbData.rankings.length === 0 && (
-                <div className={`rounded-xl backdrop-blur-xl border transition-colors duration-500 bg-white/[0.08] border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6 text-center`}>
+                <div className={`rounded-xl backdrop-blur-xl border transition-colors duration-500 bg-white/85 dark:bg-white/[0.08] border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6 text-center`}>
                   <p className="text-gray-600 dark:text-slate-400 text-sm">No evaluations found for the selected filters.</p>
                 </div>
               )}
 
               {/* All Time Achievers */}
               {lbData && lbData.all_time_achievers.length > 0 && (
-                <div className={`rounded-xl backdrop-blur-xl border transition-colors duration-500 bg-white/[0.08] border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-5`}>
+                <div className={`rounded-xl backdrop-blur-xl border transition-colors duration-500 bg-white/85 dark:bg-white/[0.08] border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-5`}>
                   <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2"><Award className="w-4 h-4 text-amber-400" /> All Time Achievers</h3>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                     {lbData.all_time_achievers.map((a) => (
@@ -809,7 +809,7 @@ export default function Home() {
 
           {/* ─── Solo Practice ─── */}
           {view === "solo-practice" && !soloSession && (
-            <div className="rounded-xl backdrop-blur-xl bg-white/[0.08] border border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6 text-center">
+            <div className="rounded-xl backdrop-blur-xl bg-white/85 dark:bg-white/[0.08] border border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6 text-center">
               <Loader2 className="h-8 w-8 animate-spin mx-auto text-amber-400 mb-3" />
               <p className="text-gray-900 dark:text-white font-medium">Preparing your solo practice...</p>
               <p className="text-sm text-gray-600 dark:text-slate-400 mt-1">Loading your topic and motivational quote</p>
@@ -819,7 +819,7 @@ export default function Home() {
             <div className="space-y-6 animate-in fade-in duration-300">
               {/* Motivational Quote */}
               {soloQuote && (
-                <div className="rounded-xl backdrop-blur-xl bg-white/[0.08] border border-purple-500/30 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6 text-center">
+                <div className="rounded-xl backdrop-blur-xl bg-white/85 dark:bg-white/[0.08] border border-purple-500/30 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6 text-center">
                   <p className="text-sm text-purple-300/80 mb-2">Motivational Quote</p>
                   <p className="text-lg font-medium text-gray-900 dark:text-white italic">"{soloQuote.quote}"</p>
                   <p className="text-sm text-purple-300/60 mt-2">— {soloQuote.author}</p>
@@ -827,7 +827,7 @@ export default function Home() {
               )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className={`rounded-xl backdrop-blur-xl border transition-colors duration-500 bg-white/[0.08] border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6`}>
+                <div className={`rounded-xl backdrop-blur-xl border transition-colors duration-500 bg-white/85 dark:bg-white/[0.08] border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6`}>
                   <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2"><Target className="w-5 h-5 text-amber-400" /> Solo Practice</h2>
                   <div className="mb-4 p-4 rounded-lg bg-gradient-to-r from-amber-500/20 to-orange-600/20 border border-amber-500/30">
                     <p className="text-xs text-amber-300/80 mb-1">Your Topic</p>
@@ -860,7 +860,7 @@ export default function Home() {
                   </Button>
                 </div>
 
-                <div className={`rounded-xl backdrop-blur-xl border transition-colors duration-500 bg-white/[0.08] border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6`}>
+                <div className={`rounded-xl backdrop-blur-xl border transition-colors duration-500 bg-white/85 dark:bg-white/[0.08] border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6`}>
                   <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2"><TrendingUp className="w-5 h-5 text-amber-400" /> Your Progress</h2>
                   {soloSession.is_new_user ? (
                     <div className="text-center py-6">
@@ -903,7 +903,7 @@ export default function Home() {
           {/* ─── Solo Session (Prep + Speaking) ─── */}
           {view === "solo-session" && soloSession && (
             <div className="max-w-3xl mx-auto space-y-4">
-              <div className={`rounded-xl backdrop-blur-xl border transition-colors duration-500 bg-white/[0.08] border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6`}>
+              <div className={`rounded-xl backdrop-blur-xl border transition-colors duration-500 bg-white/85 dark:bg-white/[0.08] border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6`}>
                 <div className="flex items-center justify-between mb-4">
                   <div>
                     <h2 className="text-xl font-bold text-gray-900 dark:text-white">{soloSession.topic}</h2>
@@ -965,14 +965,14 @@ export default function Home() {
             <div className="space-y-6 animate-in fade-in duration-300">
               {/* Quote */}
               {soloQuote && (
-                <div className="rounded-xl backdrop-blur-xl bg-white/[0.08] border border-purple-500/30 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-4 text-center">
+                <div className="rounded-xl backdrop-blur-xl bg-white/85 dark:bg-white/[0.08] border border-purple-500/30 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-4 text-center">
                   <p className="text-sm text-gray-900 dark:text-white/80 italic">"{soloQuote.quote}"</p>
                   <p className="text-xs text-purple-300/60 mt-1">— {soloQuote.author}</p>
                 </div>
               )}
 
               {/* Score Overview */}
-              <div className={`rounded-xl backdrop-blur-xl border transition-colors duration-500 bg-white/[0.08] border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6`}>
+              <div className={`rounded-xl backdrop-blur-xl border transition-colors duration-500 bg-white/85 dark:bg-white/[0.08] border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6`}>
                 <div className="flex items-center justify-between mb-4">
                   <div>
                     <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2"><Target className="w-6 h-6 text-amber-400" /> Practice Results</h2>
@@ -1044,7 +1044,7 @@ export default function Home() {
 
               {/* Improvement Comparison */}
               {soloResult.last_session && (
-                <div className={`rounded-xl backdrop-blur-xl border transition-colors duration-500 bg-white/[0.08] border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6`}>
+                <div className={`rounded-xl backdrop-blur-xl border transition-colors duration-500 bg-white/85 dark:bg-white/[0.08] border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6`}>
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2"><TrendingUp className="w-5 h-5 text-amber-400" /> Improvement from Last Session</h3>
                   <div className="grid grid-cols-4 gap-3">
                     {[
@@ -1084,7 +1084,7 @@ export default function Home() {
           {/* ─── GD Live (Join) ─── */}
           {view === "gd-live" && user?.role !== "admin" && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="rounded-xl backdrop-blur-xl bg-white/[0.08] border border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6">
+              <div className="rounded-xl backdrop-blur-xl bg-white/85 dark:bg-white/[0.08] border border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6">
                 <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2"><Zap className="w-5 h-5 text-amber-400" /> Join GD Session</h2>
                 <p className="text-xs text-gray-600 dark:text-slate-400 mb-4">Enter the 4-digit session code shared by your admin to join an anonymous group discussion.</p>
                 <div className="space-y-3">
@@ -1107,7 +1107,7 @@ export default function Home() {
                   </div>
                 )}
               </div>
-              <div className="rounded-xl backdrop-blur-xl bg-white/[0.08] border border-amber-500/20 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6">
+              <div className="rounded-xl backdrop-blur-xl bg-white/85 dark:bg-white/[0.08] border border-amber-500/20 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6">
                 <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2"><Shield className="w-5 h-5 text-amber-400" /> Anonymous & Private</h2>
                 <ul className="space-y-3 text-sm text-gray-700 dark:text-slate-300">
                   <li className="flex items-start gap-2">✓ Your name and email are hidden from other participants</li>
@@ -1118,7 +1118,7 @@ export default function Home() {
                     <li className="flex items-start gap-2">✓ Topics are basic opinion/debate subjects everyone can talk about</li>
                   </ul>
                 </div>
-                <div className="rounded-xl backdrop-blur-xl bg-white/[0.08] border border-amber-500/20 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6">
+                <div className="rounded-xl backdrop-blur-xl bg-white/85 dark:bg-white/[0.08] border border-amber-500/20 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6">
                   <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2"><MessageSquare className="w-5 h-5 text-amber-400" /> Group Discussion Rules</h2>
                   <div className="space-y-1.5 text-sm text-gray-700 dark:text-slate-300">
                     {[
@@ -1144,7 +1144,7 @@ export default function Home() {
           {/* ─── GD Live Admin ─── */}
           {view === "gd-live-admin" && user?.role === "admin" && (
             <div className="space-y-6">
-              <div className="rounded-xl backdrop-blur-xl bg-white/[0.08] border border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6">
+              <div className="rounded-xl backdrop-blur-xl bg-white/85 dark:bg-white/[0.08] border border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6">
                 <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2"><Shield className="w-5 h-5 text-amber-400" /> Admin Portal — GD Live Sessions</h2>
                 <div className="flex items-center gap-3 mb-4">
                   <Button onClick={createGdLiveSession} disabled={loading} className="bg-gradient-to-r from-emerald-500 to-green-600 border-0">
@@ -1166,7 +1166,7 @@ export default function Home() {
               </div>
 
               {gdLiveSessions.map((sess: any) => (
-                <div key={sess.session_code} className="rounded-xl backdrop-blur-xl bg-white/[0.08] border border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6">
+                <div key={sess.session_code} className="rounded-xl backdrop-blur-xl bg-white/85 dark:bg-white/[0.08] border border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6">
                   <div className="flex items-center justify-between mb-4">
                     <div>
                       <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Session <code className="font-mono text-amber-300">{sess.session_code}</code></h3>
@@ -1237,7 +1237,7 @@ export default function Home() {
               ))}
 
               {gdLiveSessions.length === 0 && (
-                <div className="rounded-xl backdrop-blur-xl bg-white/[0.08] border border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6 text-center">
+                <div className="rounded-xl backdrop-blur-xl bg-white/85 dark:bg-white/[0.08] border border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6 text-center">
                   <p className="text-gray-600 dark:text-slate-400 text-sm">No sessions created yet. Create one above!</p>
                 </div>
               )}
@@ -1246,7 +1246,7 @@ export default function Home() {
 
           {/* ─── GD Live Student View ─── */}
           {view === "gd-live" && user?.role === "admin" && (
-            <div className="rounded-xl backdrop-blur-xl bg-white/[0.08] border border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6 text-center">
+            <div className="rounded-xl backdrop-blur-xl bg-white/85 dark:bg-white/[0.08] border border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6 text-center">
               <p className="text-gray-600 dark:text-slate-400 text-sm">Use the Admin portal to manage GD Live sessions.</p>
             </div>
           )}
@@ -1254,7 +1254,7 @@ export default function Home() {
           {/* ─── GD Live Session (Anonymous Team) ─── */}
           {view === "gd-live-session" && gdLiveMyTeam && gdLiveSession && (
             <div className="max-w-3xl mx-auto space-y-4">
-              <div className="rounded-xl backdrop-blur-xl bg-white/[0.08] border border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6">
+              <div className="rounded-xl backdrop-blur-xl bg-white/85 dark:bg-white/[0.08] border border-white/10 shadow-[0_8px_32px_0_rgba(255,255,255,0.05)] p-6">
                 <div className="flex items-center justify-between mb-4">
                   <div>
                     <h2 className="text-xl font-bold text-gray-900 dark:text-white">{gdLiveMyTeam.topic}</h2>
