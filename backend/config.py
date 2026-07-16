@@ -23,6 +23,8 @@ class Settings(BaseSettings):
     upload_dir: str = "uploads"
     report_dir: str = "reports"
 
+    allowed_ips: str = ""
+
     model_config = SettingsConfigDict(env_file=(".env", "backend/.env"), env_file_encoding="utf-8")
 
 

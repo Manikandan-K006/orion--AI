@@ -5,6 +5,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from backend.api import auth, gd, gd_live, interviews, progress, questions, reports, solo
 from backend.config import get_settings
@@ -23,6 +24,30 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+class IPFilterMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        # Allow health checks and CORS preflight through
+        if request.url.path == "/health" or request.method == "OPTIONS":
+            return await call_next(request)
+
+        allowed = settings.allowed_ips.strip()
+        if allowed:
+            forwarded = request.headers.get("x-forwarded-for", "")
+            client_ip = forwarded.split(",")[0].strip() if forwarded else request.client.host
+
+            allowed_list = [ip.strip() for ip in allowed.split(",") if ip.strip()]
+            if client_ip not in allowed_list:
+                logger.warning("Blocked request from IP: %s", client_ip)
+                return JSONResponse(
+                    status_code=403,
+                    content={"detail": "Access restricted to college network. Please connect via college WiFi."}
+                )
+        return await call_next(request)
+
+
+app.add_middleware(IPFilterMiddleware)
 
 
 @app.exception_handler(Exception)
