@@ -225,20 +225,8 @@ async def host_gd_live_meeting(
     if len(participants) < 2:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Need at least 2 participants to host")
 
-    # Ensure a single team with one topic exists
-    existing = queries.fetch_one(connection, "SELECT COUNT(*) AS c FROM gd_live_teams WHERE session_code = %s", (session_code,))
-    if not existing or existing["c"] == 0:
-        queries.assign_live_single_team(connection, session_code)
-    else:
-        queries.execute(connection,
-            "UPDATE gd_live_teams SET status = 'active' WHERE session_code = %s AND status = 'waiting'",
-            (session_code,))
-
-    queries.execute(connection,
-        "UPDATE gd_live_participants SET status = 'assigned' WHERE session_code = %s AND status = 'joined'",
-        (session_code,))
-    queries.set_live_session_status(connection, session_code, "live")
-
+    # The single team + topic were pre-assigned at session creation, so the host
+    # action only needs to read them (fast) and then broadcast immediately.
     topic = queries.get_live_team_topic(connection, session_code)
     members = [{"user_id": p["user_id"], "name": p["name"], "label": p["anonymous_label"],
                 "department": p.get("department"), "year": p.get("year"), "status": p["status"]}
@@ -264,13 +252,23 @@ async def host_gd_live_meeting(
             }
         )
 
-    # Notify everyone in the room (rich payload so clients can build the workspace).
+    # ── Broadcast FIRST so students are redirected instantly (<1s). The DB status
+    #    writes below do not block the student's transition into the room. ──
     await manager.broadcast(session_code, "SESSION_STARTED", {
         "session_code": session_code,
         "topic": topic,
         "members": members,
         "state": state.snapshot(),
     })
+
+    # Persist live status (non-blocking for the redirect; late joiners poll live-state).
+    queries.execute(connection,
+        "UPDATE gd_live_teams SET status = 'active' WHERE session_code = %s AND status = 'waiting'",
+        (session_code,))
+    queries.execute(connection,
+        "UPDATE gd_live_participants SET status = 'assigned' WHERE session_code = %s AND status = 'joined'",
+        (session_code,))
+    queries.set_live_session_status(connection, session_code, "live")
 
     return {"message": "Meeting is live", "session_code": session_code, "topic": topic,
             "members": members, "state": state.snapshot()}

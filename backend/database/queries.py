@@ -542,6 +542,9 @@ def create_live_session(connection: MySQLConnection, created_by: int) -> dict[st
     code = generate_live_code(connection)
     execute(connection, "INSERT INTO gd_live_sessions (session_code, created_by) VALUES (%s, %s)", (code, created_by))
     topics = fetch_all(connection, "SELECT topic FROM gd_easy_topics ORDER BY RAND() LIMIT 21")
+    # Pre-create the single discussion team + topic now (no participants yet) so the
+    # host "Start" action only flips status to live → instant student redirect (<1s).
+    create_live_team_with_topic(connection, code)
     return {"session_code": code, "topics_available": len(topics)}
 
 
@@ -608,8 +611,22 @@ def assign_live_teams(connection: MySQLConnection, session_code: str) -> list[di
     return teams
 
 
+def create_live_team_with_topic(connection: MySQLConnection, session_code: str) -> str | None:
+    """Create the single discussion team + random topic at session creation time
+    (when no participants exist yet) so the host 'Start' action is instant."""
+    existing = fetch_one(connection, "SELECT COUNT(*) AS c FROM gd_live_teams WHERE session_code = %s", (session_code,))
+    if existing and existing["c"] > 0:
+        return get_live_team_topic(connection, session_code)
+    topic_row = fetch_one(connection, "SELECT topic FROM gd_easy_topics ORDER BY RAND() LIMIT 1")
+    topic = topic_row["topic"] if topic_row else "Introduce yourself and share your thoughts"
+    execute(connection,
+        "INSERT INTO gd_live_teams (session_code, team_number, topic) VALUES (%s, %s, %s)",
+        (session_code, 1, topic))
+    return topic
+
+
 def assign_live_single_team(connection: MySQLConnection, session_code: str) -> list[dict[str, Any]]:
-    """Put ALL participants into a single team (team_number 1) with one easy topic."""
+    """Put ALL participants into the single team (team_number 1) with its topic."""
     participants = fetch_all(connection,
         "SELECT lp.*, u.name, u.register_number, sp.department, sp.year FROM gd_live_participants lp "
         "JOIN users u ON lp.user_id = u.id "
