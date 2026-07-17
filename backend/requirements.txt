@@ -8,3 +8,8 @@ pydantic-settings==2.10.1
 email-validator==2.0
 sendgrid==6.11.0
 websockets==13.1
+
+# Speech recognition (Faster-Whisper — no PyTorch required, much faster)
+faster-whisper==1.2.1
+ctranslate2==4.8.1
+

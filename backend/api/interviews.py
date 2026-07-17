@@ -105,6 +105,11 @@ def upload_audio(
     file_path.write_bytes(content)
 
     result = transcribe_audio(str(file_path))
+    if not result.get("success", True):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=result.get("error", "Speech recognition service unavailable."),
+        )
     return {
         "audio_path": str(file_path),
         "transcript": result["transcript"],
