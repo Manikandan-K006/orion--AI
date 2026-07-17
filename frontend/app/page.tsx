@@ -235,12 +235,6 @@ export default function Home() {
   const [gdLiveSessions, setGdLiveSessions] = useState<any[]>([]);
   const [gdLiveParticipants, setGdLiveParticipants] = useState<any[]>([]);
   const [gdLiveCreatedCode, setGdLiveCreatedCode] = useState("");
-  const [gdLivePrepSeconds, setGdLivePrepSeconds] = useState(0);
-  const [gdLiveSpeakSeconds, setGdLiveSpeakSeconds] = useState(0);
-  const [gdLiveIsPrepPhase, setGdLiveIsPrepPhase] = useState(false);
-  const [gdLiveIsSpeakingPhase, setGdLiveIsSpeakingPhase] = useState(false);
-  const [gdLiveTeamStatus, setGdLiveTeamStatus] = useState<GDLiveTeamStatus | null>(null);
-  const [gdLiveMyResult, setGdLiveMyResult] = useState<GDLiveEvaluation | null>(null);
   const [gdLiveLeaderboard, setGdLiveLeaderboard] = useState<GDLiveLeaderboardEntry[]>([]);
   const [gdLiveLeaderboardViewCode, setGdLiveLeaderboardViewCode] = useState("");
   const [gdLiveAdminViewCode, setGdLiveAdminViewCode] = useState("");
