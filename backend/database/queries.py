@@ -626,8 +626,10 @@ def assign_live_teams(connection: MySQLConnection, session_code: str) -> list[di
     team_topics = [t["topic"] for t in topics]
 
     teams = []
-    # Group participants into teams of at most 3 via the pure allocation
+    # Group participants into teams of at most3 via the pure allocation
     # algorithm (shuffles every call, never leaves anyone unassigned).
+    import sys as _sys
+    print("DEBUG assign_live_teams: participants=%d allocated=%d" % (len(participants), len(allocate_teams(participants, max_team_size=3))), file=_sys.stderr)
     for idx, team in enumerate(allocate_teams(participants, max_team_size=3)):
         team_number = team["team_number"]
         team_members = team["members"]
