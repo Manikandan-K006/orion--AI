@@ -15,7 +15,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
 from mysql.connector import MySQLConnection
 
 from backend.database import queries
-from backend.database.db import get_connection, get_db
+from backend.database.db import _return, get_connection, get_db
 from backend.security import decode_token
 
 logger = logging.getLogger("speaksense.realtime")
