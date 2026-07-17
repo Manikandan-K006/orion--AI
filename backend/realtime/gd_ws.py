@@ -151,7 +151,11 @@ class GDLiveConnectionManager:
             try:
                 await ws.send_json({"event": event, "payload": payload})
             except Exception as exc:
-                logger.warning("broadcast send failed: %s", exc)
+                try:
+                    with open("C:\\Users\\manii\\AppData\\Local\\Temp\\opencode\\ws_err.log", "a") as _f:
+                        _f.write("BROADCAST %s failed: %r\n" % (event, exc))
+                except Exception:
+                    pass
                 dead.append(ws)
         for ws in dead:
             await self.disconnect(session_code, ws)

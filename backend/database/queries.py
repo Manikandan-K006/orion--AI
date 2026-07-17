@@ -572,6 +572,41 @@ def join_live_session(connection: MySQLConnection, session_code: str, user_id: i
     return "joined"
 
 
+def allocate_teams(participants: list[dict[str, Any]], max_team_size: int = 3) -> list[dict[str, Any]]:
+    """Pure team-allocation algorithm.
+
+    - Input: an ordered list of participant dicts (each must carry at least an
+      ``id`` key; other keys are passed through into the team's ``members``).
+    - Randomly shuffles the participants on every call.
+    - Packs them into teams of at most ``max_team_size`` members, in order, so
+      every participant is assigned and none is ever left out. The final team
+      simply takes whatever remainder remains (1 or 2 members).
+    - Returns a list of team assignments::
+
+          [{"team_number": 1, "members": [participant, participant, participant]},
+           {"team_number": 2, "members": [participant, participant]}, ...]
+
+    The algorithm is deterministic in structure (ceil(n / max_team_size) teams)
+    but the membership is randomized by the shuffle.
+    """
+    if not participants:
+        return []
+
+    people = list(participants)
+    random.shuffle(people)
+
+    teams: list[dict[str, Any]] = []
+    team_number = 1
+    for i in range(0, len(people), max_team_size):
+        team_members = people[i:i + max_team_size]
+        teams.append({
+            "team_number": team_number,
+            "members": team_members,
+        })
+        team_number += 1
+    return teams
+
+
 def assign_live_teams(connection: MySQLConnection, session_code: str) -> list[dict[str, Any]]:
     participants = fetch_all(connection,
         "SELECT lp.*, u.name, u.register_number, sp.department, sp.year FROM gd_live_participants lp "
@@ -586,11 +621,17 @@ def assign_live_teams(connection: MySQLConnection, session_code: str) -> list[di
     if not topics:
         return []
 
+    # Hand out one unique topic per team. Shuffle first so the assignment is
+    # randomized each run; only wrap around if there are more teams than topics.
+    team_topics = [t["topic"] for t in topics]
+
     teams = []
-    team_number = 1
-    for i in range(0, len(participants), 3):
-        team_members = participants[i:i+3]
-        topic = topics[(team_number - 1) % len(topics)]["topic"]
+    # Group participants into teams of at most 3 via the pure allocation
+    # algorithm (shuffles every call, never leaves anyone unassigned).
+    for idx, team in enumerate(allocate_teams(participants, max_team_size=3)):
+        team_number = team["team_number"]
+        team_members = team["members"]
+        topic = team_topics[idx % len(team_topics)]
         execute(connection,
             "INSERT INTO gd_live_teams (session_code, team_number, topic) VALUES (%s, %s, %s)",
             (session_code, team_number, topic))
@@ -606,7 +647,6 @@ def assign_live_teams(connection: MySQLConnection, session_code: str) -> list[di
                          "register_number": m["register_number"], "department": m.get("department"),
                          "year": m.get("year")} for idx, m in enumerate(team_members)]
         })
-        team_number += 1
 
     execute(connection, "UPDATE gd_live_sessions SET status = 'active' WHERE session_code = %s", (session_code,))
     return teams
