@@ -201,7 +201,9 @@ async def gd_live_socket(
         session = queries.get_live_session_by_code(connection, session_code)
         topic = queries.get_live_team_topic(connection, session_code)
         participants = _participant_snapshot(connection, session_code)
-    except Exception:
+        logger.warning("WS snapshot uid=%s room=%s count=%d", user.get("id"), session_code, len(participants))
+    except Exception as _exc:
+        logger.warning("WS state build error: %s", repr(_exc))
         session, topic, participants = None, None, []
     finally:
         connection.close()
