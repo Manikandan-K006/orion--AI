@@ -23,6 +23,7 @@ export default function GdLiveRoom({
   user,
   initialTopic,
   initialMembers,
+  initialTeams,
   showCountdown,
   onCountdownDone,
   onLeave,
@@ -33,6 +34,7 @@ export default function GdLiveRoom({
   user: any;
   initialTopic: string;
   initialMembers: any[];
+  initialTeams?: any[];
   showCountdown?: boolean;
   onCountdownDone?: () => void;
   onLeave: () => void;
@@ -41,6 +43,7 @@ export default function GdLiveRoom({
   const { connected, send, subscribe } = useGdLiveWs(sessionCode, token);
   const [countdown, setCountdown] = useState<number | null>(showCountdown ? 3 : null);
   const [topic, setTopic] = useState(initialTopic);
+  const [teams] = useState<any[]>(initialTeams || []);
   const [members, setMembers] = useState<RoomParticipant[]>(
     (initialMembers || []).map((m: any) => ({
       user_id: m.user_id,
@@ -289,6 +292,16 @@ export default function GdLiveRoom({
             <span className="flex items-center gap-1 text-sm text-heading font-mono"><Clock className="w-4 h-4" /> {formatTime(timerSeconds)}</span>
           )}
           <span className="text-xs text-muted-soft">Round {round}</span>
+          {(() => {
+            const me = members.find((m) => m.user_id === user?.user_id);
+            const myTeam = me?.team_number;
+            if (!myTeam) return null;
+            return (
+              <span className="text-xs font-semibold text-amber-300 px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30">
+                Team {myTeam}
+              </span>
+            );
+          })()}
         </div>
         <div className="flex items-center gap-3">
           <span className="flex items-center gap-1 text-sm text-muted-soft"><UsersIcon className="w-4 h-4" /> {onlineCount} online</span>

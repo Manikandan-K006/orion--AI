@@ -6,6 +6,7 @@ const WS_BASE = "ws://localhost:8000";
 
 export type GDLiveWsEvent =
   | "SESSION_STARTED"
+  | "TEAMS_ASSIGNED"
   | "SESSION_PAUSED"
   | "SESSION_RESUMED"
   | "SESSION_ENDED"

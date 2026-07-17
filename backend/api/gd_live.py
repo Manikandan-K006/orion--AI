@@ -95,15 +95,23 @@ def _host_meeting_db_work(session_code: str):
         members = [{"user_id": p["user_id"], "name": p["name"], "label": p["anonymous_label"],
                     "department": p.get("department"), "year": p.get("year"), "status": p["status"]}
                    for p in participants]
+        # ── Automatic team allocation: shuffle everyone and pack into teams of
+        #    at most 3 (everyone assigned, none left out). Persists team_number
+        #    on each participant and (re)creates one row per team. ──
+        teams = queries.assign_live_teams(conn, session_code, max_team_size=3)
+        # Refresh member snapshot so team_number/labels are included for the
+        # student redirect payload.
+        participants = queries.get_live_participants(conn, session_code)
+        members = [{"user_id": p["user_id"], "name": p["name"], "label": p["anonymous_label"],
+                    "team_number": p.get("team_number"), "department": p.get("department"),
+                    "year": p.get("year"), "status": p["status"]}
+                   for p in participants]
         # Persist live status now (cheap; happens before broadcast returns to client).
         queries.execute(conn,
             "UPDATE gd_live_teams SET status = 'active' WHERE session_code = %s AND status = 'waiting'",
             (session_code,))
-        queries.execute(conn,
-            "UPDATE gd_live_participants SET status = 'assigned' WHERE session_code = %s AND status = 'joined'",
-            (session_code,))
         queries.set_live_session_status(conn, session_code, "live")
-        return {"topic": topic, "members": members}
+        return {"topic": topic, "members": members, "teams": teams}
     finally:
         conn.close()
 
@@ -128,6 +136,7 @@ async def host_gd_live_meeting(
 
     topic = result["topic"]
     members = result["members"]
+    teams = result.get("teams", [])
 
     # Seed the in-memory room state so late joiners get a full snapshot.
     state = manager.ensure_state(session_code, topic)
@@ -149,12 +158,21 @@ async def host_gd_live_meeting(
             }
         )
 
-    # ── Broadcast FIRST (event loop is free) so students are redirected
-    #    instantly (<1s) the moment the admin clicks Start. ──
+    # ── Broadcast team assignments FIRST so every client has its team the
+    #    instant the session goes live. ──
+    await manager.broadcast(session_code, "TEAMS_ASSIGNED", {
+        "session_code": session_code,
+        "teams": teams,
+        "members": members,
+    })
+
+    # ── Broadcast SESSION_STARTED (event loop is free) so students are
+    #    redirected instantly (<1s) the moment the admin clicks Start. ──
     await manager.broadcast(session_code, "SESSION_STARTED", {
         "session_code": session_code,
         "topic": topic,
         "members": members,
+        "teams": teams,
         "state": state.snapshot(),
     })
 

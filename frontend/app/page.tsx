@@ -33,12 +33,12 @@ type PageView = "login" | "dashboard" | "gd-leaderboard" | "solo-practice" | "so
 
 /** Student-side waiter: opens a WebSocket to the session and auto-redirects into the
  *  live room when the admin hosts the meeting (SESSION_STARTED broadcast). */
-function StudentLiveWaiter({ code, token, onStart }: { code: string; token: string; onStart: (topic: string | null, members: any[]) => void }) {
+function StudentLiveWaiter({ code, token, onStart }: { code: string; token: string; onStart: (topic: string | null, members: any[], teams?: any[]) => void }) {
   const { subscribe } = useGdLiveWs(code, token);
   useEffect(() => {
     const unsub = subscribe((msg: GDLiveWsMessage) => {
       if (msg.event === "SESSION_STARTED") {
-        onStart(msg.payload?.topic ?? null, msg.payload?.members ?? []);
+        onStart(msg.payload?.topic ?? null, msg.payload?.members ?? [], msg.payload?.teams ?? []);
       }
     });
     return unsub;
@@ -49,7 +49,7 @@ function StudentLiveWaiter({ code, token, onStart }: { code: string; token: stri
 /** Student-side polling fallback: if the WebSocket SESSION_STARTED event is
  *  missed (e.g. reconnect), poll the live-state and redirect when the session
  *  becomes "live". No manual refresh required. */
-function StudentLivePoller({ code, token, onStart }: { code: string; token: string; onStart: (topic: string | null, members: any[]) => void }) {
+function StudentLivePoller({ code, token, onStart }: { code: string; token: string; onStart: (topic: string | null, members: any[], teams?: any[]) => void }) {
   useEffect(() => {
     let active = true;
     const tick = async () => {
@@ -57,7 +57,7 @@ function StudentLivePoller({ code, token, onStart }: { code: string; token: stri
         const st = await getGdLiveState(code, token);
         if (!active) return;
         if (st.status === "live") {
-          onStart(st.topic ?? null, st.members || []);
+          onStart(st.topic ?? null, st.members || [], st.teams || []);
         }
       } catch {
         /* ignore transient errors */
@@ -233,6 +233,7 @@ export default function Home() {
   const [gdLiveSession, setGdLiveSession] = useState<{ session_code: string; status: string; participant_count: number; team_count: number } | null>(null);
   const [gdLiveSessions, setGdLiveSessions] = useState<any[]>([]);
   const [gdLiveParticipants, setGdLiveParticipants] = useState<any[]>([]);
+  const [gdLiveTeams, setGdLiveTeams] = useState<any[]>([]);
   const [gdLiveCreatedCode, setGdLiveCreatedCode] = useState("");
   const [gdLiveLeaderboard, setGdLiveLeaderboard] = useState<GDLiveLeaderboardEntry[]>([]);
   const [gdLiveLeaderboardViewCode, setGdLiveLeaderboardViewCode] = useState("");
@@ -244,6 +245,7 @@ export default function Home() {
   const [gdLiveRoomCode, setGdLiveRoomCode] = useState("");
   const [gdLiveRoomTopic, setGdLiveRoomTopic] = useState("");
   const [gdLiveRoomMembers, setGdLiveRoomMembers] = useState<any[]>([]);
+  const [gdLiveRoomTeams, setGdLiveRoomTeams] = useState<any[]>([]);
   const [gdLiveRoomActive, setGdLiveRoomActive] = useState(false);
   const [gdLiveIsLiveMeeting, setGdLiveIsLiveMeeting] = useState(false);
   const [gdLiveShowCountdown, setGdLiveShowCountdown] = useState(false);
@@ -306,6 +308,8 @@ export default function Home() {
     const unsub = subAdminParticipants((msg: GDLiveWsMessage) => {
       if (msg.event === "PARTICIPANTS_UPDATED" && Array.isArray(msg.payload?.participants)) {
         setGdLiveParticipants(msg.payload.participants);
+      } else if (msg.event === "TEAMS_ASSIGNED" && Array.isArray(msg.payload?.teams)) {
+        setGdLiveTeams(msg.payload.teams);
       }
     });
     return unsub;
@@ -457,13 +461,14 @@ export default function Home() {
     setView("gd-live-room");
   }
 
-  function enterGdLiveRoom(code: string, topic: string | null, members: any[]) {
+  function enterGdLiveRoom(code: string, topic: string | null, members: any[], teams?: any[]) {
     const t0 = performance.now();
     setGdLivePerf((p) => ({ ...p, studentReceivedStart: t0 }));
     console.timeStamp?.("student:enterGdLiveRoom");
     setGdLiveRoomCode(code);
     setGdLiveRoomTopic(topic || "");
     setGdLiveRoomMembers(members || []);
+    setGdLiveRoomTeams(teams || []);
     setGdLiveIsLiveMeeting(true);
     // For an admin host we stay on the participant page so the cards stay visible;
     // students (and "Open Discussion Room") navigate into the room view.
@@ -1551,6 +1556,34 @@ export default function Home() {
                   </div>
                 )}
 
+                {gdLiveTeams.length > 0 && (
+                  <div className="card p-6 mt-6">
+                    <h3 className="text-lg font-bold text-heading mb-4 flex items-center gap-2">
+                      <Users className="w-5 h-5 text-amber-400" /> Teams ({gdLiveTeams.length})
+                    </h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {gdLiveTeams.map((t: any) => (
+                        <div key={t.team_number} className="card p-4 surface-2">
+                          <div className="flex items-center justify-between mb-3">
+                            <span className="text-sm font-bold text-amber-300 font-mono">Team {t.team_number}</span>
+                            <span className="text-xs text-muted-soft">{t.members?.length || 0} members</span>
+                          </div>
+                          <p className="text-xs text-muted-soft mb-3 line-clamp-2">Topic: {t.topic}</p>
+                          <ul className="space-y-1.5">
+                            {t.members?.map((m: any) => (
+                              <li key={m.user_id} className="text-sm text-heading flex items-center gap-2">
+                                <span className="w-1.5 h-1.5 rounded-full bg-purple-400 shrink-0" />
+                                {m.name}
+                                <span className="text-xs text-muted-soft font-mono">{m.label}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {gdLiveRoomActive && (
                   <GdLiveAdminPanel
                     code={gdLiveAdminViewCode}
@@ -1577,12 +1610,12 @@ export default function Home() {
               <StudentLiveWaiter
                 code={gdLiveSession.session_code}
                 token={token}
-                onStart={(topic, members) => enterGdLiveRoom(gdLiveSession.session_code, topic, members)}
+                onStart={(topic, members, teams) => enterGdLiveRoom(gdLiveSession.session_code, topic, members, teams)}
               />
               <StudentLivePoller
                 code={gdLiveSession.session_code}
                 token={token}
-                onStart={(topic, members) => enterGdLiveRoom(gdLiveSession.session_code, topic, members)}
+                onStart={(topic, members, teams) => enterGdLiveRoom(gdLiveSession.session_code, topic, members, teams)}
               />
               <div className="card p-6 text-center py-12">
                 <div className="icon-badge icon-purple mx-auto mb-5" style={{ width: "72px", height: "72px" }}>
