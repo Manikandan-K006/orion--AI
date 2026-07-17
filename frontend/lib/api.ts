@@ -250,6 +250,46 @@ export type GDLiveLeaderboardEntry = {
   transcript?: string;
 };
 
+export type GDLiveRoomMember = {
+  user_id: number;
+  name: string | null;
+  label: string | null;
+  department: string | null;
+  year: string | null;
+  status: string;
+};
+
+export type GDLiveRoomState = {
+  session_code: string;
+  status: string;
+  topic: string | null;
+  members: GDLiveRoomMember[];
+};
+
+export async function hostGdLiveMeeting(sessionCode: string, token: string) {
+  return apiRequest<{ message: string; session_code: string; topic: string | null; members: GDLiveRoomMember[] }>(
+    `/gd-live/sessions/${sessionCode}/host-meeting`,
+    { method: "POST" },
+    token,
+  );
+}
+
+export async function endGdLiveMeeting(sessionCode: string, token: string) {
+  return apiRequest<{ message: string }>(
+    `/gd-live/sessions/${sessionCode}/end-live`,
+    { method: "POST" },
+    token,
+  );
+}
+
+export async function getGdLiveState(sessionCode: string, token: string) {
+  return apiRequest<GDLiveRoomState>(
+    `/gd-live/sessions/${sessionCode}/live-state`,
+    { method: "GET" },
+    token,
+  );
+}
+
 export async function apiRequest<T>(path: string, options: RequestInit = {}, token?: string): Promise<T> {
   const response = await fetch(`${API_URL}${path}`, {
     ...options,

@@ -10,3 +10,6 @@ backend/uploads/*
 backend/reports/*
 !backend/uploads/.gitkeep
 !backend/reports/.gitkeep
+
+# build artifacts
+*.tsbuildinfo

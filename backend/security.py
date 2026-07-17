@@ -38,6 +38,12 @@ def create_access_token(data: dict[str, Any]) -> str:
     return jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
 
 
+def decode_token(token: str) -> dict[str, Any]:
+    settings = get_settings()
+    payload = jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
+    return payload
+
+
 def get_current_user(
     token: str = Depends(oauth2_scheme),
     connection: MySQLConnection = Depends(get_db),

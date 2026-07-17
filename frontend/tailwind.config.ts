@@ -12,6 +12,13 @@ const config: Config = {
         muted: "#607084",
         accent: "#0f766e"
       },
+      borderRadius: {
+        card: "20px",
+      },
+      boxShadow: {
+        card: "0 6px 20px rgba(15,23,42,0.06)",
+        "card-dark": "0 12px 30px rgba(0,0,0,0.45)",
+      },
       animation: {
         "bounce-slow": "bounce 3s infinite",
         "pulse-slow": "pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite",

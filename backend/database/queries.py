@@ -608,6 +608,38 @@ def assign_live_teams(connection: MySQLConnection, session_code: str) -> list[di
     return teams
 
 
+def assign_live_single_team(connection: MySQLConnection, session_code: str) -> list[dict[str, Any]]:
+    """Put ALL participants into a single team (team_number 1) with one easy topic."""
+    participants = fetch_all(connection,
+        "SELECT lp.*, u.name, u.register_number, sp.department, sp.year FROM gd_live_participants lp "
+        "JOIN users u ON lp.user_id = u.id "
+        "LEFT JOIN student_profile sp ON sp.user_id = u.id "
+        "WHERE lp.session_code = %s ORDER BY lp.id",
+        (session_code,))
+    if not participants:
+        return []
+
+    topic_row = fetch_one(connection, "SELECT topic FROM gd_easy_topics ORDER BY RAND() LIMIT 1")
+    topic = topic_row["topic"] if topic_row else "Introduce yourself and share your thoughts"
+
+    execute(connection,
+        "INSERT INTO gd_live_teams (session_code, team_number, topic) VALUES (%s, %s, %s)",
+        (session_code, 1, topic))
+    for j, member in enumerate(participants):
+        label = f"Member {j + 1}"
+        execute(connection,
+            "UPDATE gd_live_participants SET team_number = %s, anonymous_label = %s, status = 'assigned' WHERE id = %s",
+            (1, label, member["id"]))
+
+    return [{
+        "team_number": 1,
+        "topic": topic,
+        "members": [{"user_id": m["user_id"], "label": f"Member {idx + 1}", "name": m["name"],
+                     "register_number": m["register_number"], "department": m.get("department"),
+                     "year": m.get("year")} for idx, m in enumerate(participants)],
+    }]
+
+
 def get_live_my_team(connection: MySQLConnection, session_code: str, user_id: int) -> dict[str, Any] | None:
     participant = fetch_one(connection,
         "SELECT team_number FROM gd_live_participants WHERE session_code = %s AND user_id = %s",
@@ -635,6 +667,25 @@ def get_live_participants(connection: MySQLConnection, session_code: str) -> lis
         "LEFT JOIN student_profile sp ON sp.user_id = u.id "
         "WHERE lp.session_code = %s ORDER BY lp.team_number, lp.id",
         (session_code,))
+
+
+def set_live_session_status(connection: MySQLConnection, session_code: str, status: str) -> bool:
+    r = execute(connection,
+        "UPDATE gd_live_sessions SET status = %s WHERE session_code = %s",
+        (status, session_code))
+    return r > 0
+
+
+def get_live_session_status(connection: MySQLConnection, session_code: str) -> str | None:
+    row = fetch_one(connection, "SELECT status FROM gd_live_sessions WHERE session_code = %s", (session_code,))
+    return row["status"] if row else None
+
+
+def get_live_team_topic(connection: MySQLConnection, session_code: str) -> str | None:
+    row = fetch_one(connection,
+        "SELECT topic FROM gd_live_teams WHERE session_code = %s ORDER BY team_number LIMIT 1",
+        (session_code,))
+    return row["topic"] if row else None
 
 
 def start_live_team(connection: MySQLConnection, session_code: str, team_number: int) -> bool:

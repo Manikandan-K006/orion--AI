@@ -4,6 +4,7 @@ from mysql.connector import MySQLConnection
 from backend.ai.evaluation import evaluate_transcript
 from backend.database import queries
 from backend.database.db import get_db
+from backend.realtime.gd_ws import manager
 from backend.security import get_current_user
 
 router = APIRouter(prefix="/gd-live", tags=["GD Live"])
@@ -100,6 +101,195 @@ def start_live_team(
     if not success:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Team not found or already active")
     return {"message": f"Team {team_number} started"}
+
+
+@router.post("/sessions/{session_code}/start-all")
+def start_live_session_all(
+    session_code: str,
+    current_user: dict = Depends(get_current_user),
+    connection: MySQLConnection = Depends(get_db),
+) -> dict:
+    """Accept all participants, partition into teams of 3, assign each team a topic,
+    and immediately start the discussion (3 min prep -> 10 min speak) for every team."""
+    if current_user.get("role") != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only admins can start sessions")
+
+    session = queries.get_live_session_by_code(connection, session_code)
+    if not session:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
+    if session["status"] == "completed":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Session already completed")
+
+    # Assign teams if not already assigned
+    has_teams = queries.fetch_one(
+        connection,
+        "SELECT COUNT(*) AS c FROM gd_live_teams WHERE session_code = %s",
+        (session_code,),
+    )
+    if not has_teams or has_teams["c"] == 0:
+        teams = queries.assign_live_teams(connection, session_code)
+        if not teams:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No participants to assign")
+    else:
+        teams = queries.fetch_all(
+            connection,
+            "SELECT team_number, topic FROM gd_live_teams WHERE session_code = %s ORDER BY team_number",
+            (session_code,),
+        )
+
+    # Activate all teams and the session
+    queries.execute(
+        connection,
+        "UPDATE gd_live_teams SET status = 'active' WHERE session_code = %s AND status = 'waiting'",
+        (session_code,),
+    )
+    queries.execute(
+        connection,
+        "UPDATE gd_live_sessions SET status = 'active' WHERE session_code = %s",
+        (session_code,),
+    )
+
+    return {"message": "Session started for all teams", "teams": teams, "prep_seconds": 180, "speak_seconds": 600}
+
+
+@router.post("/sessions/{session_code}/start-meeting")
+def start_live_meeting(
+    session_code: str,
+    current_user: dict = Depends(get_current_user),
+    connection: MySQLConnection = Depends(get_db),
+) -> dict:
+    """Accept all participants into a SINGLE team (any size) with one easy topic,
+    and immediately start the discussion (3 min prep -> 10 min speak)."""
+    if current_user.get("role") != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only admins can start sessions")
+
+    session = queries.get_live_session_by_code(connection, session_code)
+    if not session:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
+    if session["status"] == "completed":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Session already completed")
+
+    # Create one team with a single easy topic (or reuse existing single team)
+    existing = queries.fetch_one(
+        connection,
+        "SELECT COUNT(*) AS c FROM gd_live_teams WHERE session_code = %s",
+        (session_code,),
+    )
+    if not existing or existing["c"] == 0:
+        teams = queries.assign_live_single_team(connection, session_code)
+        if not teams:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No participants to assign")
+    else:
+        teams = queries.fetch_all(
+            connection,
+            "SELECT team_number, topic FROM gd_live_teams WHERE session_code = %s ORDER BY team_number",
+            (session_code,),
+        )
+
+    queries.execute(
+        connection,
+        "UPDATE gd_live_teams SET status = 'active' WHERE session_code = %s AND status = 'waiting'",
+        (session_code,),
+    )
+    queries.execute(
+        connection,
+        "UPDATE gd_live_sessions SET status = 'active' WHERE session_code = %s",
+        (session_code,),
+    )
+
+    return {"message": "Meeting started for all participants", "teams": teams, "prep_seconds": 180, "speak_seconds": 600}
+
+
+@router.post("/sessions/{session_code}/host-meeting")
+async def host_gd_live_meeting(
+    session_code: str,
+    current_user: dict = Depends(get_current_user),
+    connection: MySQLConnection = Depends(get_db),
+) -> dict:
+    """Admin hosts the live meeting: put everyone in one team, mark session LIVE,
+    and notify all connected participants over WebSocket so they auto-redirect."""
+    if current_user.get("role") != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only admins can host meetings")
+
+    session = queries.get_live_session_by_code(connection, session_code)
+    if not session:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
+    if session["status"] == "completed":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Session already completed")
+
+    participants = queries.get_live_participants(connection, session_code)
+    if len(participants) < 2:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Need at least 2 participants to host")
+
+    # Ensure a single team with one topic exists
+    existing = queries.fetch_one(connection, "SELECT COUNT(*) AS c FROM gd_live_teams WHERE session_code = %s", (session_code,))
+    if not existing or existing["c"] == 0:
+        queries.assign_live_single_team(connection, session_code)
+    else:
+        queries.execute(connection,
+            "UPDATE gd_live_teams SET status = 'active' WHERE session_code = %s AND status = 'waiting'",
+            (session_code,))
+
+    queries.execute(connection,
+        "UPDATE gd_live_participants SET status = 'assigned' WHERE session_code = %s AND status = 'joined'",
+        (session_code,))
+    queries.set_live_session_status(connection, session_code, "live")
+
+    topic = queries.get_live_team_topic(connection, session_code)
+    members = [{"user_id": p["user_id"], "name": p["name"], "label": p["anonymous_label"],
+                "department": p.get("department"), "year": p.get("year"), "status": p["status"]}
+               for p in participants]
+
+    # Notify everyone in the room
+    await manager.broadcast(session_code, "SESSION_STARTED", {
+        "session_code": session_code,
+        "topic": topic,
+        "members": members,
+    })
+
+    return {"message": "Meeting is live", "session_code": session_code, "topic": topic, "members": members}
+
+
+@router.get("/sessions/{session_code}/live-state")
+def gd_live_state(
+    session_code: str,
+    current_user: dict = Depends(get_current_user),
+    connection: MySQLConnection = Depends(get_db),
+) -> dict:
+    """Snapshot of the live room for a participant who just connected via WebSocket."""
+    session = queries.get_live_session_by_code(connection, session_code)
+    if not session:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
+    participants = queries.get_live_participants(connection, session_code)
+    topic = queries.get_live_team_topic(connection, session_code)
+    return {
+        "session_code": session_code,
+        "status": session["status"],
+        "topic": topic,
+        "members": [{"user_id": p["user_id"], "name": p["name"], "label": p["anonymous_label"],
+                      "department": p.get("department"), "year": p.get("year"), "status": p["status"]}
+                     for p in participants],
+    }
+
+
+@router.post("/sessions/{session_code}/end-live")
+async def end_gd_live_meeting(
+    session_code: str,
+    current_user: dict = Depends(get_current_user),
+    connection: MySQLConnection = Depends(get_db),
+) -> dict:
+    """Admin ends the live meeting: mark completed and notify all participants."""
+    if current_user.get("role") != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only admins can end meetings")
+
+    queries.set_live_session_status(connection, session_code, "completed")
+    queries.execute(connection,
+        "UPDATE gd_live_teams SET status = 'completed' WHERE session_code = %s",
+        (session_code,))
+
+    await manager.broadcast(session_code, "SESSION_ENDED", {"session_code": session_code})
+    return {"message": "Meeting ended"}
+
 
 
 @router.post("/sessions/{session_code}/submit-transcript")

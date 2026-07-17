@@ -8,6 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from backend.api import auth, gd, gd_live, interviews, progress, questions, reports, solo
+from backend.realtime import gd_ws
 from backend.config import get_settings
 
 logging.basicConfig(level=logging.INFO, stream=sys.stdout, format="%(asctime)s %(levelname)s %(message)s")
@@ -35,9 +36,13 @@ class IPFilterMiddleware(BaseHTTPMiddleware):
         allowed = settings.allowed_ips.strip()
         if allowed:
             forwarded = request.headers.get("x-forwarded-for", "")
-            client_ip = forwarded.split(",")[0].strip() if forwarded else request.client.host
+            client_ip = forwarded.split(",")[0].strip() if forwarded else (request.client.host if request.client else "")
 
-            allowed_list = [ip.strip() for ip in allowed.split(",") if ip.strip()]
+            # Always allow local/loopback development access
+            local_ips = {"127.0.0.1", "::1", "localhost", ""}
+            allowed_list = {ip.strip() for ip in allowed.split(",") if ip.strip()}
+            allowed_list |= local_ips
+
             if client_ip not in allowed_list:
                 logger.warning("Blocked request from IP: %s", client_ip)
                 return JSONResponse(
@@ -69,3 +74,4 @@ app.include_router(reports.router)
 app.include_router(gd.router)
 app.include_router(gd_live.router)
 app.include_router(solo.router)
+app.include_router(gd_ws.router)
