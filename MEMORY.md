@@ -1,36 +1,33 @@
-# Project Memory — MZ Orator (SpeakSense AI / Orion)
+# Project Memory — MZ Orator (speaksense-ai-orion)
 
-## Objective
-Maintain and enhance MZ Orator (AI GD evaluation, solo practice, anonymous GD Live). Local-first dev with college-network IP restriction. Redesigning the entire frontend from glassmorphism to an Enterprise SaaS design system (Vercel/Linear/Stripe style): solid surfaces, visible borders, shadows in BOTH light and dark themes.
+## Realtime "Host a Meeting" GD Workflow
 
-## Critical Environment
-- MySQL: host `mysql-3ac81cc6-project-orion.j.aivencloud.com` port 15901, user `avnadmin`, password <REACTED>, db `speaksense_ai` (20 tables).
-- 61 IT students seeded 3rd Year, default password `Password123`. Admin: SPR `12345` / `Mzorator@admin` (role `admin`).
-- Backend local: `http://localhost:8000`; frontend local: `http://localhost:3000`; Render backend `https://orion-ai-2udw.onrender.com`; Vercel `https://orion-ai-gamma.vercel.app`.
-- `frontend/lib/api.ts` `API_URL` hardcoded `http://localhost:8000` — Vercel build breaks unless reverted or uses `NEXT_PUBLIC_API_URL`.
-- **Run locally (manual, two terminals)**: backend `.\.venv\Scripts\Activate.ps1; python -m uvicorn backend.main:app --port 8000`; frontend `cd frontend; npm run dev`. NOTE: real venv is project-root `.venv`, NOT `backend\venv`. `start-local.ps1` is WRONG (points at backend\venv) — do not use as-is.
-- Theme persisted in `localStorage` key `mzgd_theme`, defaults to `dark`, `darkMode:"class"`.
+### Endpoints (backend, `http://localhost:8000`)
+- `POST /gd-live/sessions/{session_code}/host-meeting` — admin hosts: assigns single team + topic, sets status `live`, broadcasts `SESSION_STARTED` (payload: topic, members). Returns `{ session_code, topic, members }`.
+- `GET /gd-live/sessions/{session_code}/live-state` — returns current live room state (members, topic, status).
+- `POST /gd-live/sessions/{session_code}/end-live` — sets status `completed`, broadcasts `SESSION_ENDED`.
+- `WebSocket /ws/gd-live/{session_code}?token={jwt}` — realtime hub (`backend/realtime/gd_ws.py`, `GDLiveConnectionManager`).
 
-## Completed Work
-- IP whitelist fix: `IPFilterMiddleware` in `backend/main.py` now always allows loopback (`127.0.0.1`/`::1`/`localhost`/`""`) in `allowed_list`; college restriction preserved via `ALLOWED_IPS` env (currently `103.207.1.89`). Login works locally (HTTP 200 on `/login/register-number`).
-- New light login BG: `frontend/public/new_light_BG.jpeg` (user download). Login light bg = `/new_light_BG.jpeg`, dark = `/login_dark_bg.jpeg`.
-- **Full Enterprise SaaS redesign COMPLETE** (all glassmorphism removed, verified by grep 0 matches for backdrop-blur/bg-white/[0/glass/rgba(255,255,255/text-black dark:text-white/text-gray-800 across app/):
-  - `frontend/app/globals.css`: all CSS variables (`--bg --surface --surface-2 --surface-hover --border --border-strong --heading --body --muted --shadow-card --shadow-card-hover --table-* --input-bg --input-border --focus --btn-secondary-*`) + component classes (`.card .surface .surface-2 .card-hover .btn-primary .btn-secondary .inp .ent-table .pill .pill-active .icon-badge .icon-{purple,blue,green,orange,cyan,amber,red} .divider .animate-fade-up`). Added global `border-color: var(--border)` so standalone `border` is theme-aware.
-  - `frontend/tailwind.config.ts`: `darkMode:"class"`, `borderRadius.card=20px`, `boxShadow.card`/`card-dark`, kept legacy color tokens (harmless, overridden by CSS vars).
-  - `frontend/components/ui/button.tsx`: `primary`→`.btn-primary`, `secondary`→`.btn-secondary`, `ghost`→transparent hover surface-2.
-  - `frontend/app/page.tsx`: login rewritten to solid `.card`+`.btn-*`+`.inp`+icon badge (no image bleed); app shell uses var(--surface)/var(--border), bg images removed; all glass cards→`.card`; tables→`.ent-table`; text tokens → text-heading/body/muted-soft; inputs→`.inp`; progress ring stroke uses var(--border-strong).
-  - `npm run build` passes (compiled successfully, types valid). `npx tsc --noEmit` clean.
+### WebSocket Events
+- Server → client: `SESSION_STARTED`, `SESSION_ENDED`, `PARTICIPANT_JOINED`, `PARTICIPANT_LEFT`, `MIC_TOGGLED`, `CAMERA_TOGGLED`, `HAND_RAISED`, `SPEAKER_CHANGED`, `CHAT_MESSAGE`.
+- Auth: JWT via `decode_token` (in `backend/security.py`).
 
-## Pending / Next
-- (none blocking) Optional: Framer Motion fade-up/hover on key cards; visual verify light+dark on login/dashboard/leaderboard/gd-live/solo.
-- Fix/remove `start-local.ps1` wrong venv path (`.venv` vs `backend\venv`).
-- If deploying to Vercel: switch `frontend/lib/api.ts` to `NEXT_PUBLIC_API_URL` or revert to localhost.
+### DB
+- `gd_live_sessions.status` enum: `waiting`, `active`, `live`, `completed` (added `live`).
+- `backend/database/queries.py`: `set_live_session_status`, `get_live_session_status`, `get_live_team_topic`, `assign_live_single_team`.
 
-## Key Files
-- `frontend/app/page.tsx` — all UI views (login, dashboard, leaderboard, solo, gd-live, gd-live-admin, gd-live-session, gd-live-results)
-- `frontend/app/globals.css` — design tokens + classes
-- `frontend/tailwind.config.ts` — darkMode class, card tokens
-- `frontend/components/ui/button.tsx` — Button variants
-- `frontend/lib/api.ts` — API_URL
-- `backend/main.py` — IPFilterMiddleware (loopback allowed)
-- `backend/config.py` — allowed_ips; `backend/.env` — ALLOWED_IPS=103.207.1.89
+### Frontend (`http://localhost:3000`)
+- `frontend/lib/api.ts`: `hostGdLiveMeeting`, `endGdLiveMeeting`, `getGdLiveState`, types `GDLiveRoomMember`, `GDLiveRoomState`.
+- `frontend/lib/useGdLiveWs.ts`: WS hook (`connected`, `send`, `subscribe`).
+- `frontend/components/GdLiveRoom.tsx`: full-screen live room (local camera + simulated video grid, mic/cam/hand/chat/fullscreen/leave controls, admin Start 15:00/10:00/End + countdown timer that auto-ends).
+- `frontend/app/page.tsx`: `view === "gd-live-room"` renders `<GdLiveRoom>`; admin "Host a Meeting" button (enabled when `gdLiveParticipants.length >= 2`); `StudentLiveWaiter` component opens WS in student waiting view and auto-redirects to room on `SESSION_STARTED`.
+
+### Run
+- Backend: activate venv, `python -m uvicorn backend.main:app --port 8000 --reload`. Must restart to load new routes if not using reload.
+- Frontend: `cd frontend; npm run dev`.
+
+### Test flow
+1. Admin creates a GD Live session → 2+ students join (register numbers 911724205001…061, pass `Password123`).
+2. Admin participants view shows **Host a Meeting** (enabled when ≥2 joined).
+3. Click → admin enters room; students auto-redirect via `SESSION_STARTED`.
+4. Admin Start 15:00 / 10:00 / End; timer auto-ends. End redirects all back.
