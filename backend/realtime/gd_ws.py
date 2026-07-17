@@ -15,7 +15,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
 from mysql.connector import MySQLConnection
 
 from backend.database import queries
-from backend.database.db import get_db
+from backend.database.db import get_connection, get_db
 from backend.security import decode_token
 
 logger = logging.getLogger("speaksense.realtime")
@@ -32,13 +32,13 @@ def _auth_user(token: str | None) -> dict | None:
         user_id = int(payload.get("sub"))
     except Exception:
         return None
+    # Open a fresh connection per request (no shared pool) so a dropped/idle
+    # connection can never surface as a None _cnx and reject the socket.
+    connection = get_connection()
     try:
-        connection: MySQLConnection = next(get_db())
-        user = queries.get_user_by_id(connection, user_id)
+        return queries.get_user_by_id(connection, user_id)
+    finally:
         connection.close()
-        return user
-    except Exception:
-        return None
 
 
 def _participant_snapshot(connection: MySQLConnection, session_code: str) -> list[dict]:
@@ -125,11 +125,13 @@ class GDLiveConnectionManager:
     async def broadcast(self, session_code: str, event: str, payload: Any = None) -> None:
         async with self._lock:
             targets = list(self._rooms.get(session_code, set()))
+        logger.warning("BROADCAST %s to %d targets in room %s", event, len(targets), session_code)
         dead: list[WebSocket] = []
         for ws in targets:
             try:
                 await ws.send_json({"event": event, "payload": payload})
-            except Exception:
+            except Exception as exc:
+                logger.warning("broadcast send failed: %s", exc)
                 dead.append(ws)
         for ws in dead:
             await self.disconnect(session_code, ws)
@@ -171,6 +173,7 @@ async def gd_live_socket(
 
     await websocket.accept()
     await manager.connect(session_code, websocket)
+    logger.warning("WS CONNECT uid=%s room=%s", user.get("id"), session_code)
 
     # Build/sync room state from the database.
     connection: MySQLConnection = next(get_db())

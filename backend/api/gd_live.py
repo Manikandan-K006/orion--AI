@@ -20,7 +20,6 @@ def list_easy_topics(
     return queries.fetch_all(connection, "SELECT * FROM gd_easy_topics ORDER BY id")
 
 
-@router.post("/sessions")
 def _create_live_session_db(user_id: int) -> dict:
     from backend.database.db import get_connection
     conn = get_connection()
@@ -30,6 +29,7 @@ def _create_live_session_db(user_id: int) -> dict:
         conn.close()
 
 
+@router.post("/sessions")
 async def create_live_session(
     current_user: dict = Depends(get_current_user),
 ) -> dict:
