@@ -607,52 +607,78 @@ def allocate_teams(participants: list[dict[str, Any]], max_team_size: int = 3) -
     return teams
 
 
-def assign_live_teams(connection: MySQLConnection, session_code: str) -> list[dict[str, Any]]:
+def assign_live_teams(
+    connection: MySQLConnection,
+    session_code: str,
+    max_team_size: int = 3,
+    seed: int | None = None,
+) -> list[dict[str, Any]]:
+    """Randomly shuffle all participants and pack them into teams of at most
+    ``max_team_size``. Persists ``team_number`` + ``anonymous_label`` on each
+    participant and (re)creates one ``gd_live_teams`` row per team. Returns the
+    team structure (team_number, topic, members) for the host/WebSocket.
+
+    Guarantees: every participant is assigned to exactly one team; no team is
+    larger than ``max_team_size``; the number of teams is minimised; each team
+    gets a unique, age-appropriate discussion topic.
+    """
     participants = fetch_all(connection,
         "SELECT lp.*, u.name, u.register_number, sp.department, sp.year FROM gd_live_participants lp "
         "JOIN users u ON lp.user_id = u.id "
         "LEFT JOIN student_profile sp ON sp.user_id = u.id "
-        "WHERE lp.session_code = %s ORDER BY RAND()",
+        "WHERE lp.session_code = %s ORDER BY lp.id",
         (session_code,))
     if not participants:
         return []
 
-    topics = fetch_all(connection, "SELECT topic FROM gd_easy_topics ORDER BY RAND()")
-    if not topics:
-        return []
+    # Wipe any previous assignment so re-hosting reshuffles cleanly.
+    execute(connection, "DELETE FROM gd_live_teams WHERE session_code = %s", (session_code,))
+    execute(connection,
+        "UPDATE gd_live_participants SET team_number = NULL, status = 'joined' WHERE session_code = %s",
+        (session_code,))
 
-    # Hand out one unique topic per team. Shuffle first so the assignment is
-    # randomized each run; only wrap around if there are more teams than topics.
-    team_topics = [t["topic"] for t in topics]
+    rng = random.Random(seed)
+    user_ids = [p["user_id"] for p in participants]
+    rng.shuffle(user_ids)
 
-    teams = []
-    # Group participants into teams of at most3 via the pure allocation
-    # algorithm (shuffles every call, never leaves anyone unassigned).
-    import sys as _sys
-    print("DEBUG assign_live_teams: participants=%d allocated=%d" % (len(participants), len(allocate_teams(participants, max_team_size=3))), file=_sys.stderr)
-    for idx, team in enumerate(allocate_teams(participants, max_team_size=3)):
-        team_number = team["team_number"]
-        team_members = team["members"]
-        topic = team_topics[idx % len(team_topics)]
+    # Pack into teams of at most max_team_size (last team takes the remainder).
+    teams: list[list[int]] = []
+    i = 0
+    n = len(user_ids)
+    while i < n:
+        size = min(max_team_size, n - i)
+        teams.append(user_ids[i:i + size])
+        i += size
+
+    # Unique topics: shuffle the pool and hand one to each team, wrapping only
+    # if there are more teams than available topics.
+    topic_rows = fetch_all(connection, "SELECT topic FROM gd_easy_topics ORDER BY RAND()")
+    topic_pool = [t["topic"] for t in topic_rows] or ["Introduce yourself and share your thoughts"]
+    by_id = {p["user_id"]: p for p in participants}
+    result: list[dict[str, Any]] = []
+    for team_number, members in enumerate(teams, start=1):
+        topic = topic_pool[(team_number - 1) % len(topic_pool)]
         execute(connection,
             "INSERT INTO gd_live_teams (session_code, team_number, topic) VALUES (%s, %s, %s)",
             (session_code, team_number, topic))
-        for j, member in enumerate(team_members):
+        team_members = []
+        for j, uid in enumerate(members):
             label = f"Member {j + 1}"
             execute(connection,
-                "UPDATE gd_live_participants SET team_number = %s, anonymous_label = %s, status = 'assigned' WHERE id = %s",
-                (team_number, label, member["id"]))
-        teams.append({
-            "team_number": team_number,
-            "topic": topic,
-            "members": [{"user_id": m["user_id"], "label": f"Member {idx + 1}", "name": m["name"],
-                         "register_number": m["register_number"], "department": m.get("department"),
-                         "year": m.get("year")} for idx, m in enumerate(team_members)]
-        })
+                "UPDATE gd_live_participants SET team_number = %s, anonymous_label = %s, status = 'assigned' WHERE session_code = %s AND user_id = %s",
+                (team_number, label, session_code, uid))
+            p = by_id[uid]
+            team_members.append({
+                "user_id": uid,
+                "label": label,
+                "name": p["name"],
+                "register_number": p["register_number"],
+                "department": p.get("department"),
+                "year": p.get("year"),
+            })
+        result.append({"team_number": team_number, "topic": topic, "members": team_members})
 
-    execute(connection, "UPDATE gd_live_sessions SET status = 'active' WHERE session_code = %s", (session_code,))
-    return teams
-
+    return result
 
 def create_live_team_with_topic(connection: MySQLConnection, session_code: str) -> str | None:
     """Create the single discussion team + random topic at session creation time
