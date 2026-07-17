@@ -26,6 +26,10 @@ def create_live_session(
     if current_user.get("role") != "admin":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only admins can create sessions")
     result = queries.create_live_session(connection, current_user["id"])
+    session_code = result.get("session_code") if isinstance(result, dict) else None
+    if session_code:
+        manager.ensure_state(session_code)
+        manager.broadcast(session_code, "SESSION_CREATED", {"session_code": session_code})
     return result
 
 
@@ -240,14 +244,36 @@ async def host_gd_live_meeting(
                 "department": p.get("department"), "year": p.get("year"), "status": p["status"]}
                for p in participants]
 
-    # Notify everyone in the room
+    # Seed the in-memory room state so late joiners get a full snapshot.
+    state = manager.ensure_state(session_code, topic)
+    state.ended = False
+    state.paused = False
+    state.speaker_user_id = None
+    state.round = 1
+    for p in participants:
+        state.participants.setdefault(p["user_id"], {})
+        state.participants[p["user_id"]].update(
+            {
+                "name": p["name"],
+                "label": p["anonymous_label"],
+                "team_number": p.get("team_number"),
+                "status": p["status"],
+                "ready": False,
+                "hand_raised": False,
+                "muted": False,
+            }
+        )
+
+    # Notify everyone in the room (rich payload so clients can build the workspace).
     await manager.broadcast(session_code, "SESSION_STARTED", {
         "session_code": session_code,
         "topic": topic,
         "members": members,
+        "state": state.snapshot(),
     })
 
-    return {"message": "Meeting is live", "session_code": session_code, "topic": topic, "members": members}
+    return {"message": "Meeting is live", "session_code": session_code, "topic": topic,
+            "members": members, "state": state.snapshot()}
 
 
 @router.get("/sessions/{session_code}/live-state")
@@ -262,6 +288,7 @@ def gd_live_state(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
     participants = queries.get_live_participants(connection, session_code)
     topic = queries.get_live_team_topic(connection, session_code)
+    state = manager.get_state(session_code)
     return {
         "session_code": session_code,
         "status": session["status"],
@@ -269,6 +296,7 @@ def gd_live_state(
         "members": [{"user_id": p["user_id"], "name": p["name"], "label": p["anonymous_label"],
                       "department": p.get("department"), "year": p.get("year"), "status": p["status"]}
                      for p in participants],
+        "room": state.snapshot() if state else None,
     }
 
 
@@ -287,6 +315,7 @@ async def end_gd_live_meeting(
         "UPDATE gd_live_teams SET status = 'completed' WHERE session_code = %s",
         (session_code,))
 
+    manager.drop_state(session_code)
     await manager.broadcast(session_code, "SESSION_ENDED", {"session_code": session_code})
     return {"message": "Meeting ended"}
 

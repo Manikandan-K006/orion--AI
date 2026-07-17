@@ -1,16 +1,15 @@
 """Realtime WebSocket hub for GD Live sessions.
 
-Manages per-session connections and broadcasts events to all participants
-connected to a session room. Used to drive the live Group Discussion room
-without per-second polling.
+Manages per-session connections, holds transient room state (speaker, round,
+ready/hand status, mute) and broadcasts events to every connected participant
+so the discussion workspace stays in sync without polling.
 """
 
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
-from typing import Any
+from typing import Any, Optional
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
 from mysql.connector import MySQLConnection
@@ -21,8 +20,11 @@ from backend.security import decode_token
 
 logger = logging.getLogger("speaksense.realtime")
 
+router = APIRouter(prefix="/ws/gd-live", tags=["GD Live Realtime"])
+
 
 def _auth_user(token: str | None) -> dict | None:
+    """Validate the JWT and return the DB user record (with id/name/role)."""
     if not token:
         return None
     try:
@@ -38,15 +40,53 @@ def _auth_user(token: str | None) -> dict | None:
     except Exception:
         return None
 
-router = APIRouter(prefix="/ws/gd-live", tags=["GD Live Realtime"])
+
+def _participant_snapshot(connection: MySQLConnection, session_code: str) -> list[dict]:
+    return queries.get_live_participants(connection, session_code)
+
+
+class RoomState:
+    """Transient, in-memory state for one live session room."""
+
+    def __init__(self, session_code: str, topic: str | None = None) -> None:
+        self.session_code = session_code
+        self.topic = topic
+        self.speaker_user_id: Optional[int] = None
+        self.round = 1
+        self.paused = False
+        self.ended = False
+        # user_id -> {ready, hand_raised, muted, name, label, team, status}
+        self.participants: dict[int, dict] = {}
+
+    def snapshot(self) -> dict:
+        return {
+            "topic": self.topic,
+            "speaker_user_id": self.speaker_user_id,
+            "round": self.round,
+            "paused": self.paused,
+            "ended": self.ended,
+            "participants": [
+                {
+                    "user_id": uid,
+                    "name": p.get("name"),
+                    "label": p.get("label"),
+                    "team_number": p.get("team_number"),
+                    "status": p.get("status"),
+                    "ready": bool(p.get("ready")),
+                    "hand_raised": bool(p.get("hand_raised")),
+                    "muted": bool(p.get("muted")),
+                }
+                for uid, p in self.participants.items()
+            ],
+        }
 
 
 class GDLiveConnectionManager:
     """Holds active WebSocket connections keyed by session_code."""
 
     def __init__(self) -> None:
-        # session_code -> set of WebSocket
         self._rooms: dict[str, set[WebSocket]] = {}
+        self._state: dict[str, RoomState] = {}
         self._lock = asyncio.Lock()
 
     async def connect(self, session_code: str, ws: WebSocket) -> None:
@@ -60,6 +100,21 @@ class GDLiveConnectionManager:
                 room.discard(ws)
                 if not room:
                     self._rooms.pop(session_code, None)
+
+    def ensure_state(self, session_code: str, topic: str | None = None) -> RoomState:
+        state = self._state.get(session_code)
+        if state is None or state.ended:
+            state = RoomState(session_code, topic)
+            self._state[session_code] = state
+        elif topic is not None:
+            state.topic = topic
+        return state
+
+    def get_state(self, session_code: str) -> RoomState | None:
+        return self._state.get(session_code)
+
+    def drop_state(self, session_code: str) -> None:
+        self._state.pop(session_code, None)
 
     async def send_personal(self, ws: WebSocket, event: str, payload: Any = None) -> None:
         try:
@@ -83,13 +138,22 @@ class GDLiveConnectionManager:
 manager = GDLiveConnectionManager()
 
 
-def _auth_user(token: str | None) -> dict | None:
-    if not token:
-        return None
-    try:
-        return decode_token(token)
-    except Exception:
-        return None
+# Events the server accepts from clients and relays/acts upon.
+_RELAY_EVENTS = {
+    "RAISE_HAND",
+    "READY",
+    "CHAT_MESSAGE",
+    "SET_SPEAKER",
+    "START_GD",
+    "PAUSE_GD",
+    "RESUME_GD",
+    "END_GD",
+    "NEXT_ROUND",
+    "NEXT_SPEAKER",
+    "RESET_TIMER",
+    "MUTE_PARTICIPANT",
+    "REMOVE_PARTICIPANT",
+}
 
 
 @router.websocket("/{session_code}")
@@ -108,19 +172,35 @@ async def gd_live_socket(
     await websocket.accept()
     await manager.connect(session_code, websocket)
 
-    # Tell the room someone joined (presence)
+    # Build/sync room state from the database.
+    connection: MySQLConnection = next(get_db())
     try:
-        connection: MySQLConnection = next(get_db())
-        participant = queries.fetch_one(
-            connection,
-            "SELECT id, team_number, anonymous_label, status FROM gd_live_participants "
-            "WHERE session_code = %s AND user_id = %s",
-            (session_code, user["id"]),
-        )
-        connection.close()
+        session = queries.get_live_session_by_code(connection, session_code)
+        topic = queries.get_live_team_topic(connection, session_code)
+        participants = _participant_snapshot(connection, session_code)
     except Exception:
-        participant = None
+        session, topic, participants = None, None, []
+    finally:
+        connection.close()
 
+    state = manager.ensure_state(session_code, topic)
+    state.ended = bool(session and session["status"] == "completed")
+    for p in participants:
+        uid = p["user_id"]
+        state.participants.setdefault(uid, {})
+        state.participants[uid].update(
+            {
+                "name": p.get("name"),
+                "label": p.get("anonymous_label"),
+                "team_number": p.get("team_number"),
+                "status": p.get("status"),
+            }
+        )
+
+    # Send a full snapshot to the just-connected client.
+    await manager.send_personal(websocket, "STATE_SYNC", state.snapshot())
+
+    # Tell the room someone joined (presence).
     await manager.broadcast(
         session_code,
         "PARTICIPANT_JOINED",
@@ -128,8 +208,8 @@ async def gd_live_socket(
             "user_id": user["id"],
             "name": user.get("name"),
             "role": user.get("role"),
-            "team_number": participant.get("team_number") if participant else None,
-            "label": participant.get("anonymous_label") if participant else None,
+            "team_number": state.participants.get(user["id"], {}).get("team_number"),
+            "label": state.participants.get(user["id"], {}).get("label"),
         },
     )
 
@@ -137,20 +217,54 @@ async def gd_live_socket(
         while True:
             data = await websocket.receive_json()
             event = data.get("event")
-            payload = data.get("payload", {})
-            if event in (
-                "MIC_TOGGLED",
-                "CAMERA_TOGGLED",
-                "HAND_RAISED",
-                "SPEAKER_CHANGED",
-                "CHAT_MESSAGE",
-            ):
-                # Attach sender identity and relay to the room
-                payload = dict(payload or {})
-                payload["user_id"] = user["id"]
-                payload["name"] = user.get("name")
-                payload["role"] = user.get("role")
-                await manager.broadcast(session_code, event, payload)
+            payload = data.get("payload", {}) or {}
+            if event not in _RELAY_EVENTS:
+                continue
+
+            is_admin = user.get("role") == "admin"
+            sender_id = user["id"]
+
+            if event == "RAISE_HAND":
+                p = state.participants.get(sender_id)
+                if p is not None:
+                    p["hand_raised"] = bool(payload.get("raised"))
+                await manager.broadcast(
+                    session_code,
+                    "HAND_RAISED",
+                    {"user_id": sender_id, "raised": bool(payload.get("raised"))},
+                )
+            elif event == "READY":
+                p = state.participants.get(sender_id)
+                if p is not None:
+                    p["ready"] = bool(payload.get("ready"))
+                await manager.broadcast(
+                    session_code,
+                    "READY_STATUS",
+                    {"user_id": sender_id, "ready": bool(payload.get("ready"))},
+                )
+            elif event == "CHAT_MESSAGE":
+                text = str(payload.get("text", "")).strip()
+                if not text:
+                    continue
+                await manager.broadcast(
+                    session_code,
+                    "CHAT_MESSAGE",
+                    {
+                        "user_id": sender_id,
+                        "name": user.get("name"),
+                        "label": state.participants.get(sender_id, {}).get("label"),
+                        "text": text[:1000],
+                    },
+                )
+            elif event in ("SET_SPEAKER", "NEXT_SPEAKER", "START_GD", "PAUSE_GD",
+                           "RESUME_GD", "END_GD", "NEXT_ROUND", "RESET_TIMER",
+                           "MUTE_PARTICIPANT", "REMOVE_PARTICIPANT"):
+                if not is_admin:
+                    await manager.send_personal(
+                        websocket, "ERROR", {"detail": "Admin only action"}
+                    )
+                    continue
+                await _handle_admin_event(manager, state, session_code, event, payload)
     except WebSocketDisconnect:
         pass
     except Exception as exc:
@@ -162,3 +276,64 @@ async def gd_live_socket(
             "PARTICIPANT_LEFT",
             {"user_id": user["id"], "name": user.get("name")},
         )
+
+
+async def _handle_admin_event(
+    mgr: GDLiveConnectionManager,
+    state: RoomState,
+    session_code: str,
+    event: str,
+    payload: dict,
+) -> None:
+    """Apply an admin-driven change to room state and broadcast it."""
+    if event == "SET_SPEAKER":
+        uid = int(payload.get("user_id")) if payload.get("user_id") is not None else None
+        state.speaker_user_id = uid
+        await mgr.broadcast(session_code, "SPEAKER_CHANGED", {"user_id": uid})
+    elif event == "NEXT_SPEAKER":
+        # Cycle to the next participant in the room.
+        ids = [uid for uid in state.participants if not state.participants[uid].get("muted")]
+        if ids:
+            try:
+                idx = ids.index(state.speaker_user_id)
+                nxt = ids[(idx + 1) % len(ids)]
+            except ValueError:
+                nxt = ids[0]
+            state.speaker_user_id = nxt
+            await mgr.broadcast(session_code, "SPEAKER_CHANGED", {"user_id": nxt})
+    elif event == "NEXT_ROUND":
+        state.round += 1
+        await mgr.broadcast(session_code, "ROUND_CHANGED", {"round": state.round})
+    elif event == "START_GD":
+        state.paused = False
+        await mgr.broadcast(session_code, "SESSION_RESUMED", {"status": "active"})
+    elif event == "PAUSE_GD":
+        state.paused = True
+        await mgr.broadcast(session_code, "SESSION_PAUSED", {"status": "paused"})
+    elif event == "RESUME_GD":
+        state.paused = False
+        await mgr.broadcast(session_code, "SESSION_RESUMED", {"status": "active"})
+    elif event == "RESET_TIMER":
+        await mgr.broadcast(
+            session_code,
+            "TIMER_UPDATED",
+            {"seconds": int(payload.get("seconds", 0)), "running": False},
+        )
+    elif event == "MUTE_PARTICIPANT":
+        uid = int(payload.get("user_id"))
+        p = state.participants.get(uid)
+        if p is not None:
+            p["muted"] = bool(payload.get("muted", True))
+            await mgr.broadcast(
+                session_code,
+                "PARTICIPANT_MUTED",
+                {"user_id": uid, "muted": bool(payload.get("muted", True))},
+            )
+    elif event == "REMOVE_PARTICIPANT":
+        uid = int(payload.get("user_id"))
+        state.participants.pop(uid, None)
+        await mgr.broadcast(session_code, "PARTICIPANT_REMOVED", {"user_id": uid})
+    elif event == "END_GD":
+        state.ended = True
+        await mgr.broadcast(session_code, "SESSION_ENDED", {"session_code": session_code})
+        mgr.drop_state(session_code)

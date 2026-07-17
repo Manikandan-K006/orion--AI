@@ -46,6 +46,124 @@ function StudentLiveWaiter({ code, token, onStart }: { code: string; token: stri
   return null;
 }
 
+/** Student-side polling fallback: if the WebSocket SESSION_STARTED event is
+ *  missed (e.g. reconnect), poll the live-state and redirect when the session
+ *  becomes "live". No manual refresh required. */
+function StudentLivePoller({ code, token, onStart }: { code: string; token: string; onStart: (topic: string | null, members: any[]) => void }) {
+  useEffect(() => {
+    let active = true;
+    const tick = async () => {
+      try {
+        const st = await getGdLiveState(code, token);
+        if (!active) return;
+        if (st.status === "live") {
+          onStart(st.topic ?? null, st.members || []);
+        }
+      } catch {
+        /* ignore transient errors */
+      }
+    };
+    tick();
+    const id = setInterval(tick, 2000);
+    return () => { active = false; clearInterval(id); };
+  }, [code, token, onStart]);
+  return null;
+}
+
+/** Inline admin control panel shown AFTER hosting — keeps the participant cards on
+ *  the page and adds realtime live controls + a live activity feed. No camera. */
+function GdLiveAdminPanel({ code, token, topic, onOpenRoom, onEnd }: {
+  code: string;
+  token: string;
+  topic: string;
+  onOpenRoom: () => void;
+  onEnd: (code: string) => void;
+}) {
+  const { connected, send, subscribe } = useGdLiveWs(code, token);
+  const [round, setRound] = useState(1);
+  const [paused, setPaused] = useState(false);
+  const [timerSeconds, setTimerSeconds] = useState(0);
+  const [timerRunning, setTimerRunning] = useState(false);
+  const [activity, setActivity] = useState<{ id: number; text: string; ts: number }[]>([]);
+  const idRef = useRef(1);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const push = (text: string) =>
+    setActivity((p) => [...p.slice(-60), { id: idRef.current++, text, ts: Date.now() }]);
+
+  useEffect(() => {
+    const unsub = subscribe((msg: GDLiveWsMessage) => {
+      switch (msg.event) {
+        case "ROUND_CHANGED": setRound(msg.payload?.round ?? round + 1); push(`Round ${msg.payload?.round ?? round + 1} started`); break;
+        case "TIMER_UPDATED": setTimerSeconds(msg.payload?.seconds ?? 0); setTimerRunning(!!msg.payload?.running); break;
+        case "SESSION_PAUSED": setPaused(true); setTimerRunning(false); push("Session paused"); break;
+        case "SESSION_RESUMED": setPaused(false); push("Session resumed"); break;
+        case "PARTICIPANT_JOINED": push(`${msg.payload?.name || "Participant"} joined`); break;
+        case "PARTICIPANT_LEFT": push(`${msg.payload?.name || "Participant"} left`); break;
+        case "HAND_RAISED": push(`${msg.payload?.name || "Someone"} raised hand`); break;
+        case "CHAT_MESSAGE": push(`${msg.payload?.name || "Participant"}: ${msg.payload?.text}`); break;
+        case "SESSION_ENDED": push("Session ended"); break;
+        default: break;
+      }
+    });
+    return unsub;
+  }, [subscribe, round]);
+
+  function startTimer(min: number) {
+    setTimerSeconds(min * 60); setTimerRunning(true);
+    if (timerRef.current) clearInterval(timerRef.current);
+    timerRef.current = setInterval(() => {
+      setTimerSeconds((s) => {
+        if (s <= 1) { if (timerRef.current) clearInterval(timerRef.current!); setTimerRunning(false); push("Time is up"); send("TIMER_UPDATED", { seconds: 0, running: false }); return 0; }
+        return s - 1;
+      });
+    }, 1000);
+    send("TIMER_UPDATED", { seconds: min * 60, running: true });
+  }
+
+  return (
+    <div className="mt-6 space-y-4">
+      <div className="flex items-center justify-between flex-wrap gap-3 card p-4">
+        <div className="flex items-center gap-3">
+          <span className="flex items-center gap-1.5 text-xs font-semibold text-red-500">
+            <span className={`w-2.5 h-2.5 rounded-full bg-red-500 ${paused ? "" : "animate-pulse"}`} /> {paused ? "PAUSED" : "LIVE"}
+          </span>
+          <span className="text-sm text-heading font-semibold">{topic || "—"}</span>
+          {timerRunning && <span className="text-sm font-mono text-heading">{Math.floor(timerSeconds / 60).toString().padStart(2, "0")}:{(timerSeconds % 60).toString().padStart(2, "0")}</span>}
+          <span className="text-xs text-muted-soft">Round {round}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-soft flex items-center gap-1"><span className={`w-2 h-2 rounded-full ${connected ? "bg-emerald-500" : "bg-red-500"}`} /> {connected ? "Realtime" : "Offline"}</span>
+          <button onClick={onOpenRoom} className="btn-secondary text-xs h-9 px-3">Open Discussion Room</button>
+        </div>
+      </div>
+
+      <div className="card p-4 flex flex-wrap gap-2 items-center">
+        <button onClick={() => startTimer(15)} disabled={timerRunning} className="btn-primary text-xs h-10 px-3">Start 15:00</button>
+        <button onClick={() => startTimer(10)} disabled={timerRunning} className="btn-secondary text-xs h-10 px-3">10:00</button>
+        <button onClick={() => send("RESET_TIMER", { seconds: 0 })} className="btn-secondary text-xs h-10 px-3">Reset Timer</button>
+        <button onClick={() => send("PAUSE_GD", {})} disabled={paused} className="btn-secondary text-xs h-10 px-3">Pause GD</button>
+        <button onClick={() => send("RESUME_GD", {})} disabled={!paused} className="btn-secondary text-xs h-10 px-3">Resume GD</button>
+        <button onClick={() => send("NEXT_ROUND", {})} className="btn-secondary text-xs h-10 px-3">Next Round</button>
+        <button onClick={() => send("NEXT_SPEAKER", {})} className="btn-secondary text-xs h-10 px-3">Next Speaker</button>
+        <button onClick={() => onEnd(code)} className="btn-secondary text-xs h-10 px-3 text-red-500 border-red-500/40">End GD</button>
+      </div>
+
+      <div className="card p-4">
+        <p className="text-xs uppercase tracking-wide text-muted-soft mb-2">Live Activity</p>
+        <div className="space-y-1.5 max-h-48 overflow-y-auto text-sm">
+          {activity.length === 0 && <p className="text-muted-soft text-xs">Waiting for activity…</p>}
+          {activity.map((a) => (
+            <div key={a.id} className="text-xs text-muted-soft">
+              <span className="opacity-60 mr-1">{new Date(a.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>{a.text}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Home() {
   const [token, setToken] = useState("");
   const [user, setUser] = useState<User | null>(null);
@@ -133,13 +251,13 @@ export default function Home() {
   const [gdLiveRoomCode, setGdLiveRoomCode] = useState("");
   const [gdLiveRoomTopic, setGdLiveRoomTopic] = useState("");
   const [gdLiveRoomMembers, setGdLiveRoomMembers] = useState<any[]>([]);
+  const [gdLiveRoomActive, setGdLiveRoomActive] = useState(false);
+  const [gdLiveIsLiveMeeting, setGdLiveIsLiveMeeting] = useState(false);
   const [roomMicOn, setRoomMicOn] = useState(true);
-  const [roomCamOn, setRoomCamOn] = useState(true);
+  const [roomCamOn, setRoomCamOn] = useState(false);
   const [roomHandRaised, setRoomHandRaised] = useState(false);
   const [roomTimerSeconds, setRoomTimerSeconds] = useState(0);
   const [roomTimerRunning, setRoomTimerRunning] = useState(false);
-  const localVideoRef = useRef<HTMLVideoElement | null>(null);
-  const roomStreamRef = useRef<MediaStream | null>(null);
   const roomTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
@@ -323,13 +441,19 @@ export default function Home() {
   }
 
   async function loadGdLiveTeamInfo(code: string) {
-    // Poll for team assignment + status (auto-starts prep when admin starts the session)
+    // Poll for team assignment + status. For a HOSTED (live) meeting we must NOT
+    // start the old prep/speak recording flow — the live discussion room is opened
+    // via the WebSocket / poller redirect. Only start prep for the classic team GD.
     const poll = setInterval(async () => {
       try {
         const team = await apiRequest<any>(`/gd-live/sessions/${code}/my-team`, {}, token);
         if (team && team.team_number) {
           setGdLiveMyTeam(team);
-          if (team.team_status === "active" && team.status !== "completed" && !gdLiveIsPrepPhase && !gdLiveIsSpeakingPhase) {
+          if (gdLiveIsLiveMeeting) {
+            clearInterval(poll);
+            return;
+          }
+          if (team.team_status === "active" && team.status !== "completed" && !gdLiveIsPrepPhase && !gdLiveIsSpeakingPhase && !gdLiveIsLiveMeeting) {
             clearInterval(poll);
             startGdLivePrep(team);
           }
@@ -344,6 +468,8 @@ export default function Home() {
   function startGdLivePrep(teamArg?: any) {
     const team = teamArg || gdLiveMyTeam;
     if (!team) { setMessage("Wait for team assignment first"); return; }
+    // Never start the prep/speak recording flow for a hosted (live) meeting.
+    if (gdLiveIsLiveMeeting) return;
     setGdLiveIsPrepPhase(true);
     setGdLivePrepSeconds(180);
     setIsSessionLocked(true);
@@ -417,56 +543,64 @@ export default function Home() {
   }
 
   // ─── Live GD Room helpers ───
-  async function startLocalCamera() {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-      roomStreamRef.current = stream;
-      if (localVideoRef.current) localVideoRef.current.srcObject = stream;
-      setRoomMicOn(stream.getAudioTracks().some((t) => t.enabled));
-      setRoomCamOn(stream.getVideoTracks().some((t) => t.enabled));
-    } catch {
-      setMessage("Camera/microphone permission denied. You can still join the room.");
-    }
-  }
-
-  function stopLocalCamera() {
-    if (roomStreamRef.current) {
-      roomStreamRef.current.getTracks().forEach((t) => t.stop());
-      roomStreamRef.current = null;
-    }
-    if (roomTimerRef.current) { clearInterval(roomTimerRef.current); roomTimerRef.current = null; }
+  function openGdLiveRoom() {
+    if (!gdLiveAdminViewCode) return;
+    setGdLiveRoomCode(gdLiveAdminViewCode);
+    setView("gd-live-room");
   }
 
   function enterGdLiveRoom(code: string, topic: string | null, members: any[]) {
     setGdLiveRoomCode(code);
     setGdLiveRoomTopic(topic || "");
     setGdLiveRoomMembers(members || []);
-    setView("gd-live-room");
+    setGdLiveIsLiveMeeting(true);
+    // For an admin host we stay on the participant page so the cards stay visible;
+    // students (and "Open Discussion Room") navigate into the room view.
+    if (user?.role !== "admin") {
+      setView("gd-live-room");
+    }
     setRoomTimerSeconds(0);
     setRoomTimerRunning(false);
-    startLocalCamera();
   }
 
   function leaveGdLiveRoom() {
-    stopLocalCamera();
-    setView("dashboard");
-    if (typeof loadGdLiveSessions === "function") loadGdLiveSessions();
+    setGdLiveIsLiveMeeting(false);
+    if (user?.role === "admin" && gdLiveRoomActive) {
+      setView("gd-live-admin-view");
+      if (gdLiveAdminViewCode) loadGdLiveParticipants(gdLiveAdminViewCode);
+    } else {
+      setView("dashboard");
+      if (typeof loadGdLiveSessions === "function") loadGdLiveSessions();
+    }
   }
 
   async function hostGdLiveRoom(sessionCode: string) {
     setLoading(true);
     try {
       const res = await hostGdLiveMeeting(sessionCode, token);
-      enterGdLiveRoom(res.session_code, res.topic, res.members);
+      // Keep the admin on the participant page: cards stay visible + live controls appear.
+      setGdLiveRoomActive(true);
+      setGdLiveIsLiveMeeting(true);
+      setGdLiveRoomTopic(res.topic || "");
+      setGdLiveRoomMembers(res.members || []);
+      await loadGdLiveParticipants(sessionCode); // refresh cards to live (assigned) state
+      setSuccess("Meeting is live. Participants are being redirected.");
     } catch (err: any) { setMessage(err.message); }
     finally { setLoading(false); }
   }
 
   async function endGdLiveRoom(sessionCode: string) {
     try { await endGdLiveMeeting(sessionCode, token); } catch {}
-    stopLocalCamera();
-    setView("dashboard");
-    loadGdLiveSessions();
+    setGdLiveRoomActive(false);
+    setGdLiveIsLiveMeeting(false);
+    if (user?.role === "admin") {
+      setView("gd-live-admin-view");
+      loadGdLiveParticipants(sessionCode);
+      loadGdLiveSessions();
+    } else {
+      setView("dashboard");
+      loadGdLiveSessions();
+    }
   }
 
   function startRoomTimer(minutes: number) {
@@ -1469,9 +1603,13 @@ export default function Home() {
                     <p className="text-sm text-muted-soft mt-1">Code <code className="font-mono text-amber-300">{gdLiveAdminViewCode}</code> · {gdLiveParticipants.length} participant(s)</p>
                   </div>
                   <div className="flex gap-2 items-center">
-                    {gdLiveParticipants.length >= 2 ? (
+                    {gdLiveIsLiveMeeting ? (
+                      <span className="flex items-center gap-1.5 text-xs font-semibold text-red-500 px-3 h-11 rounded-xl surface-2 border border-red-500/40">
+                        <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse" /> LIVE — Meeting in progress
+                      </span>
+                    ) : gdLiveParticipants.length >= 2 ? (
                       <Button onClick={() => hostGdLiveRoom(gdLiveAdminViewCode)} disabled={loading} className="btn-primary h-11 text-sm font-semibold">
-                        <Video className="w-4 h-4 mr-2" /> Host a Meeting
+                        <Radio className="w-4 h-4 mr-2" /> Host a Meeting
                       </Button>
                     ) : (
                       <span className="text-xs text-muted-soft flex items-center gap-1"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Waiting for participants...</span>
@@ -1523,6 +1661,16 @@ export default function Home() {
                     ))}
                   </div>
                 )}
+
+                {gdLiveRoomActive && (
+                  <GdLiveAdminPanel
+                    code={gdLiveAdminViewCode}
+                    token={token}
+                    topic={gdLiveRoomTopic}
+                    onOpenRoom={openGdLiveRoom}
+                    onEnd={endGdLiveRoom}
+                  />
+                )}
               </div>
             </div>
           )}
@@ -1538,6 +1686,11 @@ export default function Home() {
           {view === "gd-live-session" && gdLiveSession && (
             <div className="max-w-3xl mx-auto space-y-4">
               <StudentLiveWaiter
+                code={gdLiveSession.session_code}
+                token={token}
+                onStart={(topic, members) => enterGdLiveRoom(gdLiveSession.session_code, topic, members)}
+              />
+              <StudentLivePoller
                 code={gdLiveSession.session_code}
                 token={token}
                 onStart={(topic, members) => enterGdLiveRoom(gdLiveSession.session_code, topic, members)}
