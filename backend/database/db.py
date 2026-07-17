@@ -20,7 +20,7 @@ def _make_config() -> dict:
         "user": settings.mysql_user,
         "password": settings.mysql_password,
         "database": settings.mysql_database,
-        "autocommit": False,
+        "autocommit": True,
         "use_pure": True,
     }
     if settings.mysql_host not in ("localhost", "127.0.0.1"):

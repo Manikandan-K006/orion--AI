@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import GdLiveRoom from "@/components/GdLiveRoom";
 import { useGdLiveWs, GDLiveWsMessage } from "@/lib/useGdLiveWs";
-import { AllTimeAchiever, ComprehensiveLeaderboard, GDLiveEvaluation, GDLiveLeaderboardEntry, GDLiveTeamStatus, LeaderboardRanking, LeaderboardStats, Progress, SoloQuote, SoloStartResponse, SoloSubmitResponse, User, apiRequest, hostGdLiveMeeting, endGdLiveMeeting, getGdLiveState } from "@/lib/api";
+import { AllTimeAchiever, ComprehensiveLeaderboard, GDLiveLeaderboardEntry, LeaderboardRanking, LeaderboardStats, Progress, SoloQuote, SoloStartResponse, SoloSubmitResponse, User, apiRequest, hostGdLiveMeeting, endGdLiveMeeting, getGdLiveState } from "@/lib/api";
 
 function speak(text: string) {
   if (typeof window === "undefined" || !window.speechSynthesis) return;
@@ -231,7 +231,6 @@ export default function Home() {
   const [gdLiveCode, setGdLiveCode] = useState("");
   const [gdLiveJoined, setGdLiveJoined] = useState(false);
   const [gdLiveSession, setGdLiveSession] = useState<{ session_code: string; status: string; participant_count: number; team_count: number } | null>(null);
-  const [gdLiveMyTeam, setGdLiveMyTeam] = useState<{ team_number: number; topic: string; team_status: string; members: string[] } | null>(null);
   const [gdLiveSessions, setGdLiveSessions] = useState<any[]>([]);
   const [gdLiveParticipants, setGdLiveParticipants] = useState<any[]>([]);
   const [gdLiveCreatedCode, setGdLiveCreatedCode] = useState("");
@@ -294,6 +293,23 @@ export default function Home() {
       loadProfile(savedToken);
     }
   }, []);
+
+  // Keep the admin's participant list live: as students join/leave, the backend
+  // broadcasts PARTICIPANTS_UPDATED over the session WebSocket. Update the list
+  // in place so the admin never has to refresh or leave the page.
+  const { subscribe: subAdminParticipants } = useGdLiveWs(
+    view === "gd-live-admin-view" ? gdLiveAdminViewCode : null,
+    token
+  );
+  useEffect(() => {
+    if (view !== "gd-live-admin-view" || !gdLiveAdminViewCode) return;
+    const unsub = subAdminParticipants((msg: GDLiveWsMessage) => {
+      if (msg.event === "PARTICIPANTS_UPDATED" && Array.isArray(msg.payload?.participants)) {
+        setGdLiveParticipants(msg.payload.participants);
+      }
+    });
+    return unsub;
+  }, [subAdminParticipants, view, gdLiveAdminViewCode]);
 
   useEffect(() => {
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
@@ -1309,21 +1325,19 @@ export default function Home() {
                 </div>
                 {gdLiveJoined && (
                   <div className="mt-4 p-4 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-center">
-                    <Loader2 className="h-6 w-6 animate-spin mx-auto text-emerald-400 mb-2" />
-                    <p className="text-sm text-emerald-300">Joined! Waiting for admin to assign teams...</p>
-                    <p className="text-xs text-muted-soft mt-1">You will be placed in a team of 3. Your identity is hidden from other members.</p>
+                    <CheckCircle2 className="h-6 w-6 mx-auto text-emerald-400 mb-2" />
+                    <p className="text-sm text-emerald-300">Joined! Opening the session...</p>
+                    <p className="text-xs text-muted-soft mt-1">Your identity stays hidden from other participants.</p>
                   </div>
                 )}
               </div>
               <div className="card border-amber-500/30 p-6">
                 <h2 className="text-lg font-semibold text-heading mb-4 flex items-center gap-2"><Shield className="w-5 h-5 text-amber-400" /> Anonymous & Private</h2>
-                <ul className="space-y-3 text-sm text-body">
-                  <li className="flex items-start gap-2">✓ Your name and email are hidden from other participants</li>
-                  <li className="flex items-start gap-2">✓ Teams of 3 are formed randomly from all participants</li>
-                  <li className="flex items-start gap-2">✓ Each member is labeled as "Member 1", "Member 2", "Member 3"</li>
-                  <li className="flex items-start gap-2">✓ Each team gets a separate discussion topic</li>
-                  <li className="flex items-start gap-2">✓ Only admins can view your identity, department, and year</li>
-                    <li className="flex items-start gap-2">✓ Topics are basic opinion/debate subjects everyone can talk about</li>
+                  <ul className="space-y-3 text-sm text-body">
+                    <li className="flex items-start gap-2">✓ Your name and email are hidden from other participants</li>
+                    <li className="flex items-start gap-2">✓ Everyone joins one shared discussion hosted by your admin</li>
+                    <li className="flex items-start gap-2">✓ Only admins can view your identity, department, and year</li>
+                      <li className="flex items-start gap-2">✓ Topics are basic opinion/debate subjects everyone can talk about</li>
                   </ul>
                 </div>
               </div>
@@ -1361,11 +1375,6 @@ export default function Home() {
                       <p className="text-xs text-muted-soft">Status: {sess.status} · {sess.participant_count || 0} participants · {sess.team_count || 0} teams</p>
                     </div>
                     <div className="flex gap-2">
-                      {sess.status === "waiting" && sess.participant_count > 0 && (
-                        <Button onClick={() => startGdLiveMeeting(sess.session_code)} disabled={loading} className="bg-gradient-to-r from-emerald-500 to-green-600 border-0 text-xs">
-                          <Zap className="w-3 h-3 mr-1" /> Start Meeting
-                        </Button>
-                      )}
                       <Button onClick={() => { setGdLiveAdminViewCode(sess.session_code); loadGdLiveParticipants(sess.session_code); setView("gd-live-admin-view"); }} disabled={loading} variant="secondary" className="text-xs">
                         View
                       </Button>
