@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircle, Award, Clock, LogOut, MessageSquare, Mic, MicOff, Trophy, Users, Zap, Loader2, Copy, Check, Target, TrendingUp, ArrowUp, ArrowDown, Sparkles, Menu, X, Shield, Sun, Moon, RefreshCw, Video, VideoOff, Hand, MessageCircle, Maximize, PhoneOff, Radio, CheckCircle2 } from "lucide-react";
+import { AlertCircle, Award, Clock, LogOut, MessageSquare, Mic, MicOff, Trophy, Users, Zap, Loader2, Copy, Check, Target, TrendingUp, ArrowUp, ArrowDown, Sparkles, Menu, X, Shield, Sun, Moon, RefreshCw, Video, VideoOff, Hand, MessageCircle, Maximize, PhoneOff, Radio, CheckCircle2, Mail, Phone, Globe } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Bar, BarChart, CartesianGrid, Cell, Legend, PolarAngleAxis, PolarGrid, Radar, RadarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
@@ -853,7 +853,17 @@ export default function Home() {
   }
 
   return (
-    <div className={`min-h-screen flex items-center justify-center relative overflow-hidden ${theme === "dark" ? "dark" : ""}`} style={{ background: "var(--bg)" }}>
+    <div className={`min-h-screen flex items-center justify-center relative overflow-hidden ${theme === "dark" ? "dark" : ""}`}>
+        {/* Theme-based animated background */}
+        <div className="fixed inset-0 z-0">
+          <img
+            src={theme === "dark" ? "/login_dark_bg.jpeg" : "/new_light_BG.jpeg"}
+            alt=""
+            className="w-full h-full object-cover"
+          />
+          <div className="absolute inset-0 backdrop-blur-[2px]" style={{ background: theme === "dark" ? "rgba(15,23,42,0.45)" : "rgba(248,250,252,0.35)" }} />
+        </div>
+
         {/* Theme toggle */}
         <button onClick={toggleTheme} className="fixed top-4 right-4 z-20 p-2.5 rounded-xl btn-secondary">
           {theme === "dark" ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
@@ -937,15 +947,39 @@ export default function Home() {
               )}
             </div>
           </div>
+
+          {/* College contact footer */}
+          <div className="mt-6 text-center text-xs text-muted-soft space-y-1">
+            <p className="font-medium text-heading">Mount Zion College of Engineering and Technology</p>
+            <p>
+              <span className="inline-flex items-center gap-1"><Mail className="w-3.5 h-3.5" /> info@mzcet.in</span>
+              {"  ·  "}
+              <span className="inline-flex items-center gap-1"><Phone className="w-3.5 h-3.5" /> 04333 294400</span>
+              {"  ·  "}
+              <span className="inline-flex items-center gap-1"><Phone className="w-3.5 h-3.5" /> 73733 44444</span>
+
+            </p>
+            <p>
+              <span className="inline-flex items-center gap-1"><Globe className="w-3.5 h-3.5" /> www.mzcet.in</span>
+            </p>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className={`min-h-screen flex relative overflow-hidden ${theme === "dark" ? "dark" : ""}`} style={{ background: "var(--bg)" }}>
-      {/* Subtle app background accent (no image bleed) */}
-      <div className="fixed inset-0 pointer-events-none" style={{ background: "radial-gradient(1200px 600px at 80% -10%, rgba(139,92,246,0.10), transparent 60%), radial-gradient(900px 500px at -10% 110%, rgba(37,99,235,0.08), transparent 60%)" }} />
+    <div className={`min-h-screen flex relative overflow-hidden ${theme === "dark" ? "dark" : ""}`}>
+      {/* Theme-based animated background */}
+      <div className="fixed inset-0 z-0">
+        <img
+          src={theme === "dark" ? "/animated_gd_bg.jpeg" : "/gd_light_bg.jpeg"}
+          alt=""
+          className="w-full h-full object-cover"
+          style={theme === "dark" ? { animation: "ken-burns 30s ease-in-out infinite alternate" } : undefined}
+        />
+        <div className="absolute inset-0" style={{ background: theme === "dark" ? "rgba(15,23,42,0.72)" : "rgba(248,250,252,0.78)" }} />
+      </div>
 
       {/* Theme toggle */}
       <button onClick={toggleTheme} className="fixed top-4 right-4 z-50 p-2.5 rounded-xl btn-secondary" title="Toggle theme">
