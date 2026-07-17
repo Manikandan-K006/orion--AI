@@ -23,6 +23,8 @@ export default function GdLiveRoom({
   user,
   initialTopic,
   initialMembers,
+  showCountdown,
+  onCountdownDone,
   onLeave,
   onEnd,
 }: {
@@ -31,10 +33,13 @@ export default function GdLiveRoom({
   user: any;
   initialTopic: string;
   initialMembers: any[];
+  showCountdown?: boolean;
+  onCountdownDone?: () => void;
   onLeave: () => void;
   onEnd: (code: string) => void;
 }) {
   const { connected, send, subscribe } = useGdLiveWs(sessionCode, token);
+  const [countdown, setCountdown] = useState<number | null>(showCountdown ? 3 : null);
   const [topic, setTopic] = useState(initialTopic);
   const [members, setMembers] = useState<RoomParticipant[]>(
     (initialMembers || []).map((m: any) => ({
@@ -72,6 +77,25 @@ export default function GdLiveRoom({
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [activity]);
+
+  // Fast 3-2-1 "Discussion starting" overlay. The room (WS, listeners, timers,
+  // participant list) is already mounted and preloading underneath, so by the time
+  // the overlay clears everything is ready — the student perceives an instant entry.
+  useEffect(() => {
+    if (countdown === null) return;
+    if (countdown <= 0) {
+      const id = setTimeout(() => {
+        setCountdown(null);
+        onCountdownDone?.();
+        if (typeof performance !== "undefined") {
+          console.timeStamp?.("student:room-ready");
+        }
+      }, 450);
+      return () => clearTimeout(id);
+    }
+    const id = setTimeout(() => setCountdown((c) => (c === null ? c : c - 1)), 500);
+    return () => clearTimeout(id);
+  }, [countdown, onCountdownDone]);
 
   // WebSocket events
   useEffect(() => {
@@ -242,6 +266,17 @@ export default function GdLiveRoom({
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: "var(--bg)" }}>
+      {/* Countdown overlay — room is preloading underneath (WS, listeners, timers) */}
+      {countdown !== null && (
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center"
+             style={{ background: "var(--bg)", backdropFilter: "blur(2px)" }}>
+          <p className="text-sm text-muted-soft mb-4 tracking-wide uppercase">Discussion starting</p>
+          <div key={countdown} className="text-7xl font-extrabold text-amber-400 animate-ping-once">
+            {countdown > 0 ? countdown : "✓"}
+          </div>
+          <p className="text-xs text-muted-soft mt-6">Connecting you to the live room…</p>
+        </div>
+      )}
       {/* Top bar */}
       <header className="flex items-center justify-between px-4 md:px-6 py-3 surface border-b" style={{ borderColor: "var(--border)" }}>
         <div className="flex items-center gap-3 flex-wrap">

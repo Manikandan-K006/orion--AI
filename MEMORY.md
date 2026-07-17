@@ -25,6 +25,7 @@
   - Admin "Host a Meeting" → `hostGdLiveRoom` keeps admin on `gd-live-admin-view` (participant cards ALWAYS visible), sets `gdLiveRoomActive` and renders `<GdLiveAdminPanel>` (inline realtime controls + live activity + "Open Discussion Room"). Cards never disappear.
   - Student waiting (`gd-live-session`) renders `StudentLiveWaiter` (WS → redirect on `SESSION_STARTED`) AND `StudentLivePoller` (polls `/live-state`, redirects when `status==="live"`). Both call `enterGdLiveRoom` → `view="gd-live-room"`.
   - `enterGdLiveRoom` sets `gdLiveIsLiveMeeting=true`; guards `loadGdLiveTeamInfo`/`startGdLivePrep` so the OLD prep/speak recording flow does NOT hijack a hosted (live) meeting.
+  - **Startup perf (optimized):** `hostGdLiveRoom` does NOT call `loadGdLiveParticipants` on host — the `SESSION_STARTED` broadcast drives student clients; admin live controls show via `gdLiveRoomActive`. Students get a **3-2-1 "Discussion starting" countdown overlay** (`gdLiveShowCountdown` → `GdLiveRoom` mounts with `showCountdown`, preloads WS/listeners/timers underneath, then reveals). The indefinite `Loader2` student spinner was replaced with a **staged progress panel** (Connected ✓ / Waiting for team & topic / Enter room). Perf timings logged to console: `hostClickedToResponse` and `studentEntryToReady`.
   - Camera fully removed: no `startLocalCamera`/`stopLocalCamera`, no `getUserMedia(video)`, no `<video>`.
 
 ### Run

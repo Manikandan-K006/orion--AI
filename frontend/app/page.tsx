@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircle, Award, Clock, LogOut, MessageSquare, Mic, MicOff, Trophy, Users, Zap, Loader2, Copy, Check, Target, TrendingUp, ArrowUp, ArrowDown, Sparkles, Menu, X, Shield, Sun, Moon, RefreshCw, Video, VideoOff, Hand, MessageCircle, Maximize, PhoneOff, Radio } from "lucide-react";
+import { AlertCircle, Award, Clock, LogOut, MessageSquare, Mic, MicOff, Trophy, Users, Zap, Loader2, Copy, Check, Target, TrendingUp, ArrowUp, ArrowDown, Sparkles, Menu, X, Shield, Sun, Moon, RefreshCw, Video, VideoOff, Hand, MessageCircle, Maximize, PhoneOff, Radio, CheckCircle2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Bar, BarChart, CartesianGrid, Cell, Legend, PolarAngleAxis, PolarGrid, Radar, RadarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
@@ -253,6 +253,8 @@ export default function Home() {
   const [gdLiveRoomMembers, setGdLiveRoomMembers] = useState<any[]>([]);
   const [gdLiveRoomActive, setGdLiveRoomActive] = useState(false);
   const [gdLiveIsLiveMeeting, setGdLiveIsLiveMeeting] = useState(false);
+  const [gdLiveShowCountdown, setGdLiveShowCountdown] = useState(false);
+  const [gdLivePerf, setGdLivePerf] = useState<Record<string, number>>({});
   const [roomMicOn, setRoomMicOn] = useState(true);
   const [roomCamOn, setRoomCamOn] = useState(false);
   const [roomHandRaised, setRoomHandRaised] = useState(false);
@@ -550,6 +552,9 @@ export default function Home() {
   }
 
   function enterGdLiveRoom(code: string, topic: string | null, members: any[]) {
+    const t0 = performance.now();
+    setGdLivePerf((p) => ({ ...p, studentReceivedStart: t0 }));
+    console.timeStamp?.("student:enterGdLiveRoom");
     setGdLiveRoomCode(code);
     setGdLiveRoomTopic(topic || "");
     setGdLiveRoomMembers(members || []);
@@ -557,6 +562,8 @@ export default function Home() {
     // For an admin host we stay on the participant page so the cards stay visible;
     // students (and "Open Discussion Room") navigate into the room view.
     if (user?.role !== "admin") {
+      // Show a fast 3-2-1 overlay while the room (WS, timers, listeners) preloads.
+      setGdLiveShowCountdown(true);
       setView("gd-live-room");
     }
     setRoomTimerSeconds(0);
@@ -576,14 +583,19 @@ export default function Home() {
 
   async function hostGdLiveRoom(sessionCode: string) {
     setLoading(true);
+    const t0 = performance.now();
     try {
       const res = await hostGdLiveMeeting(sessionCode, token);
+      setGdLivePerf((p) => ({ ...p, hostClickedToResponse: performance.now() - t0 }));
+      console.timeStamp?.("admin:hostGdLiveRoom:response");
       // Keep the admin on the participant page: cards stay visible + live controls appear.
+      // Do NOT reload participants here — the broadcast (SESSION_STARTED) drives clients,
+      // and the admin's live controls are shown via gdLiveRoomActive. This keeps the host
+      // click→student-screen path under 1s.
       setGdLiveRoomActive(true);
       setGdLiveIsLiveMeeting(true);
       setGdLiveRoomTopic(res.topic || "");
       setGdLiveRoomMembers(res.members || []);
-      await loadGdLiveParticipants(sessionCode); // refresh cards to live (assigned) state
       setSuccess("Meeting is live. Participants are being redirected.");
     } catch (err: any) { setMessage(err.message); }
     finally { setLoading(false); }
@@ -824,6 +836,16 @@ export default function Home() {
         user={user}
         initialTopic={gdLiveRoomTopic}
         initialMembers={gdLiveRoomMembers}
+        showCountdown={gdLiveShowCountdown}
+        onCountdownDone={() => {
+          setGdLiveShowCountdown(false);
+          setGdLivePerf((p) => {
+            const entryToReady = p.studentReceivedStart ? performance.now() - p.studentReceivedStart : 0;
+            console.log("[GD-Live perf] host→response(ms):", Math.round(p.hostClickedToResponse || 0),
+              "| student entry→room-ready(ms):", Math.round(entryToReady));
+            return { ...p, studentEntryToReady: entryToReady };
+          });
+        }}
         onLeave={leaveGdLiveRoom}
         onEnd={endGdLiveRoom}
       />
@@ -1696,12 +1718,25 @@ export default function Home() {
                 onStart={(topic, members) => enterGdLiveRoom(gdLiveSession.session_code, topic, members)}
               />
               <div className="card p-6">
-                {/* Team not yet assigned */}
+                {/* Team not yet assigned — staged progress so the wait never feels indefinite */}
                 {!gdLiveMyTeam && (
-                  <div className="text-center py-8">
-                    <Loader2 className="h-8 w-8 animate-spin mx-auto text-amber-400 mb-3" />
-                    <p className="text-heading font-medium">Joined session <code className="text-amber-300 font-mono">{gdLiveSession.session_code}</code></p>
-                    <p className="text-sm text-muted-soft mt-1">Waiting for admin to start the meeting...</p>
+                  <div className="py-8">
+                    <p className="text-heading font-medium text-center mb-5">Joined session <code className="text-amber-300 font-mono">{gdLiveSession.session_code}</code></p>
+                    <ul className="max-w-md mx-auto space-y-3">
+                      <li className="flex items-center gap-3">
+                        <CheckCircle2 className="h-5 w-5 text-emerald-400" />
+                        <span className="text-sm text-heading">Connected to session</span>
+                      </li>
+                      <li className="flex items-center gap-3">
+                        <Loader2 className="h-5 w-5 animate-spin text-amber-400" />
+                        <span className="text-sm text-muted-soft">Waiting for admin to assign your team &amp; topic…</span>
+                      </li>
+                      <li className="flex items-center gap-3 opacity-50">
+                        <span className="h-5 w-5 rounded-full border border-dashed border-muted-soft flex items-center justify-center text-xs">3</span>
+                        <span className="text-sm text-muted-soft">Enter the live discussion room</span>
+                      </li>
+                    </ul>
+                    <p className="text-xs text-muted-soft text-center mt-5">The discussion room opens automatically the moment the host starts — no refresh needed.</p>
                   </div>
                 )}
 
