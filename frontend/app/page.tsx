@@ -436,110 +436,6 @@ export default function Home() {
       setGdLiveSession({ session_code: code, status: "waiting", participant_count: 0, team_count: 0 });
       setSuccess("Joined GD Live session!");
       setView("gd-live-session");
-      // Load team / topic immediately
-      await loadGdLiveTeamInfo(code);
-    } catch (err: any) { setMessage(err.message); }
-    finally { setLoading(false); }
-  }
-
-  async function loadGdLiveTeamInfo(code: string) {
-    // Poll for team assignment + status. For a HOSTED (live) meeting we must NOT
-    // start the old prep/speak recording flow — the live discussion room is opened
-    // via the WebSocket / poller redirect. Only start prep for the classic team GD.
-    const poll = setInterval(async () => {
-      try {
-        const team = await apiRequest<any>(`/gd-live/sessions/${code}/my-team`, {}, token);
-        if (team && team.team_number) {
-          setGdLiveMyTeam(team);
-          if (gdLiveIsLiveMeeting) {
-            clearInterval(poll);
-            return;
-          }
-          if (team.team_status === "active" && team.status !== "completed" && !gdLiveIsPrepPhase && !gdLiveIsSpeakingPhase && !gdLiveIsLiveMeeting) {
-            clearInterval(poll);
-            startGdLivePrep(team);
-          }
-          if (team.team_status === "completed" || team.status === "completed") {
-            clearInterval(poll);
-          }
-        }
-      } catch {}
-    }, 2000);
-  }
-
-  function startGdLivePrep(teamArg?: any) {
-    const team = teamArg || gdLiveMyTeam;
-    if (!team) { setMessage("Wait for team assignment first"); return; }
-    // Never start the prep/speak recording flow for a hosted (live) meeting.
-    if (gdLiveIsLiveMeeting) return;
-    setGdLiveIsPrepPhase(true);
-    setGdLivePrepSeconds(180);
-    setIsSessionLocked(true);
-    setTranscript("");
-    setGdLiveIsSpeakingPhase(false);
-    setSuccess("You have 3 minutes to prepare. Think about the topic and organize your thoughts.");
-    speak("You have 3 minutes to prepare. Think about the topic and organize your thoughts.");
-    if (timerRef.current) clearInterval(timerRef.current);
-    timerRef.current = setInterval(() => {
-      setGdLivePrepSeconds(prev => {
-        if (prev <= 1) {
-          clearInterval(timerRef.current!);
-          setGdLiveIsPrepPhase(false);
-          setGdLiveIsSpeakingPhase(true);
-          setGdLiveSpeakSeconds(600);
-          setSuccess("Preparation time over! Start speaking now. You have 10 minutes (finish early anytime).");
-          speak("Preparation time over. Start speaking now. You have 10 minutes.");
-          // Speaking countdown
-          if (timerRef.current) clearInterval(timerRef.current);
-          timerRef.current = setInterval(() => {
-            setGdLiveSpeakSeconds(s => {
-              if (s <= 1) {
-                clearInterval(timerRef.current!);
-                if (transcript.trim()) { submitGdLiveAndEvaluate(); }
-                else { setSuccess("Time is up. Please submit your speech."); }
-                return 0;
-              }
-              return s - 1;
-            });
-          }, 1000);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-  }
-
-  async function assignGdLiveTeams(sessionCode: string) {
-    setLoading(true);
-    try {
-      const res = await apiRequest<{ teams: any[]; message: string }>(`/gd-live/sessions/${sessionCode}/assign-teams`, { method: "POST" }, token);
-      setSuccess(res.message);
-      await loadGdLiveSessions();
-      await loadGdLiveParticipants(sessionCode);
-    } catch (err: any) { setMessage(err.message); }
-    finally { setLoading(false); }
-  }
-
-  async function startGdLiveAll(sessionCode: string) {
-    setLoading(true);
-    try {
-      const res = await apiRequest<{ message: string; teams: any[]; prep_seconds: number; speak_seconds: number }>(
-        `/gd-live/sessions/${sessionCode}/start-all`, { method: "POST" }, token);
-      setSuccess(res.message);
-      await loadGdLiveSessions();
-      await loadGdLiveParticipants(sessionCode);
-    } catch (err: any) { setMessage(err.message); }
-    finally { setLoading(false); }
-  }
-
-  async function startGdLiveMeeting(sessionCode: string) {
-    setLoading(true);
-    try {
-      const res = await apiRequest<{ message: string; teams: any[]; prep_seconds: number; speak_seconds: number }>(
-        `/gd-live/sessions/${sessionCode}/start-meeting`, { method: "POST" }, token);
-      setSuccess(res.message);
-      await loadGdLiveSessions();
-      await loadGdLiveParticipants(sessionCode);
     } catch (err: any) { setMessage(err.message); }
     finally { setLoading(false); }
   }
@@ -1738,9 +1634,9 @@ export default function Home() {
             </div>
           )}
 
-          {/* ─── GD Live Session (Anonymous Team) ─── */}
+          {/* ─── GD Live Session (Waiting for Host) ─── */}
           {view === "gd-live-session" && gdLiveSession && (
-            <div className="max-w-3xl mx-auto space-y-4">
+            <div className="max-w-3xl mx-auto">
               <StudentLiveWaiter
                 code={gdLiveSession.session_code}
                 token={token}
@@ -1751,134 +1647,21 @@ export default function Home() {
                 token={token}
                 onStart={(topic, members) => enterGdLiveRoom(gdLiveSession.session_code, topic, members)}
               />
-              <div className="card p-6">
-                {/* Team not yet assigned — staged progress so the wait never feels indefinite */}
-                {!gdLiveMyTeam && (
-                  <div className="py-8">
-                    <p className="text-heading font-medium text-center mb-5">Joined session <code className="text-amber-300 font-mono">{gdLiveSession.session_code}</code></p>
-                    <ul className="max-w-md mx-auto space-y-3">
-                      <li className="flex items-center gap-3">
-                        <CheckCircle2 className="h-5 w-5 text-emerald-400" />
-                        <span className="text-sm text-heading">Connected to session</span>
-                      </li>
-                      <li className="flex items-center gap-3">
-                        <Loader2 className="h-5 w-5 animate-spin text-amber-400" />
-                        <span className="text-sm text-muted-soft">Waiting for admin to assign your team &amp; topic…</span>
-                      </li>
-                      <li className="flex items-center gap-3 opacity-50">
-                        <span className="h-5 w-5 rounded-full border border-dashed border-muted-soft flex items-center justify-center text-xs">3</span>
-                        <span className="text-sm text-muted-soft">Enter the live discussion room</span>
-                      </li>
-                    </ul>
-                    <p className="text-xs text-muted-soft text-center mt-5">The discussion room opens automatically the moment the host starts — no refresh needed.</p>
-                  </div>
-                )}
-
-                {/* Team assigned - show room */}
-                {gdLiveMyTeam && (
-                  <>
-                    {/* Topic + Team Info */}
-                    <div className="flex items-center justify-between mb-4">
-                      <div>
-                        <h2 className="text-xl font-bold text-heading">{gdLiveMyTeam.topic}</h2>
-                        <p className="text-sm text-muted-soft">Team #{gdLiveMyTeam.team_number} · Session Code: {gdLiveSession.session_code}</p>
-                      </div>
-                      <span className={`text-xs px-2 py-1 rounded-full ${gdLiveMyTeam.team_status === "active" ? "bg-emerald-500/20 text-emerald-300" : gdLiveMyTeam.team_status === "completed" ? "bg-blue-500/20 text-blue-300" : "bg-amber-500/20 text-amber-300"}`}>
-                        {gdLiveMyTeam.team_status === "active" ? "Live" : gdLiveMyTeam.team_status === "completed" ? "Done" : "Waiting"}
-                      </span>
-                    </div>
-
-                    <div className="mb-4 p-4 rounded-lg bg-gradient-to-r from-amber-500/20 to-orange-600/20 border border-amber-500/30">
-                      <p className="text-xs text-amber-300/80 mb-2">Your Team (Identities Hidden)</p>
-                      <div className="flex flex-wrap gap-2">
-                        {gdLiveMyTeam.members.map((m: string, idx: number) => (
-                          <span key={idx} className="text-sm surface-2 text-heading px-4 py-2 rounded-full border font-medium">{m}</span>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Phase: Waiting for team start */}
-                    {gdLiveMyTeam.team_status === "waiting" && !gdLiveIsPrepPhase && !gdLiveIsSpeakingPhase && (
-                      <div className="text-center py-6">
-                        <Loader2 className="h-6 w-6 animate-spin mx-auto text-amber-400 mb-2" />
-                        <p className="text-heading font-medium">Waiting for admin to start your team's discussion...</p>
-                        <p className="text-xs text-muted-soft mt-1">The admin will initiate the discussion when ready.</p>
-                      </div>
-                    )}
-
-                    {/* Phase: Ready to prepare (team is active, prep about to start automatically) */}
-                    {gdLiveMyTeam.team_status === "active" && !gdLiveIsPrepPhase && !gdLiveIsSpeakingPhase && !gdLiveMyResult && (
-                      <div className="text-center py-6">
-                        <Loader2 className="h-6 w-6 animate-spin mx-auto text-amber-400 mb-2" />
-                        <p className="text-heading font-medium">Your team discussion is live!</p>
-                        <p className="text-sm text-muted-soft mt-1">Preparation will start automatically. Get ready — 3 minutes to think, then 10 minutes to speak.</p>
-                      </div>
-                    )}
-
-                    {/* Phase: Preparation (3 min countdown) */}
-                    {gdLiveIsPrepPhase && (
-                      <div className="text-center py-6">
-                        <div className="relative inline-flex items-center justify-center mb-4">
-                          <svg className="w-24 h-24 -rotate-90" viewBox="0 0 100 100">
-                            <circle cx="50" cy="50" r="45" fill="none" stroke="var(--border-strong)" strokeWidth="6" />
-                            <circle cx="50" cy="50" r="45" fill="none" stroke="#f59e0b" strokeWidth="6"
-                              strokeDasharray={`${2 * Math.PI * 45}`}
-                              strokeDashoffset={`${2 * Math.PI * 45 * (1 - gdLivePrepSeconds / 180)}`}
-                              strokeLinecap="round" className="transition-all duration-1000" />
-                          </svg>
-                          <span className="absolute text-3xl font-bold text-amber-400">{formatTime(gdLivePrepSeconds)}</span>
-                        </div>
-                        <p className="text-heading font-medium">Preparation Phase</p>
-                        <p className="text-sm text-muted-soft mt-1">Think about the topic and organize your thoughts. Speaking starts automatically after the timer.</p>
-                      </div>
-                    )}
-
-                    {/* Phase: Speaking */}
-                    {gdLiveIsSpeakingPhase && (
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-between gap-3 mb-2">
-                          <span className="text-sm font-medium text-emerald-400 flex items-center gap-1"><Mic className="w-4 h-4" /> Speaking Phase</span>
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs text-muted-soft font-mono">{formatTime(gdLiveSpeakSeconds)} left</span>
-                            <Button onClick={submitGdLiveAndEvaluate} disabled={loading || !transcript.trim()} variant="secondary" className="text-xs">
-                              Finish early
-                            </Button>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Button onClick={toggleRecording} className={`border-0 ${isRecording ? "bg-red-500 hover:bg-red-600" : "bg-gradient-to-r from-amber-500 to-orange-600"}`}>
-                            {isRecording ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />} {isRecording ? "Stop" : "Record"}
-                          </Button>
-                          {recordingStatus && <span className="text-xs text-muted-soft">{recordingStatus}</span>}
-                        </div>
-                        {liveDetectedText && <p className="text-xs text-emerald-300 bg-emerald-500/10 p-2 rounded"><span className="font-medium">Detected:</span> {liveDetectedText}</p>}
-                        <Textarea placeholder="Type or record your speech here..." value={transcript}
-                          onChange={(e) => setTranscript(e.target.value)}
-                          className="inp min-h-[120px]" />
-                        <div className="flex justify-between items-center">
-                          <span className="text-xs text-muted-soft">{transcript.trim().split(/\s+/).filter(Boolean).length} words</span>
-                          <Button onClick={submitGdLiveAndEvaluate} disabled={loading || !transcript.trim()}
-                            className="bg-gradient-to-r from-amber-500 to-orange-600 border-0">
-                            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Award className="h-4 w-4" />} Submit & Evaluate
-                          </Button>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Phase: Waiting for team after submission */}
-                    {!gdLiveIsPrepPhase && !gdLiveIsSpeakingPhase && gdLiveMyTeam.team_status === "active" && gdLiveMyResult && !gdLiveTeamStatus?.all_completed && (
-                      <div className="text-center py-6">
-                        <Loader2 className="h-6 w-6 animate-spin mx-auto text-amber-400 mb-2" />
-                        <p className="text-heading font-medium">You're done! Waiting for team members...</p>
-                        {gdLiveTeamStatus && (
-                          <p className="text-sm text-muted-soft mt-1">
-                            {gdLiveTeamStatus.members_done} of {gdLiveTeamStatus.members_total} members completed
-                          </p>
-                        )}
-                      </div>
-                    )}
-                  </>
-                )}
+              <div className="card p-6 text-center py-12">
+                <div className="icon-badge icon-purple mx-auto mb-5" style={{ width: "72px", height: "72px" }}>
+                  <Radio className="w-10 h-10" />
+                </div>
+                <h2 className="text-2xl font-bold text-heading mb-2">Connected to GD Session</h2>
+                <p className="text-sm text-muted-soft mb-6">
+                  Session <code className="text-amber-300 font-mono">{gdLiveSession.session_code}</code>
+                </p>
+                <div className="flex items-center justify-center gap-3 text-muted-soft">
+                  <Loader2 className="h-5 w-5 animate-spin text-amber-400" />
+                  <span className="text-base">Waiting for Host to Start Discussion...</span>
+                </div>
+                <p className="text-xs text-muted-soft mt-6">
+                  The discussion room opens automatically the moment the host starts — no refresh needed.
+                </p>
               </div>
             </div>
           )}

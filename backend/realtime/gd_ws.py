@@ -45,6 +45,26 @@ def _participant_snapshot(connection: MySQLConnection, session_code: str) -> lis
     return queries.get_live_participants(connection, session_code)
 
 
+def broadcast_participants(session_code: str) -> None:
+    """Fetch the live participant list and push it to every connected client in the
+    room so the admin's participant view updates instantly as students join/leave —
+    no refresh or re-fetch required."""
+    try:
+        conn = get_connection()
+        try:
+            participants = queries.get_live_participants(conn, session_code)
+        finally:
+            _return(conn)
+    except Exception as exc:
+        logger.warning("broadcast_participants failed: %s", exc)
+        return
+    # Run inside the event loop's broadcast (caller already in async context).
+    asyncio.run_coroutine_threadsafe(
+        manager.broadcast(session_code, "PARTICIPANTS_UPDATED", {"participants": participants}),
+        asyncio.get_event_loop(),
+    )
+
+
 class RoomState:
     """Transient, in-memory state for one live session room."""
 
@@ -203,7 +223,8 @@ async def gd_live_socket(
     # Send a full snapshot to the just-connected client.
     await manager.send_personal(websocket, "STATE_SYNC", state.snapshot())
 
-    # Tell the room someone joined (presence).
+    # Tell the room someone joined (presence) and push the fresh participant
+    # list so the admin's view updates instantly (no refresh).
     await manager.broadcast(
         session_code,
         "PARTICIPANT_JOINED",
@@ -215,6 +236,7 @@ async def gd_live_socket(
             "label": state.participants.get(user["id"], {}).get("label"),
         },
     )
+    broadcast_participants(session_code)
 
     try:
         while True:
@@ -279,6 +301,7 @@ async def gd_live_socket(
             "PARTICIPANT_LEFT",
             {"user_id": user["id"], "name": user.get("name")},
         )
+        broadcast_participants(session_code)
 
 
 async def _handle_admin_event(
