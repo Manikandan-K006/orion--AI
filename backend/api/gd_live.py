@@ -215,6 +215,10 @@ async def host_gd_live_meeting(
     if current_user.get("role") != "admin":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only admins can host meetings")
 
+    import time as _t
+    _m = {"_last": _t.time()}
+    def _mark(k): _m[k] = _t.time()
+    _mark("start")
     session = queries.get_live_session_by_code(connection, session_code)
     if not session:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
@@ -222,12 +226,14 @@ async def host_gd_live_meeting(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Session already completed")
 
     participants = queries.get_live_participants(connection, session_code)
+    _mark("get_participants")
     if len(participants) < 2:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Need at least 2 participants to host")
 
     # The single team + topic were pre-assigned at session creation, so the host
     # action only needs to read them (fast) and then broadcast immediately.
     topic = queries.get_live_team_topic(connection, session_code)
+    _mark("get_topic")
     members = [{"user_id": p["user_id"], "name": p["name"], "label": p["anonymous_label"],
                 "department": p.get("department"), "year": p.get("year"), "status": p["status"]}
                for p in participants]
@@ -260,6 +266,7 @@ async def host_gd_live_meeting(
         "members": members,
         "state": state.snapshot(),
     })
+    _mark("broadcast")
 
     # Persist live status (non-blocking for the redirect; late joiners poll live-state).
     queries.execute(connection,
@@ -270,8 +277,11 @@ async def host_gd_live_meeting(
         (session_code,))
     queries.set_live_session_status(connection, session_code, "live")
 
-    return {"message": "Meeting is live", "session_code": session_code, "topic": topic,
-            "members": members, "state": state.snapshot()}
+    _m["_end"] = _t.time()
+    _profile = {k: round((_m[k] - _m["start"]) * 1000, 1) for k in _m if k not in ("start", "_last", "_end")}
+    _profile["_total_endpoint"] = round((_m["_end"] - _m["start"]) * 1000, 1)
+    return {"message": "Meeting is live", "session_code": session_code, "topic": topic, "members": members, "state": state.snapshot(), "_profile": _profile}
+
 
 
 @router.get("/sessions/{session_code}/live-state")

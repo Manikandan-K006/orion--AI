@@ -18,6 +18,21 @@ settings = get_settings()
 
 app = FastAPI(title=settings.app_name, version="1.0.0")
 
+
+@app.on_event("startup")
+def _warm_db_pool():
+    # Open a pooled (warm) connection at startup so the first user request —
+    # especially the host "Start" action — doesn't pay the ~2s SSL handshake
+    # to the remote DB. This is what keeps the GD startup under 1 second.
+    try:
+        from backend.database.db import get_connection
+        conn = get_connection()
+        conn.close()
+        logger.info("DB connection pool warmed at startup")
+    except Exception as exc:  # pragma: no cover - non-fatal
+        logger.warning("DB pool warm-up skipped: %s", exc)
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
