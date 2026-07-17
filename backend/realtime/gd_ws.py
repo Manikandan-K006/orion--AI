@@ -38,7 +38,7 @@ def _auth_user(token: str | None) -> dict | None:
     try:
         return queries.get_user_by_id(connection, user_id)
     finally:
-        connection.close()
+        _return(connection)
 
 
 def _participant_snapshot(connection: MySQLConnection, session_code: str) -> list[dict]:
@@ -206,7 +206,7 @@ async def gd_live_socket(
         logger.warning("WS state build error: %s", repr(_exc))
         session, topic, participants = None, None, []
     finally:
-        connection.close()
+        _return(connection)
 
     state = manager.ensure_state(session_code, topic)
     state.ended = bool(session and session["status"] == "completed")
