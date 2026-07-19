@@ -24,7 +24,7 @@ from mysql.connector import MySQLConnection
 
 from backend.database import queries
 from backend.database.db import _return, get_connection, get_db
-from backend.ai.evaluation import evaluate_transcript
+from backend.ai.evaluation import evaluate_transcript_parallel, evaluate_transcript
 from backend.security import decode_token
 
 logger = logging.getLogger("speaksense.realtime")
@@ -68,49 +68,56 @@ async def broadcast_participants(session_code: str) -> None:
     await manager.broadcast(session_code, "PARTICIPANTS_UPDATED", {"participants": participants})
 
 
+def _compute_scores_sync(evaluation) -> dict:
+    """Shared score computation — mirrors gd_live.py _compute_scores."""
+    relevance = min(100, evaluation.grammar_score * 0.3 + evaluation.fluency_score * 0.3 + evaluation.confidence_score * 0.4)
+    quality = min(100, evaluation.vocabulary_score * 0.5 + evaluation.overall_score * 0.5)
+    accent = evaluation.pronunciation_score
+    overall = round((evaluation.grammar_score + evaluation.fluency_score + accent + relevance + quality) / 5, 2)
+    points = round(overall * 0.5, 2)
+    weaknesses = []
+    tips = []
+    if evaluation.grammar_score < 70:
+        weaknesses.append("Grammar needs improvement")
+        tips.append("Practice sentence construction and verb tenses")
+    if evaluation.fluency_score < 70:
+        weaknesses.append("Fluency needs improvement")
+        tips.append("Speak slowly and use filler words naturally")
+    if evaluation.pronunciation_score < 70:
+        weaknesses.append("Pronunciation needs improvement")
+        tips.append("Practice difficult words and tongue twisters")
+    if evaluation.confidence_score < 70:
+        weaknesses.append("Confidence needs improvement")
+        tips.append("Maintain steady pace and practice eye contact")
+    if evaluation.vocabulary_score < 70:
+        weaknesses.append("Vocabulary needs improvement")
+        tips.append("Read widely and learn new words daily")
+    if not weaknesses:
+        weaknesses.append("Great overall performance!")
+        tips.append("Keep up the good work and challenge yourself with harder topics")
+    return {
+        "overall": overall, "points": points,
+        "fluency": evaluation.fluency_score, "grammar": evaluation.grammar_score,
+        "accent": accent, "relevance": relevance, "quality": quality,
+        "weaknesses": "; ".join(weaknesses),
+        "tips": "; ".join(tips),
+    }
+
+
 def _save_evaluation_db(session_code: str, user_id: int, team_number: int, transcript: str) -> None:
-    """Run AI evaluation and persist to DB. Called in a thread to avoid blocking the event loop."""
+    """Run AI evaluation (parallel) and persist to DB. Called in a thread to avoid blocking."""
     connection = get_connection()
     try:
-        participant = queries.fetch_one(connection,
-            "SELECT id, team_number FROM gd_live_participants WHERE session_code = %s AND user_id = %s",
-            (session_code, user_id))
-        if not participant:
-            logger.warning("_save_evaluation_db: participant not found uid=%s code=%s", user_id, session_code)
-            return
+        from backend.ai.evaluation import evaluate_transcript
         result = evaluate_transcript(transcript)
-        relevance_score = min(100, result.grammar_score * 0.3 + result.fluency_score * 0.3 + result.confidence_score * 0.4)
-        content_quality = min(100, result.vocabulary_score * 0.5 + result.overall_score * 0.5)
-        accent_score = result.pronunciation_score
-        overall = round((result.grammar_score + result.fluency_score + accent_score + relevance_score + content_quality) / 5, 2)
-        points = round(overall * 0.5, 2)
-        weaknesses = []
-        tips = []
-        if result.grammar_score < 70:
-            weaknesses.append("Grammar needs improvement")
-            tips.append("Practice sentence construction and verb tenses")
-        if result.fluency_score < 70:
-            weaknesses.append("Fluency needs improvement")
-            tips.append("Speak slowly and use filler words naturally")
-        if result.pronunciation_score < 70:
-            weaknesses.append("Pronunciation needs improvement")
-            tips.append("Practice difficult words and tongue twisters")
-        if result.confidence_score < 70:
-            weaknesses.append("Confidence needs improvement")
-            tips.append("Maintain steady pace and practice eye contact")
-        if result.vocabulary_score < 70:
-            weaknesses.append("Vocabulary needs improvement")
-            tips.append("Read widely and learn new words daily")
-        if not weaknesses:
-            weaknesses.append("Great overall performance!")
-            tips.append("Keep up the good work and challenge yourself with harder topics")
+        scores = _compute_scores_sync(result)
         queries.save_live_evaluation(
             connection, session_code, user_id, team_number, transcript,
-            overall, result.fluency_score, result.grammar_score,
-            accent_score, relevance_score, content_quality, points,
-            "; ".join(weaknesses), "; ".join(tips),
+            scores["overall"], scores["fluency"], scores["grammar"],
+            scores["accent"], scores["relevance"], scores["quality"],
+            scores["points"], scores["weaknesses"], scores["tips"],
         )
-        logger.info("Evaluation saved uid=%s code=%s team=%s score=%s", user_id, session_code, team_number, overall)
+        logger.info("Evaluation saved uid=%s code=%s team=%s score=%s", user_id, session_code, team_number, scores["overall"])
     except Exception as exc:
         logger.warning("_save_evaluation_db failed: %s", exc)
     finally:
@@ -421,6 +428,11 @@ async def gd_live_socket(
                     ts.finished_user_ids.add(user_id)
                     if len(ts.finished_user_ids) >= len(ts.members):
                         ts.all_finished = True
+                    # Evaluate transcript in background if not already done via HTTP upload
+                    if user_id not in ts.evaluations and user_id in ts.transcripts:
+                        transcript = ts.transcripts[user_id]
+                        loop = asyncio.get_running_loop()
+                        loop.run_in_executor(None, _save_evaluation_db, session_code, user_id, team_number, transcript)
                     # Broadcast updated team state
                     await manager.broadcast_to_team(session_code, team_number, "TEAM_STATE_UPDATED", ts.snapshot())
                     await manager.broadcast_to_admin(session_code, "TEAM_PROGRESS", {

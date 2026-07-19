@@ -5,7 +5,6 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile
 from mysql.connector import MySQLConnection
 
-from backend.ai.evaluation import evaluate_transcript
 from backend.ai.speech_recognition import transcribe_audio
 from backend.config import get_settings
 from backend.database import queries
@@ -15,6 +14,12 @@ from backend.realtime.gd_ws import manager
 from backend.security import get_current_user
 
 ALLOWED_AUDIO_TYPES = {".wav", ".webm", ".mp3", ".m4a", ".ogg"}
+# Progress stages displayed to the student in order
+AI_PROGRESS_STAGES = [
+    "uploading", "transcribing",
+    "grammar", "vocabulary", "fluency", "confidence", "pronunciation",
+    "generating_scores", "complete",
+]
 
 router = APIRouter(prefix="/gd-live", tags=["GD Live"])
 
@@ -352,39 +357,12 @@ def _evaluate_live_participant(
 ) -> None:
     from backend.ai.evaluation import evaluate_transcript
     result = evaluate_transcript(transcript)
-
-    relevance_score = min(100, result.grammar_score * 0.3 + result.fluency_score * 0.3 + result.confidence_score * 0.4)
-    content_quality = min(100, result.vocabulary_score * 0.5 + result.overall_score * 0.5)
-    accent_score = result.pronunciation_score
-    overall = round((result.grammar_score + result.fluency_score + accent_score + relevance_score + content_quality) / 5, 2)
-    points = round(overall * 0.5, 2)
-
-    weaknesses = []
-    tips = []
-    if result.grammar_score < 70:
-        weaknesses.append("Grammar needs improvement")
-        tips.append("Practice sentence construction and verb tenses")
-    if result.fluency_score < 70:
-        weaknesses.append("Fluency needs improvement")
-        tips.append("Speak slowly and use filler words naturally")
-    if result.pronunciation_score < 70:
-        weaknesses.append("Pronunciation needs improvement")
-        tips.append("Practice difficult words and tongue twisters")
-    if result.confidence_score < 70:
-        weaknesses.append("Confidence needs improvement")
-        tips.append("Maintain steady pace and practice eye contact")
-    if result.vocabulary_score < 70:
-        weaknesses.append("Vocabulary needs improvement")
-        tips.append("Read widely and learn new words daily")
-    if not weaknesses:
-        weaknesses.append("Great overall performance!")
-        tips.append("Keep up the good work and challenge yourself with harder topics")
-
+    scores = _compute_scores(result)
     queries.save_live_evaluation(
         connection, session_code, user_id, team_number, transcript,
-        overall, result.fluency_score, result.grammar_score,
-        accent_score, relevance_score, content_quality, points,
-        "; ".join(weaknesses), "; ".join(tips),
+        scores["overall"], scores["fluency"], scores["grammar"],
+        scores["accent"], scores["relevance"], scores["quality"],
+        scores["points"], scores["weaknesses"], scores["tips"],
     )
 
 
@@ -442,22 +420,25 @@ async def upload_gd_live_audio(
     content = await loop.run_in_executor(None, file.file.read)
     await loop.run_in_executor(None, file_path.write_bytes, content)
 
-    loop_time = loop.time
     logger = __import__("logging").getLogger("speaksense.api")
 
     async def _send_progress(stage: str):
         state = manager.get_state(session_code)
         if state:
-            for p in state.participants.values():
-                if p.get("user_id") == current_user["id"]:
-                    tn = p.get("team_number")
-                    if tn:
-                        await manager.broadcast_to_team(
-                            session_code, tn,
-                            "EVALUATION_PROGRESS",
-                            {"user_id": current_user["id"], "stage": stage},
-                        )
-                    break
+            uid = current_user["id"]
+            # participants is dict keyed by user_id; look up directly
+            p = state.participants.get(uid)
+            if p:
+                tn = p.get("team_number")
+                if tn:
+                    await manager.broadcast_to_team(
+                        session_code, tn,
+                        "EVALUATION_PROGRESS",
+                        {"user_id": uid, "stage": stage},
+                    )
+
+    async def _progress(name: str):
+        await _send_progress(name)
 
     # Step 1: Transcribe with Whisper (offloaded to thread)
     await _send_progress("uploading")
@@ -472,43 +453,46 @@ async def upload_gd_live_audio(
         transcript = "[Audio could not be transcribed clearly]"
     await _send_progress("transcribing")
 
-    # Step 2: Run AI evaluation modules IN PARALLEL via asyncio.gather
+    # Step 2: Parallel AI evaluation with per-module progress
     try:
         from backend.ai.evaluation import evaluate_transcript_parallel
-        evaluation = await evaluate_transcript_parallel(transcript)
-        await _send_progress("evaluating")
+        evaluation = await evaluate_transcript_parallel(transcript, on_progress=_progress)
+        await _send_progress("generating_scores")
     except Exception as exc:
         logger.warning("AI evaluation failed for gd-live: %s", exc)
         evaluation = None
 
-    # Step 3: Broadcast TRANSCRIPT + AI_EVALUATION to team
+    # Step 3: Broadcast TRANSCRIPT + AI_EVALUATION to team immediately
     state = manager.get_state(session_code)
     team_number = None
     if state:
-        for p in state.participants.values():
-            if p.get("user_id") == current_user["id"]:
-                team_number = p.get("team_number")
-                break
+        uid = current_user["id"]
+        p = state.participants.get(uid)
+        if p:
+            team_number = p.get("team_number")
         if team_number and team_number in state.team_states:
             ts = state.team_states[team_number]
-            ts.transcripts[current_user["id"]] = transcript
+            ts.transcripts[uid] = transcript
             # Broadcast TRANSCRIPT
             await manager.broadcast_to_team(session_code, team_number, "TRANSCRIPT", {
-                "user_id": current_user["id"],
+                "user_id": uid,
                 "text": transcript,
             })
             # Broadcast AI_EVALUATION
             if evaluation:
-                await manager.broadcast_to_team(session_code, team_number, "AI_EVALUATION", {
-                    "user_id": current_user["id"],
+                scores = {
                     "overall_score": round(evaluation.overall_score, 1),
                     "grammar": round(evaluation.grammar_score, 1),
                     "fluency": round(evaluation.fluency_score, 1),
                     "confidence": round(evaluation.confidence_score, 1),
                     "vocabulary": round(evaluation.vocabulary_score, 1),
                     "pronunciation": round(evaluation.pronunciation_score, 1),
+                }
+                await manager.broadcast_to_team(session_code, team_number, "AI_EVALUATION", {
+                    "user_id": uid,
+                    **scores,
                 })
-                ts.evaluations[current_user["id"]] = {
+                ts.evaluations[uid] = {
                     "overall_score": round(evaluation.overall_score, 1),
                     "grammar_score": round(evaluation.grammar_score, 1),
                     "fluency_score": round(evaluation.fluency_score, 1),
@@ -516,15 +500,13 @@ async def upload_gd_live_audio(
                     "vocabulary_score": round(evaluation.vocabulary_score, 1),
                     "pronunciation_score": round(evaluation.pronunciation_score, 1),
                 }
-        await _send_progress("saving")
+        await _send_progress("complete")
 
-    # Step 4: Save evaluation to DB in background (non-blocking)
+    # Step 4: Save evaluation + update progress + PDF in background
     if evaluation and team_number:
         asyncio.create_task(_save_evaluation_bg(
             session_code, current_user["id"], team_number, transcript, evaluation, logger
         ))
-
-    await _send_progress("complete")
 
     return {
         "audio_path": str(file_path),
@@ -541,52 +523,70 @@ async def upload_gd_live_audio(
     }
 
 
+def _compute_scores(evaluation) -> dict:
+    """Shared score computation used by save and broadcast. Avoids duplication."""
+    relevance = min(100, evaluation.grammar_score * 0.3 + evaluation.fluency_score * 0.3 + evaluation.confidence_score * 0.4)
+    quality = min(100, evaluation.vocabulary_score * 0.5 + evaluation.overall_score * 0.5)
+    accent = evaluation.pronunciation_score
+    overall = round((evaluation.grammar_score + evaluation.fluency_score + accent + relevance + quality) / 5, 2)
+    points = round(overall * 0.5, 2)
+    weaknesses = []
+    tips = []
+    if evaluation.grammar_score < 70:
+        weaknesses.append("Grammar needs improvement")
+        tips.append("Practice sentence construction and verb tenses")
+    if evaluation.fluency_score < 70:
+        weaknesses.append("Fluency needs improvement")
+        tips.append("Speak slowly and use filler words naturally")
+    if evaluation.pronunciation_score < 70:
+        weaknesses.append("Pronunciation needs improvement")
+        tips.append("Practice difficult words and tongue twisters")
+    if evaluation.confidence_score < 70:
+        weaknesses.append("Confidence needs improvement")
+        tips.append("Maintain steady pace and practice eye contact")
+    if evaluation.vocabulary_score < 70:
+        weaknesses.append("Vocabulary needs improvement")
+        tips.append("Read widely and learn new words daily")
+    if not weaknesses:
+        weaknesses.append("Great overall performance!")
+        tips.append("Keep up the good work and challenge yourself with harder topics")
+    return {
+        "overall": overall, "points": points,
+        "fluency": evaluation.fluency_score, "grammar": evaluation.grammar_score,
+        "accent": accent, "relevance": relevance, "quality": quality,
+        "weaknesses": "; ".join(weaknesses),
+        "tips": "; ".join(tips),
+    }
+
+
 async def _save_evaluation_bg(
     session_code: str, user_id: int, team_number: int, transcript: str, evaluation, logger
 ) -> None:
-    """Save evaluation to DB in a background task. Runs blocking DB calls in a thread."""
+    """Save evaluation to DB in a background task. Single transaction, single commit."""
     from backend.database.db import get_connection
     loop = asyncio.get_running_loop()
 
     def _do_save():
         conn = get_connection()
         try:
-            relevance_score = min(100, evaluation.grammar_score * 0.3 + evaluation.fluency_score * 0.3 + evaluation.confidence_score * 0.4)
-            content_quality = min(100, evaluation.vocabulary_score * 0.5 + evaluation.overall_score * 0.5)
-            accent_score = evaluation.pronunciation_score
-            overall = round((evaluation.grammar_score + evaluation.fluency_score + accent_score + relevance_score + content_quality) / 5, 2)
-            points = round(overall * 0.5, 2)
-            weaknesses = []
-            tips = []
-            if evaluation.grammar_score < 70:
-                weaknesses.append("Grammar needs improvement")
-                tips.append("Practice sentence construction and verb tenses")
-            if evaluation.fluency_score < 70:
-                weaknesses.append("Fluency needs improvement")
-                tips.append("Speak slowly and use filler words naturally")
-            if evaluation.pronunciation_score < 70:
-                weaknesses.append("Pronunciation needs improvement")
-                tips.append("Practice difficult words and tongue twisters")
-            if evaluation.confidence_score < 70:
-                weaknesses.append("Confidence needs improvement")
-                tips.append("Maintain steady pace and practice eye contact")
-            if evaluation.vocabulary_score < 70:
-                weaknesses.append("Vocabulary needs improvement")
-                tips.append("Read widely and learn new words daily")
-            if not weaknesses:
-                weaknesses.append("Great overall performance!")
-                tips.append("Keep up the good work and challenge yourself with harder topics")
+            scores = _compute_scores(evaluation)
             queries.save_live_evaluation(
                 conn, session_code, user_id, team_number, transcript,
-                overall, evaluation.fluency_score, evaluation.grammar_score,
-                accent_score, relevance_score, content_quality, points,
-                "; ".join(weaknesses), "; ".join(tips),
+                scores["overall"], scores["fluency"], scores["grammar"],
+                scores["accent"], scores["relevance"], scores["quality"],
+                scores["points"], scores["weaknesses"], scores["tips"],
+            )
+            logger.info(
+                "Saved evaluation uid=%s code=%s team=%s score=%s (%.1fs)",
+                user_id, session_code, team_number, scores["overall"],
+                (__import__("time").time() - _save_evaluation_bg._t0) if hasattr(_save_evaluation_bg, "_t0") else 0,
             )
         except Exception as exc:
             logger.warning("save_live_evaluation background failed: %s", exc)
         finally:
             conn.close()
 
+    _save_evaluation_bg._t0 = __import__("time").time()
     try:
         await loop.run_in_executor(None, _do_save)
     except Exception as exc:

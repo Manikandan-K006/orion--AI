@@ -1,6 +1,7 @@
 import asyncio
 import functools
 from concurrent.futures import ThreadPoolExecutor
+from typing import Callable, Coroutine
 
 from backend.ai.confidence import analyze_confidence
 from backend.ai.emotion import detect_emotion
@@ -12,6 +13,10 @@ from backend.models.schemas import AnalysisResult
 
 _executor = ThreadPoolExecutor(max_workers=4)
 
+MODULE_NAMES = ["grammar", "vocabulary", "fluency", "confidence", "pronunciation", "emotion"]
+
+ProgressCallback = Callable[[str], Coroutine | None]
+
 
 def _run_module(fn, transcript, audio_path=None):
     if audio_path is not None:
@@ -19,13 +24,41 @@ def _run_module(fn, transcript, audio_path=None):
     return fn(transcript)
 
 
-def evaluate_transcript(transcript: str, audio_path: str | None = None) -> AnalysisResult:
-    grammar = analyze_grammar(transcript)
-    pronunciation = analyze_pronunciation(transcript, audio_path)
-    fluency = analyze_fluency(transcript)
-    confidence = analyze_confidence(transcript)
-    vocabulary = analyze_vocabulary(transcript)
-    emotion = detect_emotion(transcript)
+async def evaluate_transcript_parallel(
+    transcript: str,
+    audio_path: str | None = None,
+    on_progress: ProgressCallback | None = None,
+) -> AnalysisResult:
+    """Run all 6 AI evaluation modules in parallel using a thread pool.
+
+    Args:
+        transcript: The transcribed text to evaluate.
+        audio_path: Optional path to audio file (passed to pronunciation module).
+        on_progress: Optional async callback called with module name as each completes.
+    """
+    loop = asyncio.get_running_loop()
+    modules = [
+        (analyze_grammar, (transcript,), {}, "grammar"),
+        (analyze_pronunciation, (transcript, audio_path) if audio_path else (transcript,), {}, "pronunciation"),
+        (analyze_fluency, (transcript,), {}, "fluency"),
+        (analyze_confidence, (transcript,), {}, "confidence"),
+        (analyze_vocabulary, (transcript,), {}, "vocabulary"),
+        (detect_emotion, (transcript,), {}, "emotion"),
+    ]
+
+    async def run_one(fn, args, kwargs, name):
+        result = await loop.run_in_executor(
+            _executor, functools.partial(fn, *args, **kwargs)
+        )
+        if on_progress:
+            cb = on_progress(name)
+            if cb:
+                await cb
+        return result
+
+    tasks = [run_one(fn, args, kwargs, name) for fn, args, kwargs, name in modules]
+    results = await asyncio.gather(*tasks)
+    grammar, pronunciation, fluency, confidence, vocabulary, emotion = results
 
     overall = round(
         (
@@ -56,23 +89,17 @@ def evaluate_transcript(transcript: str, audio_path: str | None = None) -> Analy
     )
 
 
-async def evaluate_transcript_parallel(transcript: str, audio_path: str | None = None) -> AnalysisResult:
-    """Run all 6 AI evaluation modules in parallel using a thread pool."""
-    loop = asyncio.get_running_loop()
-    modules = [
-        (analyze_grammar, (transcript,), {}),
-        (analyze_pronunciation, (transcript, audio_path) if audio_path else (transcript,), {}),
-        (analyze_fluency, (transcript,), {}),
-        (analyze_confidence, (transcript,), {}),
-        (analyze_vocabulary, (transcript,), {}),
-        (detect_emotion, (transcript,), {}),
-    ]
-    tasks = [
-        loop.run_in_executor(_executor, functools.partial(fn, *args, **kwargs))
-        for fn, args, kwargs in modules
-    ]
-    results = await asyncio.gather(*tasks)
-    grammar, pronunciation, fluency, confidence, vocabulary, emotion = results
+def evaluate_transcript(transcript: str, audio_path: str | None = None) -> AnalysisResult:
+    """Synchronous wrapper — needed for endpoints that don't use async (classic GD, Solo).
+
+    Internally uses the same parallel execution as evaluate_transcript_parallel.
+    """
+    grammar = analyze_grammar(transcript)
+    pronunciation = analyze_pronunciation(transcript, audio_path)
+    fluency = analyze_fluency(transcript)
+    confidence = analyze_confidence(transcript)
+    vocabulary = analyze_vocabulary(transcript)
+    emotion = detect_emotion(transcript)
 
     overall = round(
         (

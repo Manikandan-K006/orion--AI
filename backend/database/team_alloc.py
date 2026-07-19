@@ -90,22 +90,45 @@ def assign_live_teams(
 
     by_id = {p["user_id"]: p for p in participants}
     result: list[dict[str, Any]] = []
+
+    # Batch INSERT all teams in a single multi-row query
+    team_rows = [
+        (session_code, tn, topic_pool[(tn - 1) % len(topic_pool)])
+        for tn in range(1, len(teams) + 1)
+    ]
+    if team_rows:
+        placeholders = ", ".join("(%s, %s, %s)" for _ in team_rows)
+        flat_params = tuple(v for row in team_rows for v in row)
+        cursor = connection.cursor()
+        cursor.execute(
+            f"INSERT INTO gd_live_teams (session_code, team_number, topic) VALUES {placeholders}",
+            flat_params,
+        )
+        cursor.close()
+
+    # Batch UPDATE all participants in a single executemany call
+    update_params = []
+    for team_number, members in enumerate(teams, start=1):
+        for j, uid in enumerate(members):
+            update_params.append((team_number, f"Member {j + 1}", session_code, uid))
+    if update_params:
+        cursor = connection.cursor()
+        cursor.executemany(
+            "UPDATE gd_live_participants SET team_number = %s, anonymous_label = %s, status = 'assigned' "
+            "WHERE session_code = %s AND user_id = %s",
+            update_params,
+        )
+        cursor.close()
+
+    # Build result dict (no DB calls needed)
     for team_number, members in enumerate(teams, start=1):
         topic = topic_pool[(team_number - 1) % len(topic_pool)]
-        queries.execute(connection,
-            "INSERT INTO gd_live_teams (session_code, team_number, topic) VALUES (%s, %s, %s)",
-            (session_code, team_number, topic))
         team_members = []
         for j, uid in enumerate(members):
-            label = f"Member {j + 1}"
-            queries.execute(connection,
-                "UPDATE gd_live_participants SET team_number = %s, anonymous_label = %s, status = 'assigned' "
-                "WHERE session_code = %s AND user_id = %s",
-                (team_number, label, session_code, uid))
             p = by_id[uid]
             team_members.append({
                 "user_id": uid,
-                "label": label,
+                "label": f"Member {j + 1}",
                 "name": p["name"],
                 "register_number": p["register_number"],
                 "department": p.get("department"),
