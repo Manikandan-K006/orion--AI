@@ -264,6 +264,7 @@ export type GDLiveRoomState = {
   status: string;
   topic: string | null;
   members: GDLiveRoomMember[];
+  teams?: any[];
 };
 
 export async function hostGdLiveMeeting(sessionCode: string, token: string) {

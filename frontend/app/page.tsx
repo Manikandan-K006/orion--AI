@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircle, Award, Clock, LogOut, MessageSquare, Mic, MicOff, Trophy, Users, Zap, Loader2, Copy, Check, Target, TrendingUp, ArrowUp, ArrowDown, Sparkles, Menu, X, Shield, Sun, Moon, RefreshCw, Video, VideoOff, Hand, MessageCircle, Maximize, PhoneOff, Radio, CheckCircle2, Mail, Phone, Globe, Eye } from "lucide-react";
+import { AlertCircle, Award, Clock, LogOut, MessageSquare, Mic, MicOff, Trophy, Users, Zap, Loader2, Copy, Check, Target, TrendingUp, ArrowUp, ArrowDown, Sparkles, Menu, X, Shield, Sun, Moon, RefreshCw, Video, VideoOff, Hand, MessageCircle, Maximize, PhoneOff, Radio, CheckCircle2, Mail, Phone, Globe, Eye, VolumeX } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Bar, BarChart, CartesianGrid, Cell, Legend, PolarAngleAxis, PolarGrid, Radar, RadarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import GdLiveRoom from "@/components/GdLiveRoom";
 import GdLiveAdminMonitor from "@/components/GdLiveAdminMonitor";
 import { useGdLiveWs, GDLiveWsMessage } from "@/lib/useGdLiveWs";
+import { useVoiceAnnouncement } from "@/services/voice/useVoiceAnnouncement";
 import { AllTimeAchiever, ComprehensiveLeaderboard, GDLiveLeaderboardEntry, LeaderboardRanking, LeaderboardStats, Progress, SoloQuote, SoloStartResponse, SoloSubmitResponse, User, apiRequest, hostGdLiveMeeting, endGdLiveMeeting, getGdLiveState } from "@/lib/api";
 
 function speak(text: string) {
@@ -220,6 +221,20 @@ export default function Home() {
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [pageLoading, setPageLoading] = useState(false);
+  const voice = useVoiceAnnouncement();
+  const announcedViews = useRef<Set<string>>(new Set());
+
+  // Voice announcements triggered by view changes
+  useEffect(() => {
+    if (view === "gd-live-session" && !announcedViews.current.has("waiting")) {
+      announcedViews.current.add("waiting");
+      voice.announceWaiting();
+    }
+    if (view === "gd-live-admin-view" && gdLiveIsLiveMeeting && !announcedViews.current.has("admin-monitor")) {
+      announcedViews.current.add("admin-monitor");
+      voice.announceTeamsAssigned();
+    }
+  }, [view]);
   const [isSessionLocked, setIsSessionLocked] = useState(false);
   const [tabSwitchWarning, setTabSwitchWarning] = useState(false);
   const lockWarningRef = useRef<boolean>(false);
@@ -302,11 +317,17 @@ export default function Home() {
   );
   useEffect(() => {
     if (view !== "gd-live-admin-view" || !gdLiveAdminViewCode) return;
+    const prevCount = gdLiveParticipants.length;
     const unsub = subAdminParticipants((msg: GDLiveWsMessage) => {
       if (msg.event === "PARTICIPANTS_UPDATED" && Array.isArray(msg.payload?.participants)) {
-        setGdLiveParticipants(msg.payload.participants);
+        const newParts = msg.payload.participants;
+        if (newParts.length > prevCount) {
+          voice.announceParticipantJoined();
+        }
+        setGdLiveParticipants(newParts);
       } else if (msg.event === "TEAMS_ASSIGNED" && Array.isArray(msg.payload?.teams)) {
         setGdLiveTeams(msg.payload.teams);
+        voice.announceTeamsAssigned();
       }
     });
     return unsub;
@@ -321,6 +342,7 @@ export default function Home() {
       const profile = await apiRequest<User>("/profile", {}, t);
       setUser(profile);
       setView("dashboard");
+      voice.announceLogin();
       const p = await apiRequest<Progress>("/progress", {}, t).catch(() => null);
       if (p) setProgress(p);
     } catch { localStorage.removeItem("mzgd_token"); setView("login"); }
@@ -390,6 +412,7 @@ export default function Home() {
   }
 
   function logout() {
+    voice.announceLogout();
     localStorage.removeItem("mzgd_token");
     setUser(null); setToken(""); setView("login");
     setMessage(""); setSuccess("");
@@ -432,6 +455,7 @@ export default function Home() {
       const res = await apiRequest<{ session_code: string }>("/gd-live/sessions", { method: "POST" }, token);
       setGdLiveCreatedCode(res.session_code);
       setSuccess(`GD Live session created! Code: ${res.session_code}`);
+      voice.announceSessionCreated();
       await loadGdLiveSessions();
     } catch (err: any) { setMessage(err.message); }
     finally { setLoading(false); }
@@ -447,6 +471,7 @@ export default function Home() {
       setGdLiveSession({ session_code: code, status: "waiting", participant_count: 0, team_count: 0 });
       setSuccess("Joined GD Live session!");
       setView("gd-live-session");
+      voice.announceSessionJoined();
     } catch (err: any) { setMessage(err.message); }
     finally { setLoading(false); }
   }
@@ -701,7 +726,6 @@ export default function Home() {
           });
         }}
         onLeave={leaveGdLiveRoom}
-        onEnd={endGdLiveRoom}
       />
     );
   }
@@ -892,6 +916,9 @@ export default function Home() {
           ))}
         </nav>
         <div className="p-3 border-t space-y-2" style={{ borderColor: "var(--border)" }}>
+          <button onClick={() => voice.setEnabled(!voice.enabled)} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all whitespace-nowrap text-muted-soft hover:text-heading hover:bg-[var(--surface-hover)]">
+            <VolumeX className="w-5 h-5 shrink-0" /> {voice.enabled ? "Mute Voice" : "Unmute Voice"}
+          </button>
           <button onClick={logout} disabled={isSessionLocked} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all whitespace-nowrap ${isSessionLocked ? "text-slate-600 cursor-not-allowed" : "text-red-600 dark:text-red-400 hover:bg-red-500/10"}`}>
             <LogOut className="w-5 h-5 shrink-0" /> Sign Out
           </button>

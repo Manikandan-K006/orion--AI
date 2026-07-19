@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Mic, MicOff, Clock, Users, CheckCircle2, Loader2, BarChart3, Zap, Volume2, Flag, Medal } from "lucide-react";
+import { Mic, MicOff, Clock, Users, CheckCircle2, Loader2, BarChart3, Zap, Volume2, Flag, Medal, VolumeX } from "lucide-react";
 import { useGdLiveWs, GDLiveWsMessage } from "@/lib/useGdLiveWs";
+import { useVoiceAnnouncement } from "@/services/voice/useVoiceAnnouncement";
 
 function formatTime(s: number) {
   const m = Math.floor(s / 60).toString().padStart(2, "0");
@@ -62,6 +63,8 @@ export default function GdLiveRoom({
 
   const userId = user?.user_id ?? user?.id;
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+  const voice = useVoiceAnnouncement();
+  const announcedMarkers = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     if (countdown === null) return;
@@ -74,7 +77,25 @@ export default function GdLiveRoom({
     if (!timerRunning) { if (timerRef.current) clearInterval(timerRef.current); return; }
     timerRef.current = setInterval(() => {
       setTimerSeconds((s) => {
-        if (s <= 1) { if (timerRef.current) clearInterval(timerRef.current!); setTimerRunning(false); return 0; }
+        if (s <= 1) {
+          if (timerRef.current) clearInterval(timerRef.current!);
+          setTimerRunning(false);
+          voice.announceTimeOver();
+          return 0;
+        }
+        // Milestone announcements
+        if (s === 61 && !announcedMarkers.current.has("60")) {
+          announcedMarkers.current.add("60");
+          voice.announceOneMinute();
+        }
+        if (s === 31 && !announcedMarkers.current.has("30")) {
+          announcedMarkers.current.add("30");
+          voice.announceThirtySeconds();
+        }
+        if (s === 11 && !announcedMarkers.current.has("10")) {
+          announcedMarkers.current.add("10");
+          voice.announceTenSeconds();
+        }
         return s - 1;
       });
     }, 1000);
@@ -116,12 +137,14 @@ export default function GdLiveRoom({
       };
       recorder.start(1000);
       setIsRecording(true);
+      voice.announceRecordingStarted();
     } catch (err) { console.warn("Recording start failed:", err); }
   }
 
   function stopRecording() {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
       mediaRecorderRef.current.stop();
+      voice.announceRecordingStopped();
     }
   }
 
@@ -149,6 +172,7 @@ export default function GdLiveRoom({
     }
     setUploading(false);
     send("SPEAKER_FINISHED", { user_id: userId });
+    voice.announceFinishEarly();
   }
 
   useEffect(() => {
@@ -168,6 +192,11 @@ export default function GdLiveRoom({
             setTimerRunning(myTeam.timer_running);
             setFinishedIds(new Set(myTeam.finished_user_ids || []));
             setAllFinished(myTeam.all_finished || false);
+            if (myTeam.timer_running && !announcedMarkers.current.has("start")) {
+              announcedMarkers.current.add("start");
+              voice.announceDiscussionStart();
+              setTimeout(() => voice.announceTopic(topic || myTeam.topic || ""), 2000);
+            }
           }
           break;
         }
@@ -195,6 +224,7 @@ export default function GdLiveRoom({
         case "ALL_FINISHED":
           setAllFinished(true);
           setTimerRunning(false);
+          voice.announceAllFinished();
           break;
         case "SESSION_RESULTS": {
           const all = msg.payload?.results || [];
@@ -206,6 +236,8 @@ export default function GdLiveRoom({
             setMyRank(myIdx + 1);
           }
           setShowResults(true);
+          voice.announceEvaluationComplete();
+          setTimeout(() => voice.announceLeaderboardReady(), 2500);
           break;
         }
         case "PARTICIPANT_LEFT":
@@ -221,6 +253,17 @@ export default function GdLiveRoom({
 
   const myFinished = finishedIds.has(userId);
   const me = members.find((m: any) => m.user_id === userId);
+
+  // Connection lost / restored announcements
+  useEffect(() => {
+    if (!connected && announcedMarkers.current.has("connected")) {
+      announcedMarkers.current.delete("connected");
+      voice.announceConnectionLost();
+    } else if (connected && !announcedMarkers.current.has("connected")) {
+      announcedMarkers.current.add("connected");
+      if (announcedMarkers.current.size > 1) voice.announceReconnected();
+    }
+  }, [connected]);
 
   // ── Results View ──
   if (showResults && myResult) {
