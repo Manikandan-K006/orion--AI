@@ -46,6 +46,11 @@ export function announceDiscussionStart() {
 
 /* ── 4b. Student clicked Start Discussion ── */
 export function announceDiscussionStarted() {
+  sayImmediate("You have two minutes to prepare. Read the topic carefully and organize your thoughts.");
+}
+
+/* ── 4c. Student starts speaking (after prep) ── */
+export function announceBeginSpeaking() {
   sayImmediate("Your discussion has started. You have ten minutes. You may begin speaking now.");
 }
 

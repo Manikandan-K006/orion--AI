@@ -46,6 +46,8 @@ export default function GdLiveRoom({
   const [timerSeconds, setTimerSeconds] = useState(600);
   const [timerRunning, setTimerRunning] = useState(false);
   const [discussionStarted, setDiscussionStarted] = useState(false);
+  const [thinkingPhase, setThinkingPhase] = useState(false);
+  const [thinkingSeconds, setThinkingSeconds] = useState(120);
   const [isRecording, setIsRecording] = useState(false);
   const [audioLevel, setAudioLevel] = useState(0);
   const [transcript, setTranscript] = useState("");
@@ -61,6 +63,7 @@ export default function GdLiveRoom({
   const audioContextRef = useRef<AudioContext | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const thinkingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const userId = user?.user_id ?? user?.id;
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -103,6 +106,22 @@ export default function GdLiveRoom({
     }, 1000);
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [timerRunning]);
+
+  // Thinking timer countdown (2 minutes)
+  useEffect(() => {
+    if (!thinkingPhase) { if (thinkingTimerRef.current) clearInterval(thinkingTimerRef.current); return; }
+    thinkingTimerRef.current = setInterval(() => {
+      setThinkingSeconds((s) => {
+        if (s <= 1) {
+          if (thinkingTimerRef.current) clearInterval(thinkingTimerRef.current);
+          beginDiscussion();
+          return 0;
+        }
+        return s - 1;
+      });
+    }, 1000);
+    return () => { if (thinkingTimerRef.current) clearInterval(thinkingTimerRef.current); };
+  }, [thinkingPhase]);
 
   // Stop recording when timer stops (auto-finish or manual)
   useEffect(() => {
@@ -158,10 +177,18 @@ export default function GdLiveRoom({
 
   function startDiscussion() {
     setDiscussionStarted(true);
-    setTimerRunning(true);
-    startRecording();
+    setThinkingPhase(true);
+    setThinkingSeconds(120);
     voice.announceDiscussionStarted();
     setTimeout(() => voice.announceTopic(topic), 2000);
+  }
+
+  function beginDiscussion() {
+    if (thinkingTimerRef.current) clearInterval(thinkingTimerRef.current);
+    setThinkingPhase(false);
+    setTimerRunning(true);
+    startRecording();
+    voice.announceBeginSpeaking();
   }
 
   async function finishDiscussion() {
@@ -536,6 +563,91 @@ export default function GdLiveRoom({
               <Play className="w-6 h-6" />
               Start Discussion
             </button>
+          </div>
+        </div>
+
+        <footer className="px-4 md:px-6 py-3 surface border-t text-center" style={{ borderColor: "var(--border)" }}>
+          <p className="text-xs text-muted-soft">
+            {members.length} member{members.length !== 1 ? "s" : ""} assigned
+          </p>
+        </footer>
+      </div>
+    );
+  }
+
+  // ── Thinking Phase (2 min preparation) ──
+  if (thinkingPhase && !myFinished) {
+    return (
+      <div className="min-h-screen flex flex-col" style={{ background: "var(--bg)" }}>
+        <header className="flex items-center justify-between px-4 md:px-6 py-3 surface border-b" style={{ borderColor: "var(--border)", backdropFilter: "blur(12px)" }}>
+          <div className="flex items-center gap-3 flex-wrap">
+            <span className="flex items-center gap-1.5 text-xs font-semibold text-blue-500 px-2 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/20">
+              <Brain className="w-3.5 h-3.5" /> THINKING
+            </span>
+            <code className="text-sm font-mono font-bold text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded-md">{teamNumber || "—"}</code>
+            <span className="text-sm text-heading font-semibold truncate max-w-[50vw]">{topic || "—"}</span>
+            <span className="hidden md:flex text-xs text-muted-soft items-center gap-1 px-2 py-1 rounded-full bg-white/5">
+              <Users className="w-3.5 h-3.5" /> {members.length}
+            </span>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="relative flex h-2.5 w-2.5">
+              <span className={`animate-ping absolute inline-flex h-full w-full rounded-full ${connected ? "bg-emerald-400" : "bg-red-400"} opacity-75`} style={{ animationDuration: "1.5s" }} />
+              <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${connected ? "bg-emerald-500" : "bg-red-500"}`} />
+            </span>
+          </div>
+        </header>
+
+        <div className="flex-1 flex items-center justify-center p-4 md:p-8">
+          <div className="w-full max-w-lg space-y-8 animate-fade-up text-center">
+            {/* Brain icon */}
+            <div className="w-16 h-16 mx-auto rounded-full bg-gradient-to-br from-blue-400 to-purple-600 flex items-center justify-center">
+              <Brain className="w-8 h-8 text-white" />
+            </div>
+
+            {/* Thinking timer */}
+            <div>
+              <p className="text-xs uppercase tracking-wider text-muted-soft font-semibold mb-2">Preparation Time</p>
+              <div className="inline-flex items-center gap-3 px-6 py-3 rounded-2xl surface-2 shadow-inner">
+                <Clock className="w-6 h-6 text-blue-400" />
+                <span className="font-mono font-bold text-5xl text-heading tabular-nums tracking-wider">{formatTime(thinkingSeconds)}</span>
+              </div>
+            </div>
+
+            {/* Topic reminder */}
+            <div className="card p-5 space-y-2">
+              <p className="text-xs uppercase tracking-wider text-muted-soft font-semibold">Discussion Topic</p>
+              <p className="text-lg md:text-xl font-bold text-heading leading-snug">{topic || "—"}</p>
+            </div>
+
+            {/* Instructions */}
+            <div className="card p-4 space-y-2">
+              <p className="text-xs uppercase tracking-wider text-muted-soft font-semibold">Prepare Your Thoughts</p>
+              <ul className="space-y-1.5 text-sm text-body text-left">
+                <li className="flex items-start gap-2">
+                  <span className="mt-1 w-1.5 h-1.5 rounded-full bg-blue-400 shrink-0" />
+                  <span>Think about your opening statement and key points.</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="mt-1 w-1.5 h-1.5 rounded-full bg-blue-400 shrink-0" />
+                  <span>Structure your arguments logically.</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="mt-1 w-1.5 h-1.5 rounded-full bg-blue-400 shrink-0" />
+                  <span>You have <strong>2 minutes</strong> to prepare.</span>
+                </li>
+              </ul>
+            </div>
+
+            {/* Start Speaking button */}
+            <button
+              onClick={beginDiscussion}
+              className="w-full btn-primary bg-gradient-to-r from-emerald-500 via-emerald-500 to-green-600 border-0 flex items-center justify-center gap-3 h-14 text-base font-bold shadow-lg shadow-emerald-500/25 hover:shadow-emerald-500/40 transition-all active:scale-[0.97] rounded-2xl"
+            >
+              <Play className="w-6 h-6" />
+              Start Speaking
+            </button>
+            <p className="text-xs text-muted-soft -mt-4">You can start speaking before the timer ends</p>
           </div>
         </div>
 
