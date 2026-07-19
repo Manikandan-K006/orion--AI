@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Clock, Users, CheckCircle2, Loader2, BarChart3, Zap, Volume2, MessageSquare, Eye, Radio, Timer, StopCircle } from "lucide-react";
+import { Clock, Users, CheckCircle2, Loader2, BarChart3, Zap, MessageSquare, Eye, Timer, StopCircle } from "lucide-react";
+import { useGdLiveWs, GDLiveWsMessage } from "@/lib/useGdLiveWs";
 
 interface MonitorMember {
   user_id: number;
@@ -21,11 +22,6 @@ interface MonitorTeam {
   timer_seconds: number;
   transcripts: { user_id: number; text: string }[];
   evaluations: Record<number, any>;
-}
-
-interface GDLiveWsMessage {
-  event: string;
-  payload?: any;
 }
 
 const COLORS = [
@@ -409,40 +405,4 @@ export default function GdLiveAdminMonitor({
       </div>
     </div>
   );
-}
-
-function useGdLiveWs(sessionCode: string, token: string) {
-  const [connected, setConnected] = useState(false);
-  const wsRef = useRef<WebSocket | null>(null);
-  const listenersRef = useRef<((msg: GDLiveWsMessage) => void)[]>([]);
-
-  useEffect(() => {
-    if (!sessionCode || !token) return;
-    const wsUrl = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8000";
-    const ws = new WebSocket(`${wsUrl}/ws/gd-live/${sessionCode}?token=${token}`);
-    wsRef.current = ws;
-
-    ws.onopen = () => setConnected(true);
-    ws.onclose = () => setConnected(false);
-    ws.onerror = () => setConnected(false);
-    ws.onmessage = (event) => {
-      try {
-        const msg = JSON.parse(event.data) as GDLiveWsMessage;
-        listenersRef.current.forEach((fn) => fn(msg));
-      } catch {}
-    };
-
-    return () => {
-      ws.close();
-    };
-  }, [sessionCode, token]);
-
-  const subscribe = (fn: (msg: GDLiveWsMessage) => void) => {
-    listenersRef.current.push(fn);
-    return () => {
-      listenersRef.current = listenersRef.current.filter((f) => f !== fn);
-    };
-  };
-
-  return { connected, subscribe };
 }
