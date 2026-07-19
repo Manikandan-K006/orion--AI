@@ -39,9 +39,14 @@ export function announceWaiting() {
   say("Please wait while your discussion room is being prepared.", 1);
 }
 
-/* ── 4. Discussion Starts ── */
+/* ── 4. Room Opened (waiting for Start) ── */
 export function announceDiscussionStart() {
-  sayImmediate("The group discussion has now started. You may begin speaking about the given topic.");
+  sayImmediate("Welcome to the meeting. Please read the discussion topic carefully. Click Start Discussion whenever you are ready.");
+}
+
+/* ── 4b. Student clicked Start Discussion ── */
+export function announceDiscussionStarted() {
+  sayImmediate("Your discussion has started. You have ten minutes. You may begin speaking now.");
 }
 
 /* ── 5. Topic Announcement ── */

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Mic, MicOff, Clock, Users, CheckCircle2, Loader2, BarChart3, Zap, Volume2, Flag, Medal, VolumeX } from "lucide-react";
+import { Mic, MicOff, Clock, Users, CheckCircle2, Loader2, BarChart3, Zap, Flag, Medal, Play, Volume2, Brain } from "lucide-react";
 import { useGdLiveWs, GDLiveWsMessage } from "@/lib/useGdLiveWs";
 import { useVoiceAnnouncement } from "@/services/voice/useVoiceAnnouncement";
 
@@ -45,6 +45,7 @@ export default function GdLiveRoom({
   const [allFinished, setAllFinished] = useState(false);
   const [timerSeconds, setTimerSeconds] = useState(600);
   const [timerRunning, setTimerRunning] = useState(false);
+  const [discussionStarted, setDiscussionStarted] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [audioLevel, setAudioLevel] = useState(0);
   const [transcript, setTranscript] = useState("");
@@ -65,6 +66,7 @@ export default function GdLiveRoom({
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
   const voice = useVoiceAnnouncement();
   const announcedMarkers = useRef<Set<string>>(new Set());
+  const finishingRef = useRef(false);
 
   useEffect(() => {
     if (countdown === null) return;
@@ -73,6 +75,7 @@ export default function GdLiveRoom({
     return () => clearTimeout(id);
   }, [countdown, onCountdownDone]);
 
+  // Timer countdown
   useEffect(() => {
     if (!timerRunning) { if (timerRef.current) clearInterval(timerRef.current); return; }
     timerRef.current = setInterval(() => {
@@ -83,7 +86,6 @@ export default function GdLiveRoom({
           voice.announceTimeOver();
           return 0;
         }
-        // Milestone announcements
         if (s === 61 && !announcedMarkers.current.has("60")) {
           announcedMarkers.current.add("60");
           voice.announceOneMinute();
@@ -102,14 +104,20 @@ export default function GdLiveRoom({
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [timerRunning]);
 
-  // Start recording when timer starts running (meeting is live) and user hasn't finished
+  // Stop recording when timer stops (auto-finish or manual)
   useEffect(() => {
-    if (timerRunning && !isRecording && !finishedIds.has(userId) && !allFinished) {
-      startRecording();
-    } else if (!timerRunning && isRecording) {
+    if (!timerRunning && isRecording) {
       stopRecording();
     }
-  }, [timerRunning, finishedIds]);
+  }, [timerRunning]);
+
+  // Auto-finish when timer expires
+  useEffect(() => {
+    if (timerRunning || timerSeconds > 0 || !discussionStarted || finishingRef.current) return;
+    if (myFinished || allFinished) return;
+    finishingRef.current = true;
+    finishDiscussion();
+  }, [timerSeconds, timerRunning, discussionStarted]);
 
   async function startRecording() {
     try {
@@ -146,6 +154,14 @@ export default function GdLiveRoom({
       mediaRecorderRef.current.stop();
       voice.announceRecordingStopped();
     }
+  }
+
+  function startDiscussion() {
+    setDiscussionStarted(true);
+    setTimerRunning(true);
+    startRecording();
+    voice.announceDiscussionStarted();
+    setTimeout(() => voice.announceTopic(topic), 2000);
   }
 
   async function finishDiscussion() {
@@ -189,13 +205,13 @@ export default function GdLiveRoom({
             setTeamNumber(myTeam.team_number);
             setMembers(myTeam.members || []);
             if (myTeam.timer_seconds) setTimerSeconds(myTeam.timer_seconds);
-            setTimerRunning(myTeam.timer_running);
             setFinishedIds(new Set(myTeam.finished_user_ids || []));
             setAllFinished(myTeam.all_finished || false);
-            if (myTeam.timer_running && !announcedMarkers.current.has("start")) {
-              announcedMarkers.current.add("start");
+            if (!announcedMarkers.current.has("welcome")) {
+              announcedMarkers.current.add("welcome");
               voice.announceDiscussionStart();
-              setTimeout(() => voice.announceTopic(topic || myTeam.topic || ""), 2000);
+              setTimeout(() => voice.announceTopic(topic || myTeam.topic || ""), 3000);
+              announcedMarkers.current.add("start");
             }
           }
           break;
@@ -204,7 +220,6 @@ export default function GdLiveRoom({
           const ts = msg.payload;
           setMembers(ts.members || []);
           setTimerSeconds(ts.timer_seconds);
-          setTimerRunning(ts.timer_running);
           setFinishedIds(new Set(ts.finished_user_ids || []));
           setAllFinished(ts.all_finished || false);
           break;
@@ -408,9 +423,9 @@ export default function GdLiveRoom({
             <div className="w-20 h-20 mx-auto rounded-full bg-gradient-to-br from-blue-400 to-purple-600 flex items-center justify-center">
               <CheckCircle2 className="w-10 h-10 text-white" />
             </div>
-            <h2 className="text-2xl font-bold text-heading">You're All Set!</h2>
-            <p className="text-muted-soft">Waiting for other team members to finish...</p>
-            <p className="text-xs text-muted-soft">Evaluation will begin automatically once every member has finished.</p>
+            <h2 className="text-2xl font-bold text-heading">Your discussion has been submitted successfully.</h2>
+            <p className="text-muted-soft">Waiting for the remaining team members to complete their discussion.</p>
+            <p className="text-xs text-muted-soft">AI evaluation will begin automatically once everyone has finished.</p>
             <div className="flex justify-center gap-2">
               {members.filter((m: any) => !finishedIds.has(m.user_id)).map((m: any, idx: number) => (
                 <div key={m.user_id} className="flex flex-col items-center gap-1 animate-pulse" style={{ animationDelay: `${idx * 200}ms` }}>
@@ -446,7 +461,94 @@ export default function GdLiveRoom({
     );
   }
 
-  // ── Main Discussion Room ──
+  // ── Waiting / Start Discussion Screen (before user clicks Start) ──
+  if (!discussionStarted && !myFinished) {
+    return (
+      <div className="min-h-screen flex flex-col" style={{ background: "var(--bg)" }}>
+        <header className="flex items-center justify-between px-4 md:px-6 py-3 surface border-b" style={{ borderColor: "var(--border)", backdropFilter: "blur(12px)" }}>
+          <div className="flex items-center gap-3">
+            <code className="text-sm font-mono font-bold text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded-md">{teamNumber || "—"}</code>
+            <span className="text-sm text-heading font-semibold truncate max-w-[50vw]">{topic || "—"}</span>
+            <span className="hidden md:flex text-xs text-muted-soft items-center gap-1 px-2 py-1 rounded-full bg-white/5">
+              <Users className="w-3.5 h-3.5" /> {members.length}
+            </span>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="relative flex h-2.5 w-2.5">
+              <span className={`animate-ping absolute inline-flex h-full w-full rounded-full ${connected ? "bg-emerald-400" : "bg-red-400"} opacity-75`} style={{ animationDuration: "1.5s" }} />
+              <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${connected ? "bg-emerald-500" : "bg-red-500"}`} />
+            </span>
+          </div>
+        </header>
+
+        <div className="flex-1 flex items-center justify-center p-4 md:p-8">
+          <div className="w-full max-w-lg space-y-8 animate-fade-up">
+            {/* Topic card */}
+            <div className="card p-6 text-center space-y-2">
+              <p className="text-xs uppercase tracking-wider text-muted-soft font-semibold">Discussion Topic</p>
+              <p className="text-xl md:text-2xl font-bold text-heading leading-snug">{topic || "—"}</p>
+            </div>
+
+            {/* Duration */}
+            <div className="flex items-center justify-center gap-4">
+              <div className="flex items-center gap-2 px-5 py-3 rounded-xl surface-2">
+                <Clock className="w-5 h-5 text-amber-400" />
+                <span className="font-mono font-bold text-2xl text-heading tabular-nums tracking-wider">{formatTime(timerSeconds)}</span>
+              </div>
+            </div>
+
+            {/* Mic status */}
+            <div className="flex items-center justify-center gap-2">
+              <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-amber-500/10 border border-amber-500/20">
+                <MicOff className="w-4 h-4 text-amber-400" />
+                <span className="text-sm text-amber-300 font-medium">Microphone Ready</span>
+              </div>
+            </div>
+
+            {/* Instructions */}
+            <div className="card p-5 space-y-2">
+              <p className="text-xs uppercase tracking-wider text-muted-soft font-semibold">Instructions</p>
+              <ul className="space-y-1.5 text-sm text-body">
+                <li className="flex items-start gap-2">
+                  <span className="mt-1 w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
+                  <span>Read the topic carefully before beginning.</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="mt-1 w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
+                  <span>Speak naturally and stay on the given topic.</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="mt-1 w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
+                  <span>Finish within 10 minutes.</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="mt-1 w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
+                  <span>Click <strong>Start Discussion</strong> when you are ready.</span>
+                </li>
+              </ul>
+            </div>
+
+            {/* Start button */}
+            <button
+              onClick={startDiscussion}
+              className="w-full btn-primary bg-gradient-to-r from-amber-500 via-amber-500 to-orange-600 border-0 flex items-center justify-center gap-3 h-14 text-base font-bold shadow-lg shadow-amber-500/25 hover:shadow-amber-500/40 transition-all active:scale-[0.97] rounded-2xl"
+            >
+              <Play className="w-6 h-6" />
+              Start Discussion
+            </button>
+          </div>
+        </div>
+
+        <footer className="px-4 md:px-6 py-3 surface border-t text-center" style={{ borderColor: "var(--border)" }}>
+          <p className="text-xs text-muted-soft">
+            {members.length} member{members.length !== 1 ? "s" : ""} assigned
+          </p>
+        </footer>
+      </div>
+    );
+  }
+
+  // ── Active Discussion Screen ──
   return (
     <div className="min-h-screen flex flex-col" style={{ background: "var(--bg)" }}>
       <header className="flex items-center justify-between px-4 md:px-6 py-3 surface border-b" style={{ borderColor: "var(--border)", backdropFilter: "blur(12px)" }}>
@@ -501,7 +603,6 @@ export default function GdLiveRoom({
                 <span className="text-sm text-amber-300">Mic Ready</span>
               </div>
             )}
-            {/* Audio level */}
             {isRecording && (
               <div className="w-32 h-1.5 rounded-full bg-gray-700/50 overflow-hidden">
                 <div className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-emerald-600 transition-all duration-100" style={{ width: `${audioLevel * 100}%` }} />
@@ -535,7 +636,7 @@ export default function GdLiveRoom({
         {/* Finish Discussion button */}
         {!myFinished && (
           <button
-            onClick={finishDiscussion}
+            onClick={() => { finishingRef.current = true; finishDiscussion(); }}
             disabled={uploading}
             className="relative btn-primary bg-gradient-to-r from-amber-500 via-amber-500 to-orange-600 border-0 flex items-center gap-2 h-14 px-8 text-base font-bold disabled:opacity-50 shadow-lg shadow-amber-500/25 hover:shadow-amber-500/40 transition-all active:scale-[0.97] rounded-2xl"
           >
