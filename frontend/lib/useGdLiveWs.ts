@@ -22,7 +22,15 @@ export type GDLiveWsEvent =
   | "PARTICIPANT_MUTED"
   | "PARTICIPANT_REMOVED"
   | "STATE_SYNC"
-  | "ERROR";
+  | "ERROR"
+  | "TEAM_STATE_UPDATED"
+  | "TRANSCRIPT"
+  | "AI_EVALUATION"
+  | "ALL_FINISHED"
+  | "TEAM_PROGRESS"
+  | "SESSION_RESULTS"
+  | "AUDIO_CHUNK"
+  | "SPEAKER_FINISHED";
 
 export type GDLiveWsMessage = {
   event: GDLiveWsEvent;
