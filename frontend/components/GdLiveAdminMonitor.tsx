@@ -8,14 +8,13 @@ interface MonitorMember {
   user_id: number;
   name: string | null;
   label: string | null;
-  status: "waiting" | "speaking" | "finished";
+  status: "recording" | "finished";
 }
 
 interface MonitorTeam {
   team_number: number;
   topic: string;
   members: MonitorMember[];
-  speaker_user_id: number | null;
   finished_count: number;
   total_count: number;
   all_finished: boolean;
@@ -70,14 +69,13 @@ export default function GdLiveAdminMonitor({
               user_id: m.user_id,
               name: m.name,
               label: m.label,
-              status: m.status || "waiting",
+              status: m.status || "recording",
             }));
             const finishedIds = new Set(ts.finished_user_ids || []);
             newTeams.set(tn, {
               team_number: tn,
               topic: ts.topic || "",
               members,
-              speaker_user_id: ts.speaker_user_id,
               finished_count: finishedIds.size,
               total_count: members.length,
               all_finished: ts.all_finished || false,
@@ -101,19 +99,17 @@ export default function GdLiveAdminMonitor({
                 user_id: m.user_id,
                 name: m.name,
                 label: m.label,
-                status: m.status || "waiting",
+                status: m.status || "recording",
               }));
               next.set(tn, {
-                ...existing,
-                members,
-                speaker_user_id: ts.speaker_user_id,
+                ...existing, members,
                 finished_count: finishedIds.size,
                 all_finished: ts.all_finished || false,
               });
             }
             return next;
           });
-          push(`Team ${tn} state updated — speaker changed`);
+          push(`Team ${tn} state updated`);
           break;
         }
         case "TEAM_PROGRESS": {
@@ -230,15 +226,13 @@ export default function GdLiveAdminMonitor({
           )}
 
           {sortedTeams.map((team, idx) => {
-            const speaker = team.members.find((m) => m.user_id === team.speaker_user_id);
             const completed = team.finished_count;
             const total = team.total_count;
             const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
 
             return (
-              <div key={team.team_number} className={`card overflow-hidden transition-all duration-300 ${team.all_finished ? "ring-1 ring-emerald-500/40" : selectedTeam === team.team_number ? "ring-1 ring-amber-500/40" : ""}`}>
-                {/* Team header */}
-                <div className={`p-4 bg-gradient-to-r ${COLORS[idx % COLORS.length]} bg-opacity-10 flex items-center justify-between`} style={{ background: "var(--surface-2)" }}>
+              <div key={team.team_number} className={`card overflow-hidden transition-all duration-300 ${team.all_finished ? "ring-1 ring-emerald-500/40" : "ring-1 ring-amber-500/20"}`}>
+                <div className="p-4 flex items-center justify-between" style={{ background: "var(--surface-2)" }}>
                   <div className="flex items-center gap-3">
                     <span className="text-lg font-bold font-mono text-amber-300">Team {team.team_number}</span>
                     <span className="text-xs text-muted-soft truncate max-w-[200px]">{team.topic}</span>
@@ -252,9 +246,7 @@ export default function GdLiveAdminMonitor({
                         <CheckCircle2 className="w-3 h-3" /> Complete
                       </span>
                     ) : (
-                      <span className={`text-xs px-2 py-0.5 rounded-full ${team.speaker_user_id ? "bg-amber-500/20 text-amber-300" : "bg-blue-500/20 text-blue-300"}`}>
-                        {team.speaker_user_id ? "Active" : "Waiting"}
-                      </span>
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300">In Progress</span>
                     )}
                   </div>
                 </div>
@@ -268,24 +260,16 @@ export default function GdLiveAdminMonitor({
                 <div className="p-4">
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
                     {team.members.map((m) => {
-                      const isSpeaker = m.user_id === team.speaker_user_id;
                       const isFinished = m.status === "finished";
                       const evalData = team.evaluations[m.user_id];
                       return (
-                        <div
-                          key={m.user_id}
-                          className={`p-3 rounded-xl text-center transition-all duration-300 ${
-                            isSpeaker ? "ring-2 ring-emerald-500 bg-emerald-500/10 scale-[1.05]" :
-                            isFinished ? "ring-1 ring-blue-500/30 opacity-75" :
-                            "surface-2"
-                          }`}
-                        >
-                          <div className={`w-10 h-10 rounded-full bg-gradient-to-br ${COLORS[idx % COLORS.length]} flex items-center justify-center text-white font-bold text-sm mx-auto mb-1.5 ${isSpeaker ? "animate-pulse" : ""}`}>
+                        <div key={m.user_id} className={`p-3 rounded-xl text-center transition-all duration-300 ${isFinished ? "ring-1 ring-blue-500/30 opacity-75" : "surface-2 ring-1 ring-emerald-500/10"}`}>
+                          <div className={`w-10 h-10 rounded-full bg-gradient-to-br ${COLORS[idx % COLORS.length]} flex items-center justify-center text-white font-bold text-sm mx-auto mb-1.5`}>
                             {(m.label || m.name || "?")[0].toUpperCase()}
                           </div>
                           <p className="text-xs font-semibold text-heading truncate">{m.label || m.name}</p>
-                          <p className={`text-[10px] ${isSpeaker ? "text-emerald-400" : isFinished ? "text-blue-400" : "text-muted-soft"}`}>
-                            {isSpeaker ? "Speaking" : isFinished ? "Finished" : "Waiting"}
+                          <p className={`text-[10px] ${isFinished ? "text-blue-400" : "text-emerald-400"}`}>
+                            {isFinished ? "Finished" : "Recording"}
                           </p>
                           {evalData && (
                             <div className="mt-1.5 space-y-0.5">
