@@ -5,6 +5,7 @@ import asyncio
 
 from backend.ai.evaluation import evaluate_transcript
 from backend.database import queries
+from backend.database import team_alloc
 from backend.database.db import get_db
 from backend.realtime.gd_ws import manager
 from backend.security import get_current_user
@@ -98,7 +99,7 @@ def _host_meeting_db_work(session_code: str):
         # ── Automatic team allocation: shuffle everyone and pack into teams of
         #    at most 3 (everyone assigned, none left out). Persists team_number
         #    on each participant and (re)creates one row per team. ──
-        teams = queries.assign_live_teams(conn, session_code, max_team_size=3)
+        teams = team_alloc.assign_live_teams(conn, session_code, max_team_size=3)
         # Refresh member snapshot so team_number/labels are included for the
         # student redirect payload.
         participants = queries.get_live_participants(conn, session_code)
