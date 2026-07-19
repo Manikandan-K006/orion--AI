@@ -96,9 +96,12 @@ export default function GdLiveRoom({
   const audioStreamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const [uploading, setUploading] = useState(false);
 
   const userId = user?.user_id ?? user?.id;
   const isAdmin = user?.role === "admin";
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
   // Countdown
   useEffect(() => {
@@ -132,7 +135,7 @@ export default function GdLiveRoom({
 
   // Start recording when user becomes speaker
   useEffect(() => {
-    if (speakerId === userId && !isRecording && !allFinished) {
+    if (speakerId === userId && !isRecording && !allFinished && !uploading) {
       startRecording();
     } else if (speakerId !== userId && isRecording) {
       stopRecording();
@@ -144,7 +147,6 @@ export default function GdLiveRoom({
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       audioStreamRef.current = stream;
 
-      // Audio level meter
       const ctx = new AudioContext();
       audioContextRef.current = ctx;
       const src = ctx.createMediaStreamSource(stream);
@@ -157,20 +159,13 @@ export default function GdLiveRoom({
         setAudioLevel(Math.min(1, avg / 128));
       }, 100);
 
+      audioChunksRef.current = [];
       const recorder = new MediaRecorder(stream, { mimeType: "audio/webm;codecs=opus" });
       mediaRecorderRef.current = recorder;
 
       recorder.ondataavailable = (e) => {
-        if (e.data.size > 0 && send) {
-          // Convert to base64 and send as AUDIO_CHUNK
-          const reader = new FileReader();
-          reader.onloadend = () => {
-            const base64 = reader.result?.toString().split(",")[1];
-            if (base64) {
-              send("AUDIO_CHUNK", { audio: base64 });
-            }
-          };
-          reader.readAsDataURL(e.data);
+        if (e.data.size > 0) {
+          audioChunksRef.current.push(e.data);
         }
       };
 
@@ -195,9 +190,32 @@ export default function GdLiveRoom({
     }
   }
 
-  function finishEarly() {
-    send("SPEAKER_FINISHED", { user_id: userId });
+  async function finishEarly() {
     stopRecording();
+    const blob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+    if (blob.size < 100) {
+      send("SPEAKER_FINISHED", { user_id: userId });
+      return;
+    }
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", blob, `gd_${sessionCode}_${userId}.webm`);
+      const res = await fetch(`${apiUrl}/gd-live/sessions/${sessionCode}/upload-audio`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      const data = await res.json();
+      if (data.transcript) {
+        setTranscript((prev) => prev + (prev ? " " : "") + data.transcript);
+      }
+    } catch (err) {
+      console.warn("Audio upload failed:", err);
+    } finally {
+      setUploading(false);
+      send("SPEAKER_FINISHED", { user_id: userId });
+    }
   }
 
   // WS events
@@ -487,8 +505,13 @@ export default function GdLiveRoom({
 
             {/* Finish Speaking button (only for current speaker) */}
             {isMyTurn && !isFinished && (
-              <button onClick={finishEarly} className="btn-primary bg-gradient-to-r from-amber-500 to-orange-600 border-0 flex items-center gap-2 h-11 px-5">
-                <CheckCircle2 className="w-5 h-5" /> Finish Speaking
+              <button
+                onClick={finishEarly}
+                disabled={uploading}
+                className="btn-primary bg-gradient-to-r from-amber-500 to-orange-600 border-0 flex items-center gap-2 h-11 px-5 disabled:opacity-50"
+              >
+                {uploading ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle2 className="w-5 h-5" />}
+                {uploading ? "Transcribing..." : "Finish Speaking"}
               </button>
             )}
 

@@ -24,6 +24,7 @@ from mysql.connector import MySQLConnection
 
 from backend.database import queries
 from backend.database.db import _return, get_connection, get_db
+from backend.ai.evaluation import evaluate_transcript
 from backend.security import decode_token
 
 logger = logging.getLogger("speaksense.realtime")
@@ -65,6 +66,61 @@ async def broadcast_participants(session_code: str) -> None:
         logger.warning("broadcast_participants failed: %s", exc)
         return
     await manager.broadcast(session_code, "PARTICIPANTS_UPDATED", {"participants": participants})
+
+
+def _save_evaluation_db(session_code: str, user_id: int, team_number: int, transcript: str) -> None:
+    """Run AI evaluation and persist to DB. Called in a thread to avoid blocking the event loop."""
+    connection = get_connection()
+    try:
+        # Fetch participant info
+        participant = queries.fetch_one(connection,
+            "SELECT id, team_number FROM gd_live_participants WHERE session_code = %s AND user_id = %s",
+            (session_code, user_id))
+        if not participant:
+            logger.warning("_save_evaluation_db: participant not found uid=%s code=%s", user_id, session_code)
+            return
+
+        # Run AI evaluation
+        result = evaluate_transcript(transcript)
+
+        relevance_score = min(100, result.grammar_score * 0.3 + result.fluency_score * 0.3 + result.confidence_score * 0.4)
+        content_quality = min(100, result.vocabulary_score * 0.5 + result.overall_score * 0.5)
+        accent_score = result.pronunciation_score
+        overall = round((result.grammar_score + result.fluency_score + accent_score + relevance_score + content_quality) / 5, 2)
+        points = round(overall * 0.5, 2)
+
+        weaknesses = []
+        tips = []
+        if result.grammar_score < 70:
+            weaknesses.append("Grammar needs improvement")
+            tips.append("Practice sentence construction and verb tenses")
+        if result.fluency_score < 70:
+            weaknesses.append("Fluency needs improvement")
+            tips.append("Speak slowly and use filler words naturally")
+        if result.pronunciation_score < 70:
+            weaknesses.append("Pronunciation needs improvement")
+            tips.append("Practice difficult words and tongue twisters")
+        if result.confidence_score < 70:
+            weaknesses.append("Confidence needs improvement")
+            tips.append("Maintain steady pace and practice eye contact")
+        if result.vocabulary_score < 70:
+            weaknesses.append("Vocabulary needs improvement")
+            tips.append("Read widely and learn new words daily")
+        if not weaknesses:
+            weaknesses.append("Great overall performance!")
+            tips.append("Keep up the good work and challenge yourself with harder topics")
+
+        queries.save_live_evaluation(
+            connection, session_code, user_id, team_number, transcript,
+            overall, result.fluency_score, result.grammar_score,
+            accent_score, relevance_score, content_quality, points,
+            "; ".join(weaknesses), "; ".join(tips),
+        )
+        logger.info("Evaluation saved uid=%s code=%s team=%s score=%s", user_id, session_code, team_number, overall)
+    except Exception as exc:
+        logger.warning("_save_evaluation_db failed: %s", exc)
+    finally:
+        _return(connection)
 
 
 class TeamState:
@@ -400,6 +456,19 @@ async def gd_live_socket(
             if event == "SPEAKER_FINISHED":
                 ts = state.team_states.get(team_number) if team_number else None
                 if ts and user_id == ts.speaker_user_id:
+                    # Get the speaker's accumulated transcript
+                    transcript = ts.transcripts.get(user_id, "").strip()
+                    speaker_name = next(
+                        (m.get("name") for m in ts.members.values() if m.get("user_id") == user_id),
+                        None
+                    )
+
+                    # Run AI evaluation in a background thread and broadcast results
+                    if transcript:
+                        asyncio.create_task(_evaluate_and_broadcast(
+                            session_code, team_number, user_id, transcript, ts
+                        ))
+
                     ts.finish_speaker(user_id)
                     # Broadcast updated team state
                     await manager.broadcast_to_team(session_code, team_number, "TEAM_STATE_UPDATED", ts.snapshot())
@@ -415,6 +484,10 @@ async def gd_live_socket(
                             "session_code": session_code,
                             "team_number": team_number,
                         })
+                        # Build and broadcast session results for the team
+                        asyncio.create_task(_broadcast_team_results(
+                            session_code, team_number, ts
+                        ))
                     else:
                         # Auto-advance to next speaker
                         nxt = ts.next_speaker()
@@ -478,6 +551,128 @@ async def gd_live_socket(
             {"user_id": user_id, "name": name},
         )
         await broadcast_participants(session_code)
+
+
+async def _evaluate_and_broadcast(
+    session_code: str, team_number: int, user_id: int, transcript: str, ts: TeamState
+) -> None:
+    """Run AI evaluation on a speaker's transcript, save to DB, and stream results to the team."""
+    try:
+        # Run the evaluation in a thread (blocking DB + AI calls)
+        result = await asyncio.to_thread(_evaluate_transcript_only, transcript)
+
+        if result:
+            # Store evaluation in TeamState for later results broadcast
+            ts.evaluations[user_id] = {
+                "user_id": user_id,
+                "overall_score": round(result.get("overall_score", 0), 1),
+                "grammar_score": round(result.get("grammar_score", 0), 1),
+                "fluency_score": round(result.get("fluency_score", 0), 1),
+                "confidence_score": round(result.get("confidence_score", 0), 1),
+                "vocabulary_score": round(result.get("vocabulary_score", 0), 1),
+                "pronunciation_score": round(result.get("pronunciation_score", 0), 1),
+                "fillers": result.get("fillers", 0),
+                "wpm": result.get("wpm", 0),
+                "pauses": result.get("pauses", 0),
+                "energy": result.get("energy", 0),
+                "professional_tone": result.get("professional_tone", 0),
+            }
+
+            # Stream AI evaluation to the team in real-time
+            await manager.broadcast_to_team(session_code, team_number, "AI_EVALUATION", {
+                "user_id": user_id,
+                "overall_score": round(result.get("overall_score", 0), 1),
+                "grammar": round(result.get("grammar_score", 0), 1),
+                "fluency": round(result.get("fluency_score", 0), 1),
+                "confidence": round(result.get("confidence_score", 0), 1),
+                "vocabulary": round(result.get("vocabulary_score", 0), 1),
+                "pronunciation": round(result.get("pronunciation_score", 0), 1),
+                "fillers": result.get("fillers", 0),
+                "wpm": result.get("wpm", 0),
+                "pauses": result.get("pauses", 0),
+                "energy": result.get("energy", 0),
+                "professional_tone": result.get("professional_tone", 0),
+            })
+
+            # Persist to database in a separate thread
+            asyncio.create_task(asyncio.to_thread(
+                _save_evaluation_db, session_code, user_id, team_number, transcript
+            ))
+    except Exception as exc:
+        logger.warning("_evaluate_and_broadcast failed: %s", exc)
+
+
+def _evaluate_transcript_only(transcript: str) -> dict:
+    """Run AI evaluation and return metrics as a dict. Called in a thread."""
+    result = evaluate_transcript(transcript)
+    return {
+        "overall_score": result.overall_score,
+        "grammar_score": result.grammar_score,
+        "fluency_score": result.fluency_score,
+        "confidence_score": result.confidence_score,
+        "vocabulary_score": result.vocabulary_score,
+        "pronunciation_score": result.pronunciation_score,
+        "emotion": result.emotion,
+        "fillers": 0,
+        "wpm": 0,
+        "pauses": 0,
+        "energy": 0,
+        "professional_tone": 0,
+    }
+
+
+async def _broadcast_team_results(
+    session_code: str, team_number: int, ts: TeamState
+) -> None:
+    """Build and broadcast SESSION_RESULTS for the team once all members have finished."""
+    try:
+        # For any member who doesn't have stored evaluation yet, evaluate now
+        for uid in ts.speaker_order:
+            if uid not in ts.evaluations:
+                transcript = ts.transcripts.get(uid, "").strip()
+                if transcript:
+                    result = await asyncio.to_thread(_evaluate_transcript_only, transcript)
+                    ts.evaluations[uid] = {
+                        "user_id": uid,
+                        "overall_score": round(result.get("overall_score", 0), 1),
+                        "grammar_score": round(result.get("grammar_score", 0), 1),
+                        "fluency_score": round(result.get("fluency_score", 0), 1),
+                        "confidence_score": round(result.get("confidence_score", 0), 1),
+                        "vocabulary_score": round(result.get("vocabulary_score", 0), 1),
+                    }
+
+        # Build results list
+        results = []
+        for uid in ts.speaker_order:
+            member = ts.members.get(uid, {})
+            eval_data = ts.evaluations.get(uid, {})
+            results.append({
+                "user_id": uid,
+                "name": member.get("name"),
+                "label": member.get("label"),
+                "overall_score": eval_data.get("overall_score", 0),
+                "grammar_score": eval_data.get("grammar_score", 0),
+                "confidence_score": eval_data.get("confidence_score", 0),
+                "fluency_score": eval_data.get("fluency_score", 0),
+                "vocabulary_score": eval_data.get("vocabulary_score", 0),
+                "pronunciation_score": eval_data.get("pronunciation_score", 0),
+            })
+
+        # Broadcast results to team and admin
+        await manager.broadcast_to_team(session_code, team_number, "SESSION_RESULTS", {
+            "session_code": session_code,
+            "team_number": team_number,
+            "results": results,
+        })
+        await manager.broadcast_to_admin(session_code, "SESSION_RESULTS", {
+            "session_code": session_code,
+            "team_number": team_number,
+            "results": results,
+        })
+
+        logger.info("Team %s results broadcast for session %s", team_number, session_code)
+    except Exception as exc:
+        logger.warning("_broadcast_team_results failed: %s", exc)
 
 
 async def _handle_admin_event(

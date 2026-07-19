@@ -1,14 +1,20 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+import asyncio
+import os
+from pathlib import Path
+
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile
 from mysql.connector import MySQLConnection
 
-import asyncio
-
 from backend.ai.evaluation import evaluate_transcript
+from backend.ai.speech_recognition import transcribe_audio
+from backend.config import get_settings
 from backend.database import queries
 from backend.database import team_alloc
 from backend.database.db import get_db
 from backend.realtime.gd_ws import manager
 from backend.security import get_current_user
+
+ALLOWED_AUDIO_TYPES = {".wav", ".webm", ".mp3", ".m4a", ".ogg"}
 
 router = APIRouter(prefix="/gd-live", tags=["GD Live"])
 
@@ -408,6 +414,136 @@ def get_live_leaderboard(
     if not results:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No evaluations yet")
     return results
+
+
+@router.post("/sessions/{session_code}/upload-audio", status_code=status.HTTP_201_CREATED)
+async def upload_gd_live_audio(
+    session_code: str,
+    file: UploadFile,
+    current_user: dict = Depends(get_current_user),
+) -> dict:
+    """Upload audio for the current speaker. Transcribes with Whisper, broadcasts
+    TRANSCRIPT + AI_EVALUATION to the team, and saves results to DB."""
+    ext = Path(file.filename or "").suffix.lower()
+    if ext not in ALLOWED_AUDIO_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unsupported file type '{ext}'. Allowed: {', '.join(sorted(ALLOWED_AUDIO_TYPES))}",
+        )
+
+    settings = get_settings()
+    upload_dir = Path(settings.upload_dir)
+    upload_dir.mkdir(parents=True, exist_ok=True)
+
+    safe_name = f"gd_{session_code}_{current_user['id']}_{os.urandom(4).hex()}{ext}"
+    file_path = upload_dir / safe_name
+    content = file.file.read()
+    file_path.write_bytes(content)
+
+    # Transcribe with Whisper
+    result = transcribe_audio(str(file_path))
+    if not result.get("success", True):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=result.get("error", "Speech recognition service unavailable."),
+        )
+
+    transcript = result.get("transcript", "")
+    if not transcript:
+        transcript = "[Audio could not be transcribed clearly]"
+
+    # Run AI evaluation
+    try:
+        evaluation = evaluate_transcript(transcript)
+    except Exception as exc:
+        logger = __import__("logging").getLogger("speaksense.api")
+        logger.warning("AI evaluation failed for gd-live: %s", exc)
+        evaluation = None
+
+    # Broadcast TRANSCRIPT to team
+    state = manager.get_state(session_code)
+    team_number = None
+    if state:
+        for p in state.participants.values():
+            if p.get("user_id") == current_user["id"]:
+                team_number = p.get("team_number")
+                break
+        if team_number and team_number in state.team_states:
+            ts = state.team_states[team_number]
+            # Store transcript
+            ts.transcripts[current_user["id"]] = transcript
+            await manager.broadcast_to_team(session_code, team_number, "TRANSCRIPT", {
+                "user_id": current_user["id"],
+                "text": transcript,
+            })
+
+            # Broadcast AI evaluation
+            if evaluation:
+                await manager.broadcast_to_team(session_code, team_number, "AI_EVALUATION", {
+                    "user_id": current_user["id"],
+                    "overall_score": round(evaluation.overall_score, 1),
+                    "grammar": round(evaluation.grammar_score, 1),
+                    "fluency": round(evaluation.fluency_score, 1),
+                    "confidence": round(evaluation.confidence_score, 1),
+                    "vocabulary": round(evaluation.vocabulary_score, 1),
+                    "pronunciation": round(evaluation.pronunciation_score, 1),
+                })
+
+    # Save evaluation to DB (async)
+    if evaluation and team_number:
+        from backend.database.db import get_connection
+        conn = get_connection()
+        try:
+            relevance_score = min(100, evaluation.grammar_score * 0.3 + evaluation.fluency_score * 0.3 + evaluation.confidence_score * 0.4)
+            content_quality = min(100, evaluation.vocabulary_score * 0.5 + evaluation.overall_score * 0.5)
+            accent_score = evaluation.pronunciation_score
+            overall = round((evaluation.grammar_score + evaluation.fluency_score + accent_score + relevance_score + content_quality) / 5, 2)
+            points = round(overall * 0.5, 2)
+            weaknesses = []
+            tips = []
+            if evaluation.grammar_score < 70:
+                weaknesses.append("Grammar needs improvement")
+                tips.append("Practice sentence construction and verb tenses")
+            if evaluation.fluency_score < 70:
+                weaknesses.append("Fluency needs improvement")
+                tips.append("Speak slowly and use filler words naturally")
+            if evaluation.pronunciation_score < 70:
+                weaknesses.append("Pronunciation needs improvement")
+                tips.append("Practice difficult words and tongue twisters")
+            if evaluation.confidence_score < 70:
+                weaknesses.append("Confidence needs improvement")
+                tips.append("Maintain steady pace and practice eye contact")
+            if evaluation.vocabulary_score < 70:
+                weaknesses.append("Vocabulary needs improvement")
+                tips.append("Read widely and learn new words daily")
+            if not weaknesses:
+                weaknesses.append("Great overall performance!")
+                tips.append("Keep up the good work and challenge yourself with harder topics")
+            queries.save_live_evaluation(
+                conn, session_code, current_user["id"], team_number, transcript,
+                overall, evaluation.fluency_score, evaluation.grammar_score,
+                accent_score, relevance_score, content_quality, points,
+                "; ".join(weaknesses), "; ".join(tips),
+            )
+        except Exception as exc:
+            logger = __import__("logging").getLogger("speaksense.api")
+            logger.warning("save_live_evaluation failed: %s", exc)
+        finally:
+            conn.close()
+
+    return {
+        "audio_path": str(file_path),
+        "transcript": transcript,
+        "evaluation": {
+            "overall_score": round(evaluation.overall_score, 1) if evaluation else 0,
+            "grammar_score": round(evaluation.grammar_score, 1) if evaluation else 0,
+            "fluency_score": round(evaluation.fluency_score, 1) if evaluation else 0,
+            "confidence_score": round(evaluation.confidence_score, 1) if evaluation else 0,
+            "vocabulary_score": round(evaluation.vocabulary_score, 1) if evaluation else 0,
+            "pronunciation_score": round(evaluation.pronunciation_score, 1) if evaluation else 0,
+        } if evaluation else None,
+        "message": "Audio processed",
+    }
 
 
 @router.get("/sessions/{session_code}/my-team/topic")

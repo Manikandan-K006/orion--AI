@@ -672,8 +672,8 @@ export default function Home() {
 
   const scoreColors = ["#f59e0b", "#10b981", "#8b5cf6", "#06b6d4"];
 
-  if (!user) {
-  if (view === "gd-live-room" && gdLiveRoomCode) {
+  // ─── Full-screen GD Live Room (authenticated) ───
+  if (view === "gd-live-room" && gdLiveRoomCode && user) {
     return (
       <GdLiveRoom
         sessionCode={gdLiveRoomCode}
@@ -681,6 +681,7 @@ export default function Home() {
         user={user}
         initialTopic={gdLiveRoomTopic}
         initialMembers={gdLiveRoomMembers}
+        initialTeams={gdLiveRoomTeams}
         showCountdown={gdLiveShowCountdown}
         onCountdownDone={() => {
           setGdLiveShowCountdown(false);
@@ -697,7 +698,8 @@ export default function Home() {
     );
   }
 
-  return (
+  if (!user) {
+    return (
     <div className={`min-h-screen flex items-center justify-center relative overflow-hidden ${theme === "dark" ? "dark" : ""}`}>
         {/* Theme-based animated background */}
         <div className="fixed inset-0 z-0">
