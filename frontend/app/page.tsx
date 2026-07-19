@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircle, Award, Clock, LogOut, MessageSquare, Mic, MicOff, Trophy, Users, Zap, Loader2, Copy, Check, Target, TrendingUp, ArrowUp, ArrowDown, Sparkles, Menu, X, Shield, Sun, Moon, RefreshCw, Video, VideoOff, Hand, MessageCircle, Maximize, PhoneOff, Radio, CheckCircle2, Mail, Phone, Globe } from "lucide-react";
+import { AlertCircle, Award, Clock, LogOut, MessageSquare, Mic, MicOff, Trophy, Users, Zap, Loader2, Copy, Check, Target, TrendingUp, ArrowUp, ArrowDown, Sparkles, Menu, X, Shield, Sun, Moon, RefreshCw, Video, VideoOff, Hand, MessageCircle, Maximize, PhoneOff, Radio, CheckCircle2, Mail, Phone, Globe, Eye } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Bar, BarChart, CartesianGrid, Cell, Legend, PolarAngleAxis, PolarGrid, Radar, RadarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import GdLiveRoom from "@/components/GdLiveRoom";
+import GdLiveAdminMonitor from "@/components/GdLiveAdminMonitor";
 import { useGdLiveWs, GDLiveWsMessage } from "@/lib/useGdLiveWs";
 import { AllTimeAchiever, ComprehensiveLeaderboard, GDLiveLeaderboardEntry, LeaderboardRanking, LeaderboardStats, Progress, SoloQuote, SoloStartResponse, SoloSubmitResponse, User, apiRequest, hostGdLiveMeeting, endGdLiveMeeting, getGdLiveState } from "@/lib/api";
 
@@ -29,7 +30,7 @@ const MOTIVATIONAL_PHRASES = [
   "Fantastic! Your hard work is paying off.",
 ];
 
-type PageView = "login" | "dashboard" | "gd-leaderboard" | "solo-practice" | "solo-session" | "solo-result" | "gd-live" | "gd-live-session" | "gd-live-results" | "gd-live-admin" | "gd-live-admin-view" | "gd-live-room";
+type PageView = "login" | "dashboard" | "gd-leaderboard" | "solo-practice" | "solo-session" | "solo-result" | "gd-live" | "gd-live-session" | "gd-live-results" | "gd-live-admin" | "gd-live-admin-view" | "gd-live-room" | "gd-live-monitor";
 
 /** Student-side waiter: opens a WebSocket to the session and auto-redirects into the
  *  live room when the admin hosts the meeting (SESSION_STARTED broadcast). */
@@ -671,6 +672,17 @@ export default function Home() {
   }
 
   const scoreColors = ["#f59e0b", "#10b981", "#8b5cf6", "#06b6d4"];
+
+  // ─── Full-screen GD Live Admin Monitor ───
+  if (view === "gd-live-monitor" && gdLiveAdminViewCode && user) {
+    return (
+      <GdLiveAdminMonitor
+        sessionCode={gdLiveAdminViewCode}
+        token={token}
+        onBack={() => { setView("gd-live-admin-view"); loadGdLiveParticipants(gdLiveAdminViewCode); }}
+      />
+    );
+  }
 
   // ─── Full-screen GD Live Room (authenticated) ───
   if (view === "gd-live-room" && gdLiveRoomCode && user) {
@@ -1586,14 +1598,21 @@ export default function Home() {
                   </div>
                 )}
 
-                {gdLiveRoomActive && (
-                  <GdLiveAdminPanel
-                    code={gdLiveAdminViewCode}
-                    token={token}
-                    topic={gdLiveRoomTopic}
-                    onOpenRoom={openGdLiveRoom}
-                    onEnd={endGdLiveRoom}
-                  />
+                    {gdLiveRoomActive && (
+                  <>
+                    <div className="flex items-center gap-2 mt-2">
+                      <button onClick={() => { setView("gd-live-monitor"); }} className="btn-primary text-xs h-9 px-4 flex items-center gap-1.5">
+                        <Eye className="w-3.5 h-3.5" /> Live Monitor
+                      </button>
+                    </div>
+                    <GdLiveAdminPanel
+                      code={gdLiveAdminViewCode}
+                      token={token}
+                      topic={gdLiveRoomTopic}
+                      onOpenRoom={openGdLiveRoom}
+                      onEnd={endGdLiveRoom}
+                    />
+                  </>
                 )}
               </div>
             </div>
