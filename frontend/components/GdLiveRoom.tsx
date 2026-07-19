@@ -25,6 +25,14 @@ function anonStatus(m: any, uid: number): string {
   return m.status || "Waiting";
 }
 
+const STAGE_LABELS: Record<string, string> = {
+  uploading: "Uploading Audio...",
+  transcribing: "Transcribing...",
+  evaluating: "Analyzing grammar, fluency, and confidence...",
+  saving: "Saving results...",
+  complete: "Complete!",
+};
+
 type SubmitStep = "idle" | "uploading" | "submitted" | "complete";
 
 export default function GdLiveRoom({
@@ -58,6 +66,7 @@ export default function GdLiveRoom({
   const [showResults, setShowResults] = useState(false);
   const [submitStep, setSubmitStep] = useState<SubmitStep>("idle");
   const [audioError, setAudioError] = useState("");
+  const [evalStage, setEvalStage] = useState("");
   const [generatingStep, setGeneratingStep] = useState<string>("");
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioStreamRef = useRef<MediaStream | null>(null);
@@ -314,6 +323,11 @@ export default function GdLiveRoom({
           setTimeout(() => voice.announceLeaderboardReady(), 2500);
           break;
         }
+        case "EVALUATION_PROGRESS":
+          if (msg.payload?.user_id === userId && msg.payload?.stage) {
+            setEvalStage(msg.payload.stage);
+          }
+          break;
         case "PARTICIPANT_LEFT":
           setMembers((prev) => prev.filter((m: any) => m.user_id !== msg.payload?.user_id));
           break;
@@ -511,7 +525,7 @@ export default function GdLiveRoom({
             )}
           </div>
           <div className="flex items-center justify-center gap-2 text-sm text-muted-soft">
-            <Loader2 className="w-4 h-4 animate-spin" /> Your AI report is being generated...
+            <Loader2 className="w-4 h-4 animate-spin" /> {evalStage ? STAGE_LABELS[evalStage] || "Processing..." : "Your AI report is being generated..."}
           </div>
         </div>
       </div>

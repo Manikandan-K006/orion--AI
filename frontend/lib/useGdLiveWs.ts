@@ -30,7 +30,8 @@ export type GDLiveWsEvent =
   | "TEAM_PROGRESS"
   | "SESSION_RESULTS"
   | "AUDIO_CHUNK"
-  | "SPEAKER_FINISHED";
+  | "SPEAKER_FINISHED"
+  | "EVALUATION_PROGRESS";
 
 export type GDLiveWsMessage = {
   event: GDLiveWsEvent;

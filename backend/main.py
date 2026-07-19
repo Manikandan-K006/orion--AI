@@ -20,7 +20,7 @@ app = FastAPI(title=settings.app_name, version="1.0.0")
 
 
 @app.on_event("startup")
-def _warm_db_pool():
+def _warm_pool_and_models():
     # Open a pooled (warm) connection at startup so the first user request —
     # especially the host "Start" action — doesn't pay the ~2s SSL handshake
     # to the remote DB. This is what keeps the GD startup under 1 second.
@@ -31,6 +31,14 @@ def _warm_db_pool():
         logger.info("DB connection pool warmed at startup")
     except Exception as exc:  # pragma: no cover - non-fatal
         logger.warning("DB pool warm-up skipped: %s", exc)
+
+    # Pre-load Whisper model so the first transcription request doesn't pay
+    # the ~5-10s cold-start penalty.
+    try:
+        from backend.ai.speech_recognition import warmup_model
+        warmup_model()
+    except Exception as exc:
+        logger.warning("Whisper warm-up skipped: %s", exc)
 
 
 app.add_middleware(

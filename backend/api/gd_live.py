@@ -420,8 +420,9 @@ async def upload_gd_live_audio(
     file: UploadFile,
     current_user: dict = Depends(get_current_user),
 ) -> dict:
-    """Upload audio for the current speaker. Transcribes with Whisper, broadcasts
-    TRANSCRIPT + AI_EVALUATION to the team, and saves results to DB."""
+    """Upload audio for the current speaker. Transcribes with Whisper in a thread,
+    runs all AI evaluation modules in parallel, broadcasts live progress events,
+    and returns scores immediately. Detailed analytics continue in background."""
     ext = Path(file.filename or "").suffix.lower()
     if ext not in ALLOWED_AUDIO_TYPES:
         raise HTTPException(
@@ -435,30 +436,52 @@ async def upload_gd_live_audio(
 
     safe_name = f"gd_{session_code}_{current_user['id']}_{os.urandom(4).hex()}{ext}"
     file_path = upload_dir / safe_name
-    content = file.file.read()
-    file_path.write_bytes(content)
+    loop = asyncio.get_running_loop()
 
-    # Transcribe with Whisper
-    result = transcribe_audio(str(file_path))
+    # Save file off the event loop
+    content = await loop.run_in_executor(None, file.file.read)
+    await loop.run_in_executor(None, file_path.write_bytes, content)
+
+    loop_time = loop.time
+    logger = __import__("logging").getLogger("speaksense.api")
+
+    async def _send_progress(stage: str):
+        state = manager.get_state(session_code)
+        if state:
+            for p in state.participants.values():
+                if p.get("user_id") == current_user["id"]:
+                    tn = p.get("team_number")
+                    if tn:
+                        await manager.broadcast_to_team(
+                            session_code, tn,
+                            "EVALUATION_PROGRESS",
+                            {"user_id": current_user["id"], "stage": stage},
+                        )
+                    break
+
+    # Step 1: Transcribe with Whisper (offloaded to thread)
+    await _send_progress("uploading")
+    result = await loop.run_in_executor(None, transcribe_audio, str(file_path))
     if not result.get("success", True):
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=result.get("error", "Speech recognition service unavailable."),
         )
-
     transcript = result.get("transcript", "")
     if not transcript:
         transcript = "[Audio could not be transcribed clearly]"
+    await _send_progress("transcribing")
 
-    # Run AI evaluation
+    # Step 2: Run AI evaluation modules IN PARALLEL via asyncio.gather
     try:
-        evaluation = evaluate_transcript(transcript)
+        from backend.ai.evaluation import evaluate_transcript_parallel
+        evaluation = await evaluate_transcript_parallel(transcript)
+        await _send_progress("evaluating")
     except Exception as exc:
-        logger = __import__("logging").getLogger("speaksense.api")
         logger.warning("AI evaluation failed for gd-live: %s", exc)
         evaluation = None
 
-    # Broadcast TRANSCRIPT to team
+    # Step 3: Broadcast TRANSCRIPT + AI_EVALUATION to team
     state = manager.get_state(session_code)
     team_number = None
     if state:
@@ -468,14 +491,13 @@ async def upload_gd_live_audio(
                 break
         if team_number and team_number in state.team_states:
             ts = state.team_states[team_number]
-            # Store transcript
             ts.transcripts[current_user["id"]] = transcript
+            # Broadcast TRANSCRIPT
             await manager.broadcast_to_team(session_code, team_number, "TRANSCRIPT", {
                 "user_id": current_user["id"],
                 "text": transcript,
             })
-
-            # Broadcast AI evaluation
+            # Broadcast AI_EVALUATION
             if evaluation:
                 await manager.broadcast_to_team(session_code, team_number, "AI_EVALUATION", {
                     "user_id": current_user["id"],
@@ -486,10 +508,47 @@ async def upload_gd_live_audio(
                     "vocabulary": round(evaluation.vocabulary_score, 1),
                     "pronunciation": round(evaluation.pronunciation_score, 1),
                 })
+                ts.evaluations[current_user["id"]] = {
+                    "overall_score": round(evaluation.overall_score, 1),
+                    "grammar_score": round(evaluation.grammar_score, 1),
+                    "fluency_score": round(evaluation.fluency_score, 1),
+                    "confidence_score": round(evaluation.confidence_score, 1),
+                    "vocabulary_score": round(evaluation.vocabulary_score, 1),
+                    "pronunciation_score": round(evaluation.pronunciation_score, 1),
+                }
+        await _send_progress("saving")
 
-    # Save evaluation to DB (async)
+    # Step 4: Save evaluation to DB in background (non-blocking)
     if evaluation and team_number:
-        from backend.database.db import get_connection
+        asyncio.create_task(_save_evaluation_bg(
+            session_code, current_user["id"], team_number, transcript, evaluation, logger
+        ))
+
+    await _send_progress("complete")
+
+    return {
+        "audio_path": str(file_path),
+        "transcript": transcript,
+        "evaluation": {
+            "overall_score": round(evaluation.overall_score, 1) if evaluation else 0,
+            "grammar_score": round(evaluation.grammar_score, 1) if evaluation else 0,
+            "fluency_score": round(evaluation.fluency_score, 1) if evaluation else 0,
+            "confidence_score": round(evaluation.confidence_score, 1) if evaluation else 0,
+            "vocabulary_score": round(evaluation.vocabulary_score, 1) if evaluation else 0,
+            "pronunciation_score": round(evaluation.pronunciation_score, 1) if evaluation else 0,
+        } if evaluation else None,
+        "message": "Audio processed",
+    }
+
+
+async def _save_evaluation_bg(
+    session_code: str, user_id: int, team_number: int, transcript: str, evaluation, logger
+) -> None:
+    """Save evaluation to DB in a background task. Runs blocking DB calls in a thread."""
+    from backend.database.db import get_connection
+    loop = asyncio.get_running_loop()
+
+    def _do_save():
         conn = get_connection()
         try:
             relevance_score = min(100, evaluation.grammar_score * 0.3 + evaluation.fluency_score * 0.3 + evaluation.confidence_score * 0.4)
@@ -518,30 +577,20 @@ async def upload_gd_live_audio(
                 weaknesses.append("Great overall performance!")
                 tips.append("Keep up the good work and challenge yourself with harder topics")
             queries.save_live_evaluation(
-                conn, session_code, current_user["id"], team_number, transcript,
+                conn, session_code, user_id, team_number, transcript,
                 overall, evaluation.fluency_score, evaluation.grammar_score,
                 accent_score, relevance_score, content_quality, points,
                 "; ".join(weaknesses), "; ".join(tips),
             )
         except Exception as exc:
-            logger = __import__("logging").getLogger("speaksense.api")
-            logger.warning("save_live_evaluation failed: %s", exc)
+            logger.warning("save_live_evaluation background failed: %s", exc)
         finally:
             conn.close()
 
-    return {
-        "audio_path": str(file_path),
-        "transcript": transcript,
-        "evaluation": {
-            "overall_score": round(evaluation.overall_score, 1) if evaluation else 0,
-            "grammar_score": round(evaluation.grammar_score, 1) if evaluation else 0,
-            "fluency_score": round(evaluation.fluency_score, 1) if evaluation else 0,
-            "confidence_score": round(evaluation.confidence_score, 1) if evaluation else 0,
-            "vocabulary_score": round(evaluation.vocabulary_score, 1) if evaluation else 0,
-            "pronunciation_score": round(evaluation.pronunciation_score, 1) if evaluation else 0,
-        } if evaluation else None,
-        "message": "Audio processed",
-    }
+    try:
+        await loop.run_in_executor(None, _do_save)
+    except Exception as exc:
+        logger.warning("_save_evaluation_bg failed: %s", exc)
 
 
 @router.get("/sessions/{session_code}/my-team/topic")
