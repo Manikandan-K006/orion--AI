@@ -149,8 +149,6 @@ async def host_gd_live_meeting(
     state = manager.ensure_state(session_code, topic)
     state.ended = False
     state.paused = False
-    state.speaker_user_id = None
-    state.round = 1
     for p in members:
         state.participants.setdefault(p["user_id"], {})
         state.participants[p["user_id"]].update(

@@ -143,10 +143,6 @@ function GdLiveAdminPanel({ code, token, topic, onOpenRoom, onEnd }: {
         <button onClick={() => startTimer(15)} disabled={timerRunning} className="btn-primary text-xs h-10 px-3">Start 15:00</button>
         <button onClick={() => startTimer(10)} disabled={timerRunning} className="btn-secondary text-xs h-10 px-3">10:00</button>
         <button onClick={() => send("RESET_TIMER", { seconds: 0 })} className="btn-secondary text-xs h-10 px-3">Reset Timer</button>
-        <button onClick={() => send("PAUSE_GD", {})} disabled={paused} className="btn-secondary text-xs h-10 px-3">Pause GD</button>
-        <button onClick={() => send("RESUME_GD", {})} disabled={!paused} className="btn-secondary text-xs h-10 px-3">Resume GD</button>
-        <button onClick={() => send("NEXT_ROUND", {})} className="btn-secondary text-xs h-10 px-3">Next Round</button>
-        <button onClick={() => send("NEXT_SPEAKER", {})} className="btn-secondary text-xs h-10 px-3">Next Speaker</button>
         <button onClick={() => onEnd(code)} className="btn-secondary text-xs h-10 px-3 text-red-500 border-red-500/40">End GD</button>
       </div>
 

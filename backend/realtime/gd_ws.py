@@ -17,7 +17,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import json
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
 from mysql.connector import MySQLConnection
@@ -72,23 +72,18 @@ def _save_evaluation_db(session_code: str, user_id: int, team_number: int, trans
     """Run AI evaluation and persist to DB. Called in a thread to avoid blocking the event loop."""
     connection = get_connection()
     try:
-        # Fetch participant info
         participant = queries.fetch_one(connection,
             "SELECT id, team_number FROM gd_live_participants WHERE session_code = %s AND user_id = %s",
             (session_code, user_id))
         if not participant:
             logger.warning("_save_evaluation_db: participant not found uid=%s code=%s", user_id, session_code)
             return
-
-        # Run AI evaluation
         result = evaluate_transcript(transcript)
-
         relevance_score = min(100, result.grammar_score * 0.3 + result.fluency_score * 0.3 + result.confidence_score * 0.4)
         content_quality = min(100, result.vocabulary_score * 0.5 + result.overall_score * 0.5)
         accent_score = result.pronunciation_score
         overall = round((result.grammar_score + result.fluency_score + accent_score + relevance_score + content_quality) / 5, 2)
         points = round(overall * 0.5, 2)
-
         weaknesses = []
         tips = []
         if result.grammar_score < 70:
@@ -109,7 +104,6 @@ def _save_evaluation_db(session_code: str, user_id: int, team_number: int, trans
         if not weaknesses:
             weaknesses.append("Great overall performance!")
             tips.append("Keep up the good work and challenge yourself with harder topics")
-
         queries.save_live_evaluation(
             connection, session_code, user_id, team_number, transcript,
             overall, result.fluency_score, result.grammar_score,
@@ -124,45 +118,23 @@ def _save_evaluation_db(session_code: str, user_id: int, team_number: int, trans
 
 
 class TeamState:
-    """Per-team state within a session: speaker, timer, members, evaluation."""
+    """Per-team state for parallel discussion: timer, members, evaluation."""
 
     def __init__(self, team_number: int, topic: str, members: list[dict]) -> None:
         self.team_number = team_number
         self.topic = topic
         self.members: dict[int, dict] = {m["user_id"]: m for m in members}
-        self.speaker_user_id: Optional[int] = None
-        self.speaker_order: list[int] = [m["user_id"] for m in members]
-        self.speaker_index = 0
         self.finished_user_ids: set[int] = set()
         self.all_finished = False
-        self.timer_seconds = 180  # 3 minutes per speaker
+        self.timer_seconds = 600  # 10 minutes shared discussion timer
         self.timer_running = False
         self.transcripts: dict[int, str] = {}
         self.evaluations: dict[int, dict] = {}
-        self.muted_user_ids: set[int] = set()
-
-    def next_speaker(self) -> Optional[int]:
-        ids = [uid for uid in self.speaker_order if uid not in self.finished_user_ids and uid not in self.muted_user_ids]
-        if not ids:
-            return None
-        if self.speaker_user_id and self.speaker_user_id in ids:
-            idx = ids.index(self.speaker_user_id)
-            self.speaker_user_id = ids[(idx + 1) % len(ids)]
-        else:
-            self.speaker_user_id = ids[0]
-        self.speaker_index = ids.index(self.speaker_user_id) if self.speaker_user_id else 0
-        return self.speaker_user_id
-
-    def finish_speaker(self, user_id: int) -> None:
-        self.finished_user_ids.add(user_id)
-        if len(self.finished_user_ids) >= len(self.speaker_order):
-            self.all_finished = True
 
     def snapshot(self) -> dict:
         return {
             "team_number": self.team_number,
             "topic": self.topic,
-            "speaker_user_id": self.speaker_user_id,
             "finished_user_ids": list(self.finished_user_ids),
             "all_finished": self.all_finished,
             "timer_seconds": self.timer_seconds,
@@ -172,7 +144,7 @@ class TeamState:
                     "user_id": uid,
                     "name": m.get("name"),
                     "label": m.get("label"),
-                    "status": "finished" if uid in self.finished_user_ids else "speaking" if uid == self.speaker_user_id else "waiting",
+                    "status": "finished" if uid in self.finished_user_ids else "recording",
                 }
                 for uid, m in self.members.items()
             ],
@@ -185,8 +157,6 @@ class RoomState:
     def __init__(self, session_code: str, topic: str | None = None) -> None:
         self.session_code = session_code
         self.topic = topic
-        self.speaker_user_id: Optional[int] = None
-        self.round = 1
         self.paused = False
         self.ended = False
         self.participants: dict[int, dict] = {}
@@ -200,8 +170,6 @@ class RoomState:
     def snapshot(self) -> dict:
         return {
             "topic": self.topic,
-            "speaker_user_id": self.speaker_user_id,
-            "round": self.round,
             "paused": self.paused,
             "ended": self.ended,
             "participants": [
@@ -211,9 +179,6 @@ class RoomState:
                     "label": p.get("label"),
                     "team_number": p.get("team_number"),
                     "status": p.get("status"),
-                    "ready": bool(p.get("ready")),
-                    "hand_raised": bool(p.get("hand_raised")),
-                    "muted": bool(p.get("muted")),
                 }
                 for uid, p in self.participants.items()
             ],
@@ -330,13 +295,10 @@ _RELAY_EVENTS = {
     "RAISE_HAND",
     "READY",
     "CHAT_MESSAGE",
-    "SET_SPEAKER",
     "START_GD",
     "PAUSE_GD",
     "RESUME_GD",
     "END_GD",
-    "NEXT_ROUND",
-    "NEXT_SPEAKER",
     "RESET_TIMER",
     "MUTE_PARTICIPANT",
     "REMOVE_PARTICIPANT",
@@ -455,49 +417,27 @@ async def gd_live_socket(
 
             if event == "SPEAKER_FINISHED":
                 ts = state.team_states.get(team_number) if team_number else None
-                if ts and user_id == ts.speaker_user_id:
-                    # Get the speaker's accumulated transcript
-                    transcript = ts.transcripts.get(user_id, "").strip()
-                    speaker_name = next(
-                        (m.get("name") for m in ts.members.values() if m.get("user_id") == user_id),
-                        None
-                    )
-
-                    # Run AI evaluation in a background thread and broadcast results
-                    if transcript:
-                        asyncio.create_task(_evaluate_and_broadcast(
-                            session_code, team_number, user_id, transcript, ts
-                        ))
-
-                    ts.finish_speaker(user_id)
+                if ts and user_id not in ts.finished_user_ids:
+                    ts.finished_user_ids.add(user_id)
+                    if len(ts.finished_user_ids) >= len(ts.members):
+                        ts.all_finished = True
                     # Broadcast updated team state
                     await manager.broadcast_to_team(session_code, team_number, "TEAM_STATE_UPDATED", ts.snapshot())
-                    # Broadcast to admin
                     await manager.broadcast_to_admin(session_code, "TEAM_PROGRESS", {
                         "team_number": team_number,
-                        "speaker_user_id": ts.speaker_user_id,
                         "finished_user_ids": list(ts.finished_user_ids),
                         "all_finished": ts.all_finished,
                     })
                     if ts.all_finished:
+                        # Stop the team timer
+                        ts.timer_running = False
                         await manager.broadcast_to_team(session_code, team_number, "ALL_FINISHED", {
                             "session_code": session_code,
                             "team_number": team_number,
                         })
-                        # Build and broadcast session results for the team
                         asyncio.create_task(_broadcast_team_results(
                             session_code, team_number, ts
                         ))
-                    else:
-                        # Auto-advance to next speaker
-                        nxt = ts.next_speaker()
-                        if nxt:
-                            ts.timer_seconds = 180
-                            ts.timer_running = True
-                            await manager.broadcast_to_team(session_code, team_number, "SPEAKER_CHANGED", {
-                                "user_id": nxt,
-                                "timer_seconds": ts.timer_seconds,
-                            })
                 continue
 
             if event not in _RELAY_EVENTS:
@@ -530,9 +470,8 @@ async def gd_live_socket(
                     {"user_id": sender_id, "name": name,
                      "label": state.participants.get(sender_id, {}).get("label"),
                      "text": text[:1000]})
-            elif event in ("SET_SPEAKER", "NEXT_SPEAKER", "START_GD", "PAUSE_GD",
-                           "RESUME_GD", "END_GD", "NEXT_ROUND", "RESET_TIMER",
-                           "MUTE_PARTICIPANT", "REMOVE_PARTICIPANT"):
+            elif event in ("START_GD", "PAUSE_GD", "RESUME_GD", "END_GD",
+                           "RESET_TIMER", "MUTE_PARTICIPANT", "REMOVE_PARTICIPANT"):
                 if not is_admin:
                     await manager.send_personal(
                         websocket, "ERROR", {"detail": "Admin only action"}
@@ -553,97 +492,15 @@ async def gd_live_socket(
         await broadcast_participants(session_code)
 
 
-async def _evaluate_and_broadcast(
-    session_code: str, team_number: int, user_id: int, transcript: str, ts: TeamState
-) -> None:
-    """Run AI evaluation on a speaker's transcript, save to DB, and stream results to the team."""
-    try:
-        # Run the evaluation in a thread (blocking DB + AI calls)
-        result = await asyncio.to_thread(_evaluate_transcript_only, transcript)
-
-        if result:
-            # Store evaluation in TeamState for later results broadcast
-            ts.evaluations[user_id] = {
-                "user_id": user_id,
-                "overall_score": round(result.get("overall_score", 0), 1),
-                "grammar_score": round(result.get("grammar_score", 0), 1),
-                "fluency_score": round(result.get("fluency_score", 0), 1),
-                "confidence_score": round(result.get("confidence_score", 0), 1),
-                "vocabulary_score": round(result.get("vocabulary_score", 0), 1),
-                "pronunciation_score": round(result.get("pronunciation_score", 0), 1),
-                "fillers": result.get("fillers", 0),
-                "wpm": result.get("wpm", 0),
-                "pauses": result.get("pauses", 0),
-                "energy": result.get("energy", 0),
-                "professional_tone": result.get("professional_tone", 0),
-            }
-
-            # Stream AI evaluation to the team in real-time
-            await manager.broadcast_to_team(session_code, team_number, "AI_EVALUATION", {
-                "user_id": user_id,
-                "overall_score": round(result.get("overall_score", 0), 1),
-                "grammar": round(result.get("grammar_score", 0), 1),
-                "fluency": round(result.get("fluency_score", 0), 1),
-                "confidence": round(result.get("confidence_score", 0), 1),
-                "vocabulary": round(result.get("vocabulary_score", 0), 1),
-                "pronunciation": round(result.get("pronunciation_score", 0), 1),
-                "fillers": result.get("fillers", 0),
-                "wpm": result.get("wpm", 0),
-                "pauses": result.get("pauses", 0),
-                "energy": result.get("energy", 0),
-                "professional_tone": result.get("professional_tone", 0),
-            })
-
-            # Persist to database in a separate thread
-            asyncio.create_task(asyncio.to_thread(
-                _save_evaluation_db, session_code, user_id, team_number, transcript
-            ))
-    except Exception as exc:
-        logger.warning("_evaluate_and_broadcast failed: %s", exc)
-
-
-def _evaluate_transcript_only(transcript: str) -> dict:
-    """Run AI evaluation and return metrics as a dict. Called in a thread."""
-    result = evaluate_transcript(transcript)
-    return {
-        "overall_score": result.overall_score,
-        "grammar_score": result.grammar_score,
-        "fluency_score": result.fluency_score,
-        "confidence_score": result.confidence_score,
-        "vocabulary_score": result.vocabulary_score,
-        "pronunciation_score": result.pronunciation_score,
-        "emotion": result.emotion,
-        "fillers": 0,
-        "wpm": 0,
-        "pauses": 0,
-        "energy": 0,
-        "professional_tone": 0,
-    }
-
-
 async def _broadcast_team_results(
     session_code: str, team_number: int, ts: TeamState
 ) -> None:
     """Build and broadcast SESSION_RESULTS for the team once all members have finished."""
     try:
-        # For any member who doesn't have stored evaluation yet, evaluate now
-        for uid in ts.speaker_order:
-            if uid not in ts.evaluations:
-                transcript = ts.transcripts.get(uid, "").strip()
-                if transcript:
-                    result = await asyncio.to_thread(_evaluate_transcript_only, transcript)
-                    ts.evaluations[uid] = {
-                        "user_id": uid,
-                        "overall_score": round(result.get("overall_score", 0), 1),
-                        "grammar_score": round(result.get("grammar_score", 0), 1),
-                        "fluency_score": round(result.get("fluency_score", 0), 1),
-                        "confidence_score": round(result.get("confidence_score", 0), 1),
-                        "vocabulary_score": round(result.get("vocabulary_score", 0), 1),
-                    }
-
-        # Build results list
+        # Build results list from stored evaluations
         results = []
-        for uid in ts.speaker_order:
+        member_ids = list(ts.members.keys())
+        for uid in member_ids:
             member = ts.members.get(uid, {})
             eval_data = ts.evaluations.get(uid, {})
             results.append({
@@ -683,24 +540,7 @@ async def _handle_admin_event(
     payload: dict,
 ) -> None:
     """Apply an admin-driven change to room state and broadcast it."""
-    if event == "SET_SPEAKER":
-        uid = int(payload.get("user_id")) if payload.get("user_id") is not None else None
-        state.speaker_user_id = uid
-        await mgr.broadcast(session_code, "SPEAKER_CHANGED", {"user_id": uid})
-    elif event == "NEXT_SPEAKER":
-        ids = [uid for uid in state.participants if not state.participants[uid].get("muted")]
-        if ids:
-            try:
-                idx = ids.index(state.speaker_user_id)
-                nxt = ids[(idx + 1) % len(ids)]
-            except ValueError:
-                nxt = ids[0]
-            state.speaker_user_id = nxt
-            await mgr.broadcast(session_code, "SPEAKER_CHANGED", {"user_id": nxt})
-    elif event == "NEXT_ROUND":
-        state.round += 1
-        await mgr.broadcast(session_code, "ROUND_CHANGED", {"round": state.round})
-    elif event == "START_GD":
+    if event == "START_GD":
         state.paused = False
         await mgr.broadcast(session_code, "SESSION_RESUMED", {"status": "active"})
     elif event == "PAUSE_GD":
