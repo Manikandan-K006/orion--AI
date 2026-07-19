@@ -1622,21 +1622,14 @@ export default function Home() {
                 )}
 
                     {gdLiveRoomActive && (
-                  <>
-                    <div className="flex items-center gap-2 mt-2">
-                      <button onClick={() => { setView("gd-live-monitor"); }} className="btn-primary text-xs h-9 px-4 flex items-center gap-1.5">
-                        <Eye className="w-3.5 h-3.5" /> Live Monitor
-                      </button>
-                    </div>
-                    <GdLiveAdminPanel
-                      code={gdLiveAdminViewCode}
-                      token={token}
-                      topic={gdLiveRoomTopic}
-                      onOpenRoom={openGdLiveRoom}
-                      onEnd={endGdLiveRoom}
-                    />
-                  </>
-                )}
+                      <GdLiveAdminMonitor
+                        sessionCode={gdLiveAdminViewCode}
+                        token={token}
+                        showHostControls
+                        onBack={() => { setGdLiveRoomActive(false); }}
+                        onEnd={endGdLiveRoom}
+                      />
+                    )}
               </div>
             </div>
           )}

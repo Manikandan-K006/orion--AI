@@ -1,14 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Clock, Users, Radio, CheckCircle2, Loader2, BarChart3, Zap, Volume2, Mic, MessageSquare, Eye } from "lucide-react";
-import { useGdLiveWs, GDLiveWsMessage } from "@/lib/useGdLiveWs";
+import { Clock, Users, CheckCircle2, Loader2, BarChart3, Zap, Volume2, MessageSquare, Eye, Radio, Timer, StopCircle } from "lucide-react";
 
 interface MonitorMember {
   user_id: number;
   name: string | null;
   label: string | null;
   status: "recording" | "finished";
+  terminated?: boolean;
 }
 
 interface MonitorTeam {
@@ -18,8 +18,14 @@ interface MonitorTeam {
   finished_count: number;
   total_count: number;
   all_finished: boolean;
+  timer_seconds: number;
   transcripts: { user_id: number; text: string }[];
   evaluations: Record<number, any>;
+}
+
+interface GDLiveWsMessage {
+  event: string;
+  payload?: any;
 }
 
 const COLORS = [
@@ -28,18 +34,27 @@ const COLORS = [
   "from-orange-500 to-orange-600", "from-pink-500 to-pink-600",
 ];
 
+function formatTime(s: number) {
+  const m = Math.floor(s / 60).toString().padStart(2, "0");
+  const sec = (s % 60).toString().padStart(2, "0");
+  return `${m}:${sec}`;
+}
+
 export default function GdLiveAdminMonitor({
   sessionCode,
   token,
   onBack,
+  onEnd,
+  showHostControls,
 }: {
   sessionCode: string;
   token: string;
   onBack: () => void;
+  onEnd?: (code: string) => void;
+  showHostControls?: boolean;
 }) {
   const { connected, subscribe } = useGdLiveWs(sessionCode, token);
   const [teams, setTeams] = useState<Map<number, MonitorTeam>>(new Map());
-  const [selectedTeam, setSelectedTeam] = useState<number | null>(null);
   const [activity, setActivity] = useState<{ id: number; text: string; ts: number }[]>([]);
   const idRef = useRef(1);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -70,6 +85,7 @@ export default function GdLiveAdminMonitor({
               name: m.name,
               label: m.label,
               status: m.status || "recording",
+              terminated: m.terminated || false,
             }));
             const finishedIds = new Set(ts.finished_user_ids || []);
             newTeams.set(tn, {
@@ -79,6 +95,7 @@ export default function GdLiveAdminMonitor({
               finished_count: finishedIds.size,
               total_count: members.length,
               all_finished: ts.all_finished || false,
+              timer_seconds: ts.timer_seconds || 0,
               transcripts: [],
               evaluations: {},
             });
@@ -100,30 +117,19 @@ export default function GdLiveAdminMonitor({
                 name: m.name,
                 label: m.label,
                 status: m.status || "recording",
+                terminated: m.terminated || false,
               }));
               next.set(tn, {
-                ...existing, members,
+                ...existing,
+                members,
                 finished_count: finishedIds.size,
                 all_finished: ts.all_finished || false,
+                timer_seconds: ts.timer_seconds ?? existing.timer_seconds,
               });
             }
             return next;
           });
           push(`Team ${tn} state updated`);
-          break;
-        }
-        case "TEAM_PROGRESS": {
-          const tn = msg.payload?.team_number;
-          const finished = msg.payload?.finished_user_ids?.length || 0;
-          setTeams((prev) => {
-            const next = new Map(prev);
-            const t = next.get(tn);
-            if (t) {
-              next.set(tn, { ...t, finished_count: finished, all_finished: msg.payload?.all_finished || false });
-            }
-            return next;
-          });
-          push(`Team ${tn}: ${finished}/${teams.get(tn)?.total_count || "?"} finished`);
           break;
         }
         case "TRANSCRIPT": {
@@ -205,12 +211,26 @@ export default function GdLiveAdminMonitor({
       <header className="flex items-center justify-between px-4 md:px-6 py-3 surface border-b" style={{ borderColor: "var(--border)" }}>
         <div className="flex items-center gap-3">
           <Eye className="w-5 h-5 text-amber-400" />
-          <span className="text-lg font-bold text-heading">Admin Monitor</span>
+          <span className="text-lg font-bold text-heading">Observer Monitor</span>
           <span className="text-sm text-muted-soft">Session <code className="font-mono text-amber-300">{sessionCode}</code></span>
+          {showHostControls && connected && (
+            <span className="flex items-center gap-1.5 text-xs font-semibold text-red-500 ml-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse" /> LIVE
+            </span>
+          )}
           <span className={`w-2 h-2 rounded-full ${connected ? "bg-emerald-500" : "bg-red-500"}`} />
         </div>
         <div className="flex items-center gap-3">
-          <span className="text-xs text-muted-soft">{sortedTeams.length} team(s) · {sortedTeams.reduce((a, t) => a + t.members.length, 0)} participant(s)</span>
+          {showHostControls && onEnd && (
+            <button onClick={() => onEnd(sessionCode)}
+              className="btn-secondary text-xs h-9 px-3 flex items-center gap-1.5 text-red-500 border-red-500/40"
+            >
+              <StopCircle className="w-3.5 h-3.5" /> End Session
+            </button>
+          )}
+          <span className="text-xs text-muted-soft hidden sm:inline">
+            {sortedTeams.length} team(s) · {sortedTeams.reduce((a, t) => a + t.members.length, 0)} participant(s)
+          </span>
           <button onClick={onBack} className="btn-secondary text-xs h-9 px-3">Back</button>
         </div>
       </header>
@@ -233,11 +253,16 @@ export default function GdLiveAdminMonitor({
             return (
               <div key={team.team_number} className={`card overflow-hidden transition-all duration-300 ${team.all_finished ? "ring-1 ring-emerald-500/40" : "ring-1 ring-amber-500/20"}`}>
                 <div className="p-4 flex items-center justify-between" style={{ background: "var(--surface-2)" }}>
-                  <div className="flex items-center gap-3">
-                    <span className="text-lg font-bold font-mono text-amber-300">Team {team.team_number}</span>
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className="text-lg font-bold font-mono text-amber-300 shrink-0">Team {team.team_number}</span>
                     <span className="text-xs text-muted-soft truncate max-w-[200px]">{team.topic}</span>
                   </div>
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 shrink-0">
+                    {team.timer_seconds > 0 && !team.all_finished && (
+                      <span className="flex items-center gap-1 text-xs font-mono tabular-nums text-heading">
+                        <Timer className="w-3.5 h-3.5 text-amber-400" /> {formatTime(team.timer_seconds)}
+                      </span>
+                    )}
                     <span className="flex items-center gap-1 text-xs text-muted-soft">
                       <Users className="w-3.5 h-3.5" /> {total}
                     </span>
@@ -263,13 +288,13 @@ export default function GdLiveAdminMonitor({
                       const isFinished = m.status === "finished";
                       const evalData = team.evaluations[m.user_id];
                       return (
-                        <div key={m.user_id} className={`p-3 rounded-xl text-center transition-all duration-300 ${isFinished ? "ring-1 ring-blue-500/30 opacity-75" : "surface-2 ring-1 ring-emerald-500/10"}`}>
+                        <div key={m.user_id} className={`p-3 rounded-xl text-center transition-all duration-300 ${isFinished ? "ring-1 ring-emerald-500/30 opacity-75" : m.terminated ? "ring-1 ring-red-500/30" : "surface-2 ring-1 ring-emerald-500/10"}`}>
                           <div className={`w-10 h-10 rounded-full bg-gradient-to-br ${COLORS[idx % COLORS.length]} flex items-center justify-center text-white font-bold text-sm mx-auto mb-1.5`}>
                             {(m.label || m.name || "?")[0].toUpperCase()}
                           </div>
                           <p className="text-xs font-semibold text-heading truncate">{m.label || m.name}</p>
-                          <p className={`text-[10px] ${isFinished ? "text-blue-400" : "text-emerald-400"}`}>
-                            {isFinished ? "Finished" : "Recording"}
+                          <p className={`text-[10px] ${m.terminated ? "text-red-400" : isFinished ? "text-emerald-400" : "text-amber-400"}`}>
+                            {m.terminated ? "Terminated" : isFinished ? "Finished" : "Recording"}
                           </p>
                           {evalData && (
                             <div className="mt-1.5 space-y-0.5">
@@ -332,7 +357,7 @@ export default function GdLiveAdminMonitor({
           })}
         </div>
 
-        {/* Right panel: Activity log */}
+        {/* Right panel: Activity log + Stats */}
         <aside className="surface border-l overflow-hidden flex flex-col" style={{ borderColor: "var(--border)" }}>
           <div className="p-4 border-b" style={{ borderColor: "var(--border)" }}>
             <h3 className="text-xs uppercase tracking-wide text-muted-soft flex items-center gap-1">
@@ -370,8 +395,54 @@ export default function GdLiveAdminMonitor({
               <p className="text-[10px] text-muted-soft">Complete</p>
             </div>
           </div>
+
+          {showHostControls && onEnd && (
+            <div className="p-4 border-t" style={{ borderColor: "var(--border)" }}>
+              <button onClick={() => onEnd(sessionCode)}
+                className="w-full btn-secondary text-sm py-3 rounded-xl flex items-center justify-center gap-2 text-red-500 border-red-500/40"
+              >
+                <StopCircle className="w-4 h-4" /> End Session
+              </button>
+            </div>
+          )}
         </aside>
       </div>
     </div>
   );
+}
+
+function useGdLiveWs(sessionCode: string, token: string) {
+  const [connected, setConnected] = useState(false);
+  const wsRef = useRef<WebSocket | null>(null);
+  const listenersRef = useRef<((msg: GDLiveWsMessage) => void)[]>([]);
+
+  useEffect(() => {
+    if (!sessionCode || !token) return;
+    const wsUrl = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8000";
+    const ws = new WebSocket(`${wsUrl}/ws/gd-live/${sessionCode}?token=${token}`);
+    wsRef.current = ws;
+
+    ws.onopen = () => setConnected(true);
+    ws.onclose = () => setConnected(false);
+    ws.onerror = () => setConnected(false);
+    ws.onmessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data) as GDLiveWsMessage;
+        listenersRef.current.forEach((fn) => fn(msg));
+      } catch {}
+    };
+
+    return () => {
+      ws.close();
+    };
+  }, [sessionCode, token]);
+
+  const subscribe = (fn: (msg: GDLiveWsMessage) => void) => {
+    listenersRef.current.push(fn);
+    return () => {
+      listenersRef.current = listenersRef.current.filter((f) => f !== fn);
+    };
+  };
+
+  return { connected, subscribe };
 }
