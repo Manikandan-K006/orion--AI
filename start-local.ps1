@@ -29,7 +29,7 @@ if (-not $isMysqlRunning) {
     $mysqlExe = "C:\Program Files\MySQL\MySQL Server 8.4\bin\mysqld.exe"
     $mysqlDataDir = "$root\database\data"
     if (Test-Path $mysqlExe) {
-        Start-Process -FilePath $mysqlExe -ArgumentList "--datadir='$mysqlDataDir'", "--port=$mysqlPort" -WindowStyle Hidden
+        Start-Process -FilePath $mysqlExe -ArgumentList "--datadir="\"$mysqlDataDir\""", "--port=$mysqlPort" -WindowStyle Hidden
         Start-Sleep -Seconds 3
     } else {
         Write-Warning "Could not find MySQL executable at $mysqlExe"
@@ -39,12 +39,12 @@ if (-not $isMysqlRunning) {
 }
 
 Write-Host "[1/2] Starting backend on http://localhost:8000 ..." -ForegroundColor Yellow
-$p1 = Start-Process -PassThru powershell -WindowStyle Normal -ArgumentList "-NoExit -Command cd '$root'; & '$pythonExe' -m uvicorn backend.main:app --host 0.0.0.0 --port 8000"
+$p1 = Start-Process -PassThru powershell -WindowStyle Hidden -ArgumentList "-NoExit -Command cd '$root'; & '$pythonExe' -m uvicorn backend.main:app --host 0.0.0.0 --port 8000"
 
 Start-Sleep -Seconds 4
 
 Write-Host "[2/2] Starting frontend on http://localhost:3000 ..." -ForegroundColor Yellow
-$p2 = Start-Process -PassThru powershell -WindowStyle Normal -ArgumentList "-NoExit -Command cd '$root\frontend'; npm run dev"
+$p2 = Start-Process -PassThru powershell -WindowStyle Hidden -ArgumentList "-NoExit -Command cd '$root\frontend'; npm run dev"
 
 Start-Sleep -Seconds 3
 Write-Host "`n=== BOTH SERVERS STARTING ===" -ForegroundColor Green
