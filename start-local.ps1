@@ -1,5 +1,5 @@
 $root = $PSScriptRoot
-$pythonExe = "$root\..\.venv\Scripts\python.exe"
+$pythonExe = "$root\backend\venv\Scripts\python.exe"
 
 Write-Host "=== MZ Orator Local Launcher ===" -ForegroundColor Cyan
 
