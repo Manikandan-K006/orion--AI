@@ -32,6 +32,9 @@ class UserResponse(BaseModel):
     email: EmailStr
     role: str
     register_number: str | None = None
+    department: str | None = None
+    year: str | None = None
+
 
 
 class QuestionCreate(BaseModel):

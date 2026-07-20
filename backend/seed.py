@@ -3,6 +3,7 @@ import hashlib
 from backend.security import hash_password
 import os
 import mysql.connector
+from backend.security import hash_password
 
 STUDENTS = [
     ("911724205001", "ADITHYA K"),

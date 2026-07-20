@@ -56,9 +56,11 @@ def get_user_by_register_number(connection: MySQLConnection, register_number: st
 def get_user_by_id(connection: MySQLConnection, user_id: int) -> dict[str, Any] | None:
     return fetch_one(
         connection,
-        "SELECT id, name, email, register_number, role, created_at FROM users WHERE id = %s",
+        "SELECT u.id, u.name, u.email, u.register_number, u.role, u.created_at, sp.department, sp.year "
+        "FROM users u LEFT JOIN student_profile sp ON u.id = sp.user_id WHERE u.id = %s",
         (user_id,),
     )
+
 
 
 def create_user(connection: MySQLConnection, name: str, email: str, password_hash: str, role: str, register_number: str = "") -> int:

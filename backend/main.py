@@ -32,13 +32,13 @@ def _warm_pool_and_models():
     except Exception as exc:  # pragma: no cover - non-fatal
         logger.warning("DB pool warm-up skipped: %s", exc)
 
-    # Pre-load Whisper model so the first transcription request doesn't pay
-    # the ~5-10s cold-start penalty.
-    try:
-        from backend.ai.speech_recognition import warmup_model
-        warmup_model()
-    except Exception as exc:
-        logger.warning("Whisper warm-up skipped: %s", exc)
+    # Pre-load Whisper model skipped due to Application Control policy restrictions on ctranslate2 DLL
+    # try:
+    #     from backend.ai.speech_recognition import warmup_model
+    #     warmup_model()
+    # except Exception as exc:
+    #     logger.warning("Whisper warm-up skipped: %s", exc)
+
 
 
 app.add_middleware(
