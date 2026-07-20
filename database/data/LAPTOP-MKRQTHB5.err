@@ -14,3 +14,13 @@
 2026-07-20T03:57:32.738372Z 0 [System] [MY-011323] [Server] X Plugin ready for connections. Bind-address: '::' port: 33060
 2026-07-20T07:01:36.098222Z 0 [System] [MY-015015] [Server] MySQL Server - start.
 2026-07-20T07:01:36.385336Z 0 [System] [MY-010116] [Server] C:\Users\HARIHARAN S\AppData\Roaming\Local\lightning-services\mysql-8.4.0\bin\win64\bin\mysqld.exe (mysqld 8.4.0) starting as process 31604
+2026-07-20T07:01:36.453862Z 1 [System] [MY-013576] [InnoDB] InnoDB initialization has started.
+2026-07-20T07:01:37.480107Z 1 [System] [MY-013577] [InnoDB] InnoDB initialization has ended.
+2026-07-20T07:01:37.980471Z 0 [System] [MY-010229] [Server] Starting XA crash recovery...
+2026-07-20T07:01:37.989415Z 0 [System] [MY-010232] [Server] XA crash recovery finished.
+2026-07-20T07:01:38.124238Z 0 [Warning] [MY-010068] [Server] CA certificate ca.pem is self signed.
+2026-07-20T07:01:38.125002Z 0 [System] [MY-013602] [Server] Channel mysql_main configured to support TLS. Encrypted connections are now supported for this channel.
+2026-07-20T07:01:38.228584Z 0 [System] [MY-010931] [Server] C:\Users\HARIHARAN S\AppData\Roaming\Local\lightning-services\mysql-8.4.0\bin\win64\bin\mysqld.exe: ready for connections. Version: '8.4.0'  socket: ''  port: 3306  MySQL Community Server - GPL.
+2026-07-20T07:01:38.512261Z 0 [System] [MY-011323] [Server] X Plugin ready for connections. Bind-address: '::' port: 33060
+2026-07-20T07:02:08.571431Z 13 [Warning] [MY-013021] [InnoDB] A transaction id in a record of table `speaksense_ai`.`solo_practice_sessions` is newer than the system-wide maximum.
+2026-07-20T07:02:08.575273Z 13 [Warning] [MY-013021] [InnoDB] A transaction id in a record of table `speaksense_ai`.`solo_practice_sessions` is newer than the system-wide maximum.
