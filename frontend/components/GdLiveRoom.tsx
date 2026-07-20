@@ -76,7 +76,7 @@ export default function GdLiveRoom({
   const thinkingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const finishLockRef = useRef(false);
   const userId = user?.user_id ?? user?.id;
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
   const voice = useVoiceAnnouncement();
   const announcedMarkers = useRef<Set<string>>(new Set());
   const [showWarning, setShowWarning] = useState<string | null>(null);

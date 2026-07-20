@@ -39,7 +39,7 @@ if (-not $isMysqlRunning) {
 }
 
 Write-Host "[1/2] Starting backend on http://localhost:8000 ..." -ForegroundColor Yellow
-$p1 = Start-Process -PassThru powershell -WindowStyle Normal -ArgumentList "-NoExit -Command cd '$root'; & '$pythonExe' -m uvicorn backend.main:app --host 127.0.0.1 --port 8000"
+$p1 = Start-Process -PassThru powershell -WindowStyle Normal -ArgumentList "-NoExit -Command cd '$root'; & '$pythonExe' -m uvicorn backend.main:app --host 0.0.0.0 --port 8000"
 
 Start-Sleep -Seconds 4
 
