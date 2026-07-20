@@ -8,7 +8,7 @@ Get-Process -Name node -ErrorAction SilentlyContinue | Stop-Process -Force
 Start-Sleep -Seconds 2
 
 Write-Host "[1/2] Starting backend on http://localhost:8000 ..." -ForegroundColor Yellow
-$p1 = Start-Process -PassThru powershell -WindowStyle Normal -ArgumentList "-NoExit -Command cd '$root'; .\backend\venv\Scripts\Activate; python -m uvicorn backend.main:app --port 8000"
+$p1 = Start-Process -PassThru powershell -WindowStyle Normal -ArgumentList "-NoExit -Command cd '$root'; .python -m uvicorn backend.main:app --port 8000"
 
 Start-Sleep -Seconds 8
 

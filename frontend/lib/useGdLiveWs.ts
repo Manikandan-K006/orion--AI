@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-const WS_BASE = "ws://localhost:8000";
+const WS_BASE = "ws://127.0.0.1:8000";
 
 export type GDLiveWsEvent =
   | "SESSION_STARTED"
