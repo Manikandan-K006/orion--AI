@@ -865,32 +865,11 @@ export default function Home() {
     );
   }
 
-  return (
-    <div className={`min-h-screen flex relative overflow-hidden ${theme === "dark" ? "dark" : ""}`}>
-      {/* Theme-based animated background */}
-      <div className="fixed inset-0 z-0">
-        <img
-          src={theme === "dark" ? "/animated_gd_bg.jpeg" : "/gd_light_bg.jpeg"}
-          alt=""
-          className="w-full h-full object-cover"
-          style={theme === "dark" ? { animation: "ken-burns 30s ease-in-out infinite alternate" } : undefined}
-        />
-        <div className="absolute inset-0" style={{ background: theme === "dark" ? "rgba(15,23,42,0.72)" : "rgba(248,250,252,0.78)" }} />
-      </div>
-
-      {/* Theme toggle */}
-      <button onClick={toggleTheme} className="fixed top-4 right-4 z-50 p-2.5 rounded-xl btn-secondary" title="Toggle theme">
-        {theme === "dark" ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-      </button>
-
-      {/* Mobile backdrop overlay when sidebar open */}
-      {sidebarOpen && (
-        <div className="fixed inset-0 z-20 bg-black/50" onClick={() => setSidebarOpen(false)} />
-      )}
-
-      {/* Sidebar */}
-      <aside className={`fixed z-30 h-full transition-all duration-300 ease-in-out flex flex-col shrink-0 surface ${theme === "dark" ? "border-r border-[#334155]" : "border-r border-[#e5e7eb]"} ${sidebarOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full"}`} style={{ width: "16rem", background: "var(--surface)" }}>
-        <div className="flex items-center justify-between p-4 md:p-5 border-b" style={{ borderColor: "var(--border)" }}>
+  function renderSidebarContent(isMobile = false) {
+    if (!user) return null;
+    return (
+      <>
+        <div className="flex items-center justify-between p-4 md:p-5 border-b animate-ping-once" style={{ borderColor: "var(--border)" }}>
           <div className="flex items-center gap-3">
             <img src="/MZ_logo_DB.webp" alt="Mount Zion Logo" className="w-10 h-10 rounded-xl object-cover shadow-lg shrink-0" />
             <div className="truncate">
@@ -898,9 +877,13 @@ export default function Home() {
               <p className="text-xs text-muted-soft">{user.name}</p>
             </div>
           </div>
-          <button className="p-2 text-muted-soft hover:text-heading hover:bg-[var(--surface-hover)] rounded-lg" onClick={() => setSidebarOpen(false)}><X className="w-5 h-5" /></button>
+          {isMobile && (
+            <button className="p-2 text-muted-soft hover:text-heading hover:bg-[var(--surface-hover)] rounded-lg" onClick={() => setSidebarOpen(false)}>
+              <X className="w-5 h-5" />
+            </button>
+          )}
         </div>
-        <nav className="flex-1 p-3 space-y-1">
+        <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
           {[
             { icon: <Users className="w-5 h-5 shrink-0" />, label: "Dashboard", view: "dashboard" as PageView },
             ...(user?.role !== "admin" ? [
@@ -923,7 +906,7 @@ export default function Home() {
                 else if (item.view === "gd-live") { setView("gd-live"); loadGdLiveSessions(); }
                 else if (item.view === "gd-live-admin") { setView("gd-live-admin"); loadGdLiveSessions(); }
                 else setView(item.view);
-                setSidebarOpen(false);
+                if (isMobile) setSidebarOpen(false);
               }}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all whitespace-nowrap ${view === item.view ? "bg-[rgba(139,92,246,0.12)] text-[#7c3aed] dark:text-[#a78bfa] border border-[#8b5cf6]" : "text-body hover:bg-[var(--surface-hover)] hover:text-heading"} ${isSessionLocked ? "opacity-40 cursor-not-allowed" : ""}`}
             >
@@ -941,13 +924,48 @@ export default function Home() {
             <LogOut className="w-5 h-5 shrink-0" /> Sign Out
           </button>
         </div>
+      </>
+    );
+  }
+
+  return (
+    <div className={`min-h-screen flex relative overflow-hidden ${theme === "dark" ? "dark" : ""}`}>
+      {/* Theme-based animated background */}
+      <div className="fixed inset-0 z-0">
+        <img
+          src={theme === "dark" ? "/animated_gd_bg.jpeg" : "/gd_light_bg.jpeg"}
+          alt=""
+          className="w-full h-full object-cover"
+          style={theme === "dark" ? { animation: "ken-burns 30s ease-in-out infinite alternate" } : undefined}
+        />
+        <div className="absolute inset-0" style={{ background: theme === "dark" ? "rgba(15,23,42,0.72)" : "rgba(248,250,252,0.78)" }} />
+      </div>
+
+      {/* Theme toggle */}
+      <button onClick={toggleTheme} className="fixed top-4 right-4 z-50 p-2.5 rounded-xl btn-secondary" title="Toggle theme">
+        {theme === "dark" ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+      </button>
+
+      {/* Mobile backdrop overlay when sidebar open */}
+      {sidebarOpen && (
+        <div className="fixed inset-0 z-20 bg-black/50 md:hidden" onClick={() => setSidebarOpen(false)} />
+      )}
+
+      {/* Mobile Sidebar */}
+      <aside className={`fixed z-30 h-full inset-y-0 left-0 transition-all duration-300 ease-in-out flex flex-col shrink-0 surface border-r border-[var(--border)] ${sidebarOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full"} md:hidden`} style={{ width: "16rem", background: "var(--surface)" }}>
+        {renderSidebarContent(true)}
+      </aside>
+
+      {/* Desktop Docked Sidebar */}
+      <aside className="hidden md:flex flex-col shrink-0 h-screen sticky top-0 border-r border-[var(--border)] bg-[var(--surface)]" style={{ width: "16rem" }}>
+        {renderSidebarContent(false)}
       </aside>
 
       {/* Main Content */}
       <main className="flex-1 overflow-auto min-h-screen">
         <div className="p-4 md:p-6 max-w-6xl mx-auto animate-fade-up">
           {/* Top bar */}
-          <div className={`flex items-center justify-between mb-4 sticky top-0 z-10 py-3 -mx-4 px-4 md:px-0 md:py-3 md:mx-0 surface rounded-b-2xl`} style={{ background: "var(--surface)", borderBottom: "1px solid var(--border)" }}>
+          <div className={`flex items-center justify-between mb-4 sticky top-0 z-10 py-3 -mx-4 px-4 md:px-0 md:py-3 md:mx-0 surface rounded-b-2xl md:hidden`} style={{ background: "var(--surface)", borderBottom: "1px solid var(--border)" }}>
             <button onClick={() => { if (!isSessionLocked) setSidebarOpen(!sidebarOpen); }} className={`p-2 rounded-lg transition-all hover:scale-110 text-muted-soft hover:bg-[var(--surface-hover)] ${isSessionLocked ? "opacity-40 cursor-not-allowed" : ""}`} title={sidebarOpen ? "Close menu" : "Open menu"}>
               {sidebarOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
             </button>
@@ -986,21 +1004,21 @@ export default function Home() {
                         </span>
                       )}
                     </div>
-                    <h2 className="text-2xl md:text-3xl font-extrabold text-heading tracking-tight flex items-center gap-2">
+                    <h2 className="text-2xl md:text-3xl font-extrabold text-slate-100 tracking-tight flex items-center gap-2">
                       Welcome back, <span className="bg-gradient-to-r from-white via-indigo-200 to-indigo-400 bg-clip-text text-transparent">{user.name}</span>!
                     </h2>
-                    <p className="text-sm text-muted-soft mt-1.5 max-w-xl">
+                    <p className="text-sm text-slate-300 mt-1.5 max-w-xl">
                       {user.role === "admin" 
                         ? "Manage group discussions, review student rankings, and monitor active sessions in real-time."
                         : "Track your communication progress, join live discussions, and build your confidence with AI feedback."}
                     </p>
                   </div>
                   {user.role === "student" && (
-                    <div className="flex flex-wrap gap-2 text-xs text-muted-soft bg-slate-950/50 backdrop-blur-md border border-slate-800 p-4 rounded-2xl shrink-0">
+                    <div className="flex flex-wrap gap-2 text-xs text-slate-300 bg-slate-950/50 backdrop-blur-md border border-slate-800 p-4 rounded-2xl shrink-0">
                       <div>
-                        <p className="font-semibold text-heading mb-1 uppercase tracking-wider">Registration Info</p>
-                        <p className="opacity-80">Reg No: <span className="font-mono text-heading">{user.register_number}</span></p>
-                        <p className="opacity-80">Year: <span className="text-heading">{user.year || "3rd Year"}</span></p>
+                        <p className="font-semibold text-slate-200 mb-1 uppercase tracking-wider">Registration Info</p>
+                        <p className="opacity-80">Reg No: <span className="font-mono text-white">{user.register_number}</span></p>
+                        <p className="opacity-80">Year: <span className="text-white">{user.year || "3rd Year"}</span></p>
                       </div>
                     </div>
                   )}
@@ -1033,7 +1051,7 @@ export default function Home() {
                         <div className="icon-badge icon-amber"><Award className="w-5 h-5" /></div>
                       </div>
                       <p className="text-3xl font-extrabold text-heading">
-                        {progress ? Math.round(progress.total_credits) : 0} <span className="text-xs text-muted-soft font-normal">pts</span>
+                        {progress && typeof progress.total_credits === "number" ? Math.round(progress.total_credits) : 0} <span className="text-xs text-muted-soft font-normal">pts</span>
                       </p>
                       <p className="text-xs text-muted-soft mt-3">Overall GD credit score</p>
                     </div>
@@ -1094,7 +1112,7 @@ export default function Home() {
                       <div className="grid grid-cols-2 gap-4">
                         <button 
                           onClick={startSoloPractice}
-                          className="card p-4 text-left card-hover border border-slate-800 bg-slate-900/40 flex flex-col justify-between h-36"
+                          className="card p-4 text-left card-hover flex flex-col justify-between h-36"
                         >
                           <div className="icon-badge icon-cyan mb-2"><Target className="w-5 h-5" /></div>
                           <div>
@@ -1105,7 +1123,7 @@ export default function Home() {
 
                         <button 
                           onClick={() => loadLeaderboard("ALL", "ALL", "all")}
-                          className="card p-4 text-left card-hover border border-slate-800 bg-slate-900/40 flex flex-col justify-between h-36"
+                          className="card p-4 text-left card-hover flex flex-col justify-between h-36"
                         >
                           <div className="icon-badge icon-amber mb-2"><Trophy className="w-5 h-5" /></div>
                           <div>
@@ -1117,7 +1135,7 @@ export default function Home() {
 
                       {/* Motivational Quote */}
                       {soloQuote && (
-                        <div className="card p-5 border border-slate-800 bg-slate-900/20 italic relative">
+                        <div className="card p-5 bg-indigo-500/5 dark:bg-indigo-500/10 border border-indigo-500/20 italic relative">
                           <div className="absolute top-2 left-3 text-4xl text-slate-700 select-none">“</div>
                           <p className="text-xs text-body leading-relaxed pl-4 pr-2 font-medium z-10 relative">
                             {soloQuote.quote}
@@ -1161,7 +1179,7 @@ export default function Home() {
                                   </span>
                                   <span className={`font-bold ${skill.text}`}>{skill.val ? `${skill.val.toFixed(0)}/100` : "N/A"}</span>
                                 </div>
-                                <div className="w-full bg-slate-800/80 rounded-full h-2 overflow-hidden border border-slate-700/30">
+                                <div className="w-full bg-slate-200 dark:bg-slate-800/80 rounded-full h-2 overflow-hidden border border-slate-300/30 dark:border-slate-700/30">
                                   <div 
                                     className={`${skill.color} h-2 rounded-full transition-all duration-700`}
                                     style={{ width: `${skill.val || 0}%` }}
@@ -1199,7 +1217,7 @@ export default function Home() {
                         ) : (
                           <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
                             {gdLiveSessions.filter((s: any) => s.status === "completed").slice(0, 5).map((s: any) => (
-                              <div key={s.session_code} className="flex items-center justify-between p-3.5 rounded-xl surface-2 border border-slate-800 hover:border-slate-700 transition">
+                              <div key={s.session_code} className="flex items-center justify-between p-3.5 rounded-xl surface-2 border border-[var(--border)] hover:border-slate-300 dark:hover:border-slate-700 transition">
                                 <div>
                                   <div className="flex items-center gap-1.5">
                                     <p className="text-sm font-bold text-heading">Session Code:</p>
@@ -1235,7 +1253,7 @@ export default function Home() {
                         ) : (
                           <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
                             {soloHistory.slice(0, 5).map((s: any) => (
-                              <div key={s.id} className="p-3.5 rounded-xl surface-2 border border-slate-800 hover:border-slate-700 transition">
+                              <div key={s.id} className="p-3.5 rounded-xl surface-2 border border-[var(--border)] hover:border-slate-300 dark:hover:border-slate-700 transition">
                                 <div className="flex justify-between items-start gap-2">
                                   <p className="text-xs font-bold text-heading line-clamp-1 flex-1">{s.topic}</p>
                                   <span className="text-xs font-extrabold text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
@@ -1243,12 +1261,12 @@ export default function Home() {
                                   </span>
                                 </div>
                                 {s.weaknesses && (
-                                  <p className="text-[10px] text-muted-soft mt-2 line-clamp-1 bg-slate-950/40 p-1.5 rounded flex items-center gap-1">
+                                  <p className="text-[10px] text-muted-soft mt-2 line-clamp-1 bg-[var(--surface-2)] border border-[var(--border)] p-1.5 rounded flex items-center gap-1">
                                     <Sparkles className="w-3 h-3 text-cyan-400 shrink-0" />
                                     <span>Feedback: {s.weaknesses.split(";")[0]}</span>
                                   </p>
                                 )}
-                                <div className="flex justify-between items-center text-[10px] text-muted-soft mt-2 pt-2 border-t border-slate-800/40">
+                                <div className="flex justify-between items-center text-[10px] text-muted-soft mt-2 pt-2 border-t border-[var(--border)]">
                                   <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> {new Date(s.created_at || Date.now()).toLocaleDateString()}</span>
                                   <span>Session #{s.session_number}</span>
                                 </div>
@@ -1300,7 +1318,7 @@ export default function Home() {
 
                   {/* Admin Actions Panel */}
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    <div className="card p-6 border border-indigo-500/20 bg-indigo-950/10 flex flex-col justify-between min-h-60">
+                    <div className="card p-6 border border-indigo-500/20 bg-indigo-500/5 dark:bg-indigo-950/10 flex flex-col justify-between min-h-60">
                       <div>
                         <h3 className="text-base font-bold text-heading mb-1.5 flex items-center gap-2">
                           <Sparkles className="w-5 h-5 text-indigo-400" /> Quick Session Launcher
@@ -1371,11 +1389,11 @@ export default function Home() {
                     ) : (
                       <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
                         {gdLiveSessions.slice(0, 8).map((s: any) => (
-                          <div key={s.session_code} className="flex items-center justify-between p-4 rounded-xl surface-2 border border-slate-800 hover:border-slate-700 transition">
+                          <div key={s.session_code} className="flex items-center justify-between p-4 rounded-xl surface-2 border border-[var(--border)] hover:border-slate-300 dark:hover:border-slate-700 transition">
                             <div>
                               <div className="flex items-center gap-2">
                                 <span className="text-sm font-bold text-heading">Code:</span>
-                                <code className="text-xs font-mono font-bold bg-slate-950 text-indigo-300 px-2 py-0.5 rounded border border-indigo-950">{s.session_code}</code>
+                                <code className="text-xs font-mono font-bold bg-[var(--surface-2)] text-indigo-500 dark:text-indigo-300 px-2 py-0.5 rounded border border-[var(--border)]">{s.session_code}</code>
                                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide border ${
                                   s.status === "completed" 
                                     ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" 

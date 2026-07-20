@@ -16,4 +16,5 @@ def get_student_progress(
     progress = queries.get_progress(connection, current_user["id"])
     if progress:
         return progress
-    return {"student_id": current_user["id"], "average_score": 0, "interviews_completed": 0}
+    return {"student_id": current_user["id"], "average_score": 0, "interviews_completed": 0, "total_credits": 0}
+
