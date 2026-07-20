@@ -518,7 +518,7 @@ export default function Home() {
     try {
       const sessions = await apiRequest<any[]>("/gd-live/sessions", {}, token).catch(() => []);
       setGdLiveSessions(sessions);
-    } catch {}
+    } catch { }
   }
 
   async function createGdLiveSession() {
@@ -607,7 +607,7 @@ export default function Home() {
   }
 
   async function endGdLiveRoom(sessionCode: string) {
-    try { await endGdLiveMeeting(sessionCode, token); } catch {}
+    try { await endGdLiveMeeting(sessionCode, token); } catch { }
     setGdLiveRoomActive(false);
     setGdLiveIsLiveMeeting(false);
     if (user?.role === "admin") {
@@ -642,7 +642,7 @@ export default function Home() {
     try {
       const parts = await apiRequest<any[]>(`/gd-live/sessions/${sessionCode}/participants`, {}, token).catch(() => []);
       setGdLiveParticipants(parts);
-    } catch {}
+    } catch { }
   }
 
   async function loadGdLiveLeaderboard(sessionCode: string) {
@@ -804,7 +804,7 @@ export default function Home() {
 
   if (!user) {
     return (
-    <div className={`min-h-screen flex items-center justify-center relative overflow-hidden ${theme === "dark" ? "dark" : ""}`}>
+      <div className={`min-h-screen flex items-center justify-center relative overflow-hidden ${theme === "dark" ? "dark" : ""}`}>
         {/* Theme-based animated background */}
         <div className="fixed inset-0 z-0">
           <img
@@ -832,17 +832,15 @@ export default function Home() {
             <div className="flex mb-6 rounded-xl p-1 surface-2">
               <button
                 onClick={() => { setLoginTab("student"); setMessage(""); }}
-                className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium rounded-lg transition-all duration-300 ${
-                  loginTab === "student" ? "btn-primary" : "text-muted-soft hover:text-heading"
-                }`}
+                className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium rounded-lg transition-all duration-300 ${loginTab === "student" ? "btn-primary" : "text-muted-soft hover:text-heading"
+                  }`}
               >
                 <Users className="w-4 h-4" /> Student Login
               </button>
               <button
                 onClick={() => { setLoginTab("admin"); setMessage(""); }}
-                className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium rounded-lg transition-all duration-300 ${
-                  loginTab === "admin" ? "btn-primary" : "text-muted-soft hover:text-heading"
-                }`}
+                className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium rounded-lg transition-all duration-300 ${loginTab === "admin" ? "btn-primary" : "text-muted-soft hover:text-heading"
+                  }`}
               >
                 <Shield className="w-4 h-4" /> Admin Login
               </button>
@@ -1062,7 +1060,7 @@ export default function Home() {
                       Welcome back, <span className="bg-gradient-to-r from-white via-indigo-200 to-indigo-400 bg-clip-text text-transparent">{user.name}</span>!
                     </h2>
                     <p className="text-sm text-slate-300 mt-1.5 max-w-xl">
-                      {user.role === "admin" 
+                      {user.role === "admin"
                         ? "Manage group discussions, review student rankings, and monitor active sessions in real-time."
                         : "Track your communication progress, join live discussions, and build your confidence with AI feedback."}
                     </p>
@@ -1089,11 +1087,11 @@ export default function Home() {
                         <div className="icon-badge icon-purple"><Trophy className="w-5 h-5" /></div>
                       </div>
                       <p className="text-3xl font-extrabold text-heading">
-                        {progress ? `${progress.average_score.toFixed(1)}%` : "0.0%"}
+                        {progress && typeof progress.average_score === 'number' ? `${progress.average_score.toFixed(1)}%` : "0.0%"}
                       </p>
                       <div className="w-full bg-slate-800 rounded-full h-1.5 mt-3 overflow-hidden">
-                        <div 
-                          className="bg-indigo-500 h-1.5 rounded-full transition-all duration-500" 
+                        <div
+                          className="bg-indigo-500 h-1.5 rounded-full transition-all duration-500"
                           style={{ width: `${progress ? progress.average_score : 0}%` }}
                         />
                       </div>
@@ -1152,8 +1150,8 @@ export default function Home() {
                             onChange={(e) => setGdLiveCode(e.target.value)}
                             className="inp flex-1 font-mono uppercase tracking-wider h-11 text-center text-lg"
                           />
-                          <Button 
-                            onClick={joinGdLive} 
+                          <Button
+                            onClick={joinGdLive}
                             disabled={loading}
                             className="btn-primary px-5 h-11 text-sm font-semibold shrink-0"
                           >
@@ -1164,7 +1162,7 @@ export default function Home() {
 
                       {/* Quick Launch Cards */}
                       <div className="grid grid-cols-2 gap-4">
-                        <button 
+                        <button
                           onClick={startSoloPractice}
                           className="card p-4 text-left card-hover flex flex-col justify-between h-36"
                         >
@@ -1175,7 +1173,7 @@ export default function Home() {
                           </div>
                         </button>
 
-                        <button 
+                        <button
                           onClick={() => loadLeaderboard("ALL", "ALL", "all")}
                           className="card p-4 text-left card-hover flex flex-col justify-between h-36"
                         >
@@ -1234,7 +1232,7 @@ export default function Home() {
                                   <span className={`font-bold ${skill.text}`}>{skill.val ? `${skill.val.toFixed(0)}/100` : "N/A"}</span>
                                 </div>
                                 <div className="w-full bg-slate-200 dark:bg-slate-800/80 rounded-full h-2 overflow-hidden border border-slate-300/30 dark:border-slate-700/30">
-                                  <div 
+                                  <div
                                     className={`${skill.color} h-2 rounded-full transition-all duration-700`}
                                     style={{ width: `${skill.val || 0}%` }}
                                   />
@@ -1311,7 +1309,7 @@ export default function Home() {
                                 <div className="flex justify-between items-start gap-2">
                                   <p className="text-xs font-bold text-heading line-clamp-1 flex-1">{s.topic}</p>
                                   <span className="text-xs font-extrabold text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
-                                    {s.overall_score.toFixed(1)}
+                                    {(s.overall_score || 0).toFixed(1)}
                                   </span>
                                 </div>
                                 {s.weaknesses && (
@@ -1381,8 +1379,8 @@ export default function Home() {
                           Create and host a live Group Discussion. This will instantly generate a new 4-digit code for students.
                         </p>
                       </div>
-                      <Button 
-                        onClick={createGdLiveSession} 
+                      <Button
+                        onClick={createGdLiveSession}
                         disabled={loading}
                         className="btn-primary w-full h-11 font-semibold flex items-center justify-center gap-2"
                       >
@@ -1404,8 +1402,8 @@ export default function Home() {
                           Analyze students' performance across departments, semesters, and overall credit points.
                         </p>
                       </div>
-                      <Button 
-                        onClick={() => loadLeaderboard()} 
+                      <Button
+                        onClick={() => loadLeaderboard()}
                         className="btn-secondary w-full h-11 font-semibold flex items-center justify-center gap-2"
                       >
                         <Trophy className="w-4 h-4" />
@@ -1422,8 +1420,8 @@ export default function Home() {
                           View details of active sessions, delete sessions, or monitor active teams in progress.
                         </p>
                       </div>
-                      <Button 
-                        onClick={() => setView("gd-live-admin")} 
+                      <Button
+                        onClick={() => setView("gd-live-admin")}
                         className="btn-secondary w-full h-11 font-semibold flex items-center justify-center gap-2"
                       >
                         <Shield className="w-4 h-4" />
@@ -1448,11 +1446,10 @@ export default function Home() {
                               <div className="flex items-center gap-2">
                                 <span className="text-sm font-bold text-heading">Code:</span>
                                 <code className="text-xs font-mono font-bold bg-[var(--surface-2)] text-indigo-500 dark:text-indigo-300 px-2 py-0.5 rounded border border-[var(--border)]">{s.session_code}</code>
-                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide border ${
-                                  s.status === "completed" 
-                                    ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" 
+                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide border ${s.status === "completed"
+                                    ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
                                     : "bg-amber-500/10 text-amber-400 border-amber-500/20"
-                                }`}>
+                                  }`}>
                                   {s.status}
                                 </span>
                               </div>
@@ -1462,14 +1459,14 @@ export default function Home() {
                             </div>
                             <div className="flex items-center gap-2">
                               {s.status !== "completed" ? (
-                                <Button 
+                                <Button
                                   onClick={() => { setGdLiveAdminViewCode(s.session_code); setView("gd-live-admin-view"); loadGdLiveParticipants(s.session_code); }}
                                   className="btn-primary text-xs h-8 px-3"
                                 >
                                   Manage
                                 </Button>
                               ) : (
-                                <Button 
+                                <Button
                                   onClick={() => loadGdLiveLeaderboard(s.session_code)}
                                   className="btn-secondary text-xs h-8 px-3"
                                 >
@@ -1565,9 +1562,9 @@ export default function Home() {
                           <td className="py-3 pr-2 text-body text-xs md:text-sm hidden md:table-cell">{r.department}</td>
                           <td className="py-3 pr-2 text-body text-xs md:text-sm hidden md:table-cell">{r.year}</td>
                           <td className="py-3 pr-2 text-amber-300 font-semibold text-xs md:text-sm">{r.total_credits}</td>
-                          <td className="py-3 pr-2 text-emerald-300 text-xs md:text-sm">{r.grammar.toFixed(1)}</td>
-                          <td className="py-3 pr-2 text-purple-300 text-xs md:text-sm">{r.fluency.toFixed(1)}</td>
-                          <td className="py-3 pr-2 text-cyan-300 text-xs md:text-sm hidden md:table-cell">{r.relevance.toFixed(1)}</td>
+                          <td className="py-3 pr-2 text-emerald-300 text-xs md:text-sm">{(r.grammar || 0).toFixed(1)}</td>
+                          <td className="py-3 pr-2 text-purple-300 text-xs md:text-sm">{(r.fluency || 0).toFixed(1)}</td>
+                          <td className="py-3 pr-2 text-cyan-300 text-xs md:text-sm hidden md:table-cell">{(r.relevance || 0).toFixed(1)}</td>
                           <td className="py-3 pr-2 text-body text-xs md:text-sm hidden md:table-cell">{r.sessions_completed}</td>
                         </tr>
                       ))}
@@ -1889,14 +1886,14 @@ export default function Home() {
               </div>
               <div className="card border-amber-500/30 p-6">
                 <h2 className="text-lg font-semibold text-heading mb-4 flex items-center gap-2"><Shield className="w-5 h-5 text-amber-400" /> Anonymous & Private</h2>
-                  <ul className="space-y-3 text-sm text-body">
-                    <li className="flex items-start gap-2">✓ Your name and email are hidden from other participants</li>
-                    <li className="flex items-start gap-2">✓ Everyone joins one shared discussion hosted by your admin</li>
-                    <li className="flex items-start gap-2">✓ Only admins can view your identity, department, and year</li>
-                      <li className="flex items-start gap-2">✓ Topics are basic opinion/debate subjects everyone can talk about</li>
-                  </ul>
-                </div>
+                <ul className="space-y-3 text-sm text-body">
+                  <li className="flex items-start gap-2">✓ Your name and email are hidden from other participants</li>
+                  <li className="flex items-start gap-2">✓ Everyone joins one shared discussion hosted by your admin</li>
+                  <li className="flex items-start gap-2">✓ Only admins can view your identity, department, and year</li>
+                  <li className="flex items-start gap-2">✓ Topics are basic opinion/debate subjects everyone can talk about</li>
+                </ul>
               </div>
+            </div>
           )}
 
           {/* ─── GD Live Admin ─── */}
@@ -1962,24 +1959,24 @@ export default function Home() {
                             <th className="pb-2 pr-2 hidden md:table-cell">Register</th>
                             <th className="pb-2 pr-2 hidden md:table-cell">Department</th>
                             <th className="pb-2 pr-2 hidden md:table-cell">Year</th>
-                          <th className="pb-2 pr-2">Status</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {gdLiveParticipants.map((p: any) => (
-                          <tr key={p.id} className="hover:surface-2">
-                            <td className="py-2 pr-2 text-heading font-mono">{p.team_number || "-"}</td>
-                            <td className="py-2 pr-2 text-amber-300">{p.anonymous_label || "-"}</td>
-                            <td className="py-2 pr-2 text-heading">{p.name}</td>
-                            <td className="py-2 pr-2 text-body hidden md:table-cell">{p.register_number}</td>
-                            <td className="py-2 pr-2 text-body hidden md:table-cell">{p.department || "-"}</td>
-                            <td className="py-2 pr-2 text-body hidden md:table-cell">{p.year || "-"}</td>
-                            <td className="py-2 pr-2">
-                              <span className={`text-xs px-2 py-0.5 rounded-full ${p.status === "completed" ? "bg-emerald-500/20 text-emerald-300" : p.status === "assigned" ? "bg-blue-500/20 text-blue-300" : "bg-amber-500/20 text-amber-300"}`}>{p.status}</span>
-                            </td>
+                            <th className="pb-2 pr-2">Status</th>
                           </tr>
-                        ))}
-                      </tbody>
+                        </thead>
+                        <tbody>
+                          {gdLiveParticipants.map((p: any) => (
+                            <tr key={p.id} className="hover:surface-2">
+                              <td className="py-2 pr-2 text-heading font-mono">{p.team_number || "-"}</td>
+                              <td className="py-2 pr-2 text-amber-300">{p.anonymous_label || "-"}</td>
+                              <td className="py-2 pr-2 text-heading">{p.name}</td>
+                              <td className="py-2 pr-2 text-body hidden md:table-cell">{p.register_number}</td>
+                              <td className="py-2 pr-2 text-body hidden md:table-cell">{p.department || "-"}</td>
+                              <td className="py-2 pr-2 text-body hidden md:table-cell">{p.year || "-"}</td>
+                              <td className="py-2 pr-2">
+                                <span className={`text-xs px-2 py-0.5 rounded-full ${p.status === "completed" ? "bg-emerald-500/20 text-emerald-300" : p.status === "assigned" ? "bg-blue-500/20 text-blue-300" : "bg-amber-500/20 text-amber-300"}`}>{p.status}</span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
                       </table>
                     </div>
                   )}
@@ -2013,8 +2010,8 @@ export default function Home() {
                               <td className="py-2 pr-2 text-body hidden md:table-cell">{entry.register_number}</td>
                               <td className="py-2 pr-2 text-amber-300 font-mono">{entry.team_number}</td>
                               <td className="py-2 pr-2 text-purple-300">{entry.anonymous_label || "-"}</td>
-                              <td className="py-2 pr-2 text-emerald-300 font-semibold">{entry.overall_score.toFixed(1)}</td>
-                              <td className="py-2 pr-2 text-amber-300">{entry.credential_points.toFixed(1)}</td>
+                              <td className="py-2 pr-2 text-emerald-300 font-semibold">{(entry.overall_score || 0).toFixed(1)}</td>
+                              <td className="py-2 pr-2 text-amber-300">{(entry.credential_points || 0).toFixed(1)}</td>
                               <td className="py-2 pr-2">
                                 <details className="cursor-pointer">
                                   <summary className="text-amber-300 hover:text-amber-200 text-xs">View</summary>
@@ -2135,15 +2132,15 @@ export default function Home() {
                   </div>
                 )}
 
-                    {gdLiveRoomActive && (
-                      <GdLiveAdminMonitor
-                        sessionCode={gdLiveAdminViewCode}
-                        token={token}
-                        showHostControls
-                        onBack={() => { setGdLiveRoomActive(false); }}
-                        onEnd={endGdLiveRoom}
-                      />
-                    )}
+                {gdLiveRoomActive && (
+                  <GdLiveAdminMonitor
+                    sessionCode={gdLiveAdminViewCode}
+                    token={token}
+                    showHostControls
+                    onBack={() => { setGdLiveRoomActive(false); }}
+                    onEnd={endGdLiveRoom}
+                  />
+                )}
               </div>
             </div>
           )}
