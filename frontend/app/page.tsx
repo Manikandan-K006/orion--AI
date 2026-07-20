@@ -337,16 +337,34 @@ export default function Home() {
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, []);
 
+  async function loadDashboardData(t = token, currentUser = user) {
+    if (!t || !currentUser) return;
+    try {
+      const p = await apiRequest<Progress>("/progress", {}, t).catch(() => null);
+      if (p) setProgress(p);
+      if (currentUser.role === "student") {
+        const history = await apiRequest<any[]>("/solo/history", {}, t).catch(() => []);
+        setSoloHistory(history);
+        const quote = await apiRequest<any>("/solo/quote", {}, t).catch(() => null);
+        if (quote) setSoloQuote(quote);
+      }
+      const sessions = await apiRequest<any[]>("/gd-live/sessions", {}, t).catch(() => []);
+      setGdLiveSessions(sessions);
+    } catch (err) {
+      console.error("Failed to load dashboard data:", err);
+    }
+  }
+
   async function loadProfile(t: string) {
     try {
       const profile = await apiRequest<User>("/profile", {}, t);
       setUser(profile);
       setView("dashboard");
       voice.announceLogin();
-      const p = await apiRequest<Progress>("/progress", {}, t).catch(() => null);
-      if (p) setProgress(p);
+      await loadDashboardData(t, profile);
     } catch { localStorage.removeItem("mzgd_token"); setView("login"); }
   }
+
 
   async function handleLogin() {
     const rn = loginTab === "student" ? studentRegisterNumber : adminRegisterNumber;
@@ -901,7 +919,7 @@ export default function Home() {
                 if (isSessionLocked) return;
                 if (item.view === "gd-leaderboard") { setView("gd-leaderboard"); loadLeaderboard(); }
                 else if (item.view === "solo-practice") { setView("solo-practice"); startSoloPractice(); }
-                else if (item.view === "dashboard") { setView("dashboard"); }
+                else if (item.view === "dashboard") { setView("dashboard"); loadDashboardData(); }
                 else if (item.view === "gd-live") { setView("gd-live"); loadGdLiveSessions(); }
                 else if (item.view === "gd-live-admin") { setView("gd-live-admin"); loadGdLiveSessions(); }
                 else setView(item.view);
@@ -950,26 +968,450 @@ export default function Home() {
           )}
 
           {/* Dashboard View */}
-          {view === "dashboard" && (
+          {view === "dashboard" && user && (
             <div className="space-y-6">
-              <div className="card p-6">
-                <h2 className="text-lg font-semibold text-heading mb-4 flex items-center gap-2"><Zap className="w-5 h-5 text-amber-400" /> Attended GD Sessions</h2>
-                {gdLiveSessions.filter(s => s.status === "completed").length === 0 ? (
-                  <p className="text-muted-soft text-sm py-4 text-center">No completed sessions yet.</p>
-                ) : (
-                  <div className="grid gap-3">
-                    {gdLiveSessions.filter((s: any) => s.status === "completed").map((s: any) => (
-                      <div key={s.session_code} className="flex items-center justify-between p-3 rounded-lg surface-2 border border">
-                        <div>
-                          <p className="text-sm font-medium text-heading">Session <code className="font-mono text-amber-300">{s.session_code}</code></p>
-                          <p className="text-xs text-muted-soft">{s.participant_count || 0} participants · {s.team_count || 0} teams</p>
-                        </div>
-                        <span className="text-xs px-2 py-1 rounded-full bg-emerald-500/20 text-emerald-300">Completed</span>
-                      </div>
-                    ))}
+              {/* Welcome Banner */}
+              <div className="relative overflow-hidden rounded-3xl border border-indigo-500/20 p-6 md:p-8 shadow-xl bg-gradient-to-r from-slate-900 via-indigo-950/60 to-slate-900">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl -z-10 pointer-events-none" />
+                <div className="absolute bottom-0 left-0 w-64 h-64 bg-purple-500/10 rounded-full blur-3xl -z-10 pointer-events-none" />
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                  <div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                        {user.role === "admin" ? "Admin Access" : "Student Portal"}
+                      </span>
+                      {user.role === "student" && user.department && (
+                        <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                          {user.department}
+                        </span>
+                      )}
+                    </div>
+                    <h2 className="text-2xl md:text-3xl font-extrabold text-heading tracking-tight flex items-center gap-2">
+                      Welcome back, <span className="bg-gradient-to-r from-white via-indigo-200 to-indigo-400 bg-clip-text text-transparent">{user.name}</span>!
+                    </h2>
+                    <p className="text-sm text-muted-soft mt-1.5 max-w-xl">
+                      {user.role === "admin" 
+                        ? "Manage group discussions, review student rankings, and monitor active sessions in real-time."
+                        : "Track your communication progress, join live discussions, and build your confidence with AI feedback."}
+                    </p>
                   </div>
-                )}
+                  {user.role === "student" && (
+                    <div className="flex flex-wrap gap-2 text-xs text-muted-soft bg-slate-950/50 backdrop-blur-md border border-slate-800 p-4 rounded-2xl shrink-0">
+                      <div>
+                        <p className="font-semibold text-heading mb-1 uppercase tracking-wider">Registration Info</p>
+                        <p className="opacity-80">Reg No: <span className="font-mono text-heading">{user.register_number}</span></p>
+                        <p className="opacity-80">Year: <span className="text-heading">{user.year || "3rd Year"}</span></p>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
+
+              {user.role === "student" ? (
+                <>
+                  {/* Metrics Grid */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="card p-5 card-hover">
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-xs font-semibold text-muted-soft uppercase tracking-wider">Average Score</span>
+                        <div className="icon-badge icon-purple"><Trophy className="w-5 h-5" /></div>
+                      </div>
+                      <p className="text-3xl font-extrabold text-heading">
+                        {progress ? `${progress.average_score.toFixed(1)}%` : "0.0%"}
+                      </p>
+                      <div className="w-full bg-slate-800 rounded-full h-1.5 mt-3 overflow-hidden">
+                        <div 
+                          className="bg-indigo-500 h-1.5 rounded-full transition-all duration-500" 
+                          style={{ width: `${progress ? progress.average_score : 0}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="card p-5 card-hover">
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-xs font-semibold text-muted-soft uppercase tracking-wider">Credit Points</span>
+                        <div className="icon-badge icon-amber"><Award className="w-5 h-5" /></div>
+                      </div>
+                      <p className="text-3xl font-extrabold text-heading">
+                        {progress ? Math.round(progress.total_credits) : 0} <span className="text-xs text-muted-soft font-normal">pts</span>
+                      </p>
+                      <p className="text-xs text-muted-soft mt-3">Overall GD credit score</p>
+                    </div>
+
+                    <div className="card p-5 card-hover">
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-xs font-semibold text-muted-soft uppercase tracking-wider">GD Sessions</span>
+                        <div className="icon-badge icon-green"><Users className="w-5 h-5" /></div>
+                      </div>
+                      <p className="text-3xl font-extrabold text-heading">
+                        {gdLiveSessions.filter(s => s.status === "completed").length}
+                      </p>
+                      <p className="text-xs text-muted-soft mt-3">Group discussions completed</p>
+                    </div>
+
+                    <div className="card p-5 card-hover">
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-xs font-semibold text-muted-soft uppercase tracking-wider">Solo Practice</span>
+                        <div className="icon-badge icon-cyan"><Target className="w-5 h-5" /></div>
+                      </div>
+                      <p className="text-3xl font-extrabold text-heading">
+                        {soloHistory.length}
+                      </p>
+                      <p className="text-xs text-muted-soft mt-3">Solo AI practices completed</p>
+                    </div>
+                  </div>
+
+                  {/* Main Grid: Actions & Chart */}
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                    {/* Left Actions column */}
+                    <div className="lg:col-span-5 space-y-6">
+                      {/* Join GD Session Form */}
+                      <div className="card p-5 border border-indigo-500/20 bg-indigo-950/10 relative overflow-hidden">
+                        <div className="absolute -top-12 -right-12 w-28 h-28 bg-indigo-500/10 rounded-full blur-xl pointer-events-none" />
+                        <h3 className="text-base font-bold text-heading mb-1.5 flex items-center gap-2">
+                          <Zap className="w-4 h-4 text-indigo-400" /> Join GD Live Session
+                        </h3>
+                        <p className="text-xs text-muted-soft mb-4">Enter the 4-digit code provided by your administrator to join the live session.</p>
+                        <div className="flex gap-2">
+                          <Input
+                            placeholder="e.g. A3C9"
+                            maxLength={4}
+                            value={gdLiveCode}
+                            onChange={(e) => setGdLiveCode(e.target.value)}
+                            className="inp flex-1 font-mono uppercase tracking-wider h-11 text-center text-lg"
+                          />
+                          <Button 
+                            onClick={joinGdLive} 
+                            disabled={loading}
+                            className="btn-primary px-5 h-11 text-sm font-semibold shrink-0"
+                          >
+                            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Join"}
+                          </Button>
+                        </div>
+                      </div>
+
+                      {/* Quick Launch Cards */}
+                      <div className="grid grid-cols-2 gap-4">
+                        <button 
+                          onClick={startSoloPractice}
+                          className="card p-4 text-left card-hover border border-slate-800 bg-slate-900/40 flex flex-col justify-between h-36"
+                        >
+                          <div className="icon-badge icon-cyan mb-2"><Target className="w-5 h-5" /></div>
+                          <div>
+                            <p className="text-sm font-bold text-heading">Solo Practice</p>
+                            <p className="text-[11px] text-muted-soft mt-0.5 leading-snug">Practice speaking solo with instant AI scores & feedback.</p>
+                          </div>
+                        </button>
+
+                        <button 
+                          onClick={() => loadLeaderboard("ALL", "ALL", "all")}
+                          className="card p-4 text-left card-hover border border-slate-800 bg-slate-900/40 flex flex-col justify-between h-36"
+                        >
+                          <div className="icon-badge icon-amber mb-2"><Trophy className="w-5 h-5" /></div>
+                          <div>
+                            <p className="text-sm font-bold text-heading">Leaderboard</p>
+                            <p className="text-[11px] text-muted-soft mt-0.5 leading-snug">Check your ranking among all students and departments.</p>
+                          </div>
+                        </button>
+                      </div>
+
+                      {/* Motivational Quote */}
+                      {soloQuote && (
+                        <div className="card p-5 border border-slate-800 bg-slate-900/20 italic relative">
+                          <div className="absolute top-2 left-3 text-4xl text-slate-700 select-none">“</div>
+                          <p className="text-xs text-body leading-relaxed pl-4 pr-2 font-medium z-10 relative">
+                            {soloQuote.quote}
+                          </p>
+                          <p className="text-right text-[10px] font-bold text-muted-soft mt-2 tracking-wide uppercase">
+                            — {soloQuote.author}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Right Chart/Breakdown column */}
+                    <div className="lg:col-span-7 flex flex-col">
+                      <div className="card p-6 flex-1 flex flex-col justify-between">
+                        <div>
+                          <h3 className="text-base font-bold text-heading mb-1.5 flex items-center gap-2">
+                            <TrendingUp className="w-5 h-5 text-indigo-400" /> Communication Skills Breakdown
+                          </h3>
+                          <p className="text-xs text-muted-soft mb-4">
+                            Analysis based on your most recent Solo Practice session. Track sub-scores to target specific skills.
+                          </p>
+                        </div>
+
+                        {soloHistory && soloHistory.length > 0 ? (
+                          <div className="space-y-4">
+                            <div className="rounded-xl p-3 surface-2 border text-xs mb-2">
+                              <p className="text-muted-soft font-medium">LATEST PRACTICE TOPIC</p>
+                              <p className="text-heading font-bold mt-1 line-clamp-1">{soloHistory[0].topic}</p>
+                            </div>
+
+                            {[
+                              { label: "Grammar & Structure", val: soloHistory[0].grammar_score, icon: "📝", color: "bg-indigo-500", text: "text-indigo-400" },
+                              { label: "Fluency & Speech Rate", val: soloHistory[0].fluency_score, icon: "⚡", color: "bg-purple-500", text: "text-purple-400" },
+                              { label: "Pronunciation & Clarity", val: soloHistory[0].accent_score, icon: "🗣️", color: "bg-cyan-500", text: "text-cyan-400" },
+                              { label: "Confidence & Delivery", val: soloHistory[0].delivery_score, icon: "🚀", color: "bg-emerald-500", text: "text-emerald-400" },
+                            ].map((skill) => (
+                              <div key={skill.label} className="space-y-1.5">
+                                <div className="flex items-center justify-between text-xs">
+                                  <span className="font-semibold text-heading flex items-center gap-1.5">
+                                    <span>{skill.icon}</span> {skill.label}
+                                  </span>
+                                  <span className={`font-bold ${skill.text}`}>{skill.val ? `${skill.val.toFixed(0)}/100` : "N/A"}</span>
+                                </div>
+                                <div className="w-full bg-slate-800/80 rounded-full h-2 overflow-hidden border border-slate-700/30">
+                                  <div 
+                                    className={`${skill.color} h-2 rounded-full transition-all duration-700`}
+                                    style={{ width: `${skill.val || 0}%` }}
+                                  />
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="flex flex-col items-center justify-center py-10 text-center flex-1 border border-dashed rounded-2xl border-slate-800 bg-slate-950/20">
+                            <Target className="w-10 h-10 text-slate-600 mb-2.5" />
+                            <p className="text-sm font-semibold text-heading">No practice history found</p>
+                            <p className="text-xs text-muted-soft max-w-[240px] mt-1 leading-normal">Start your first solo practice session to visualize your communication breakdown here.</p>
+                            <Button onClick={startSoloPractice} className="btn-primary text-xs h-9 px-4 mt-3">Start Now</Button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* History Feeds Section */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* GD Session History */}
+                    <div className="card p-6 flex flex-col justify-between">
+                      <div>
+                        <h3 className="text-base font-bold text-heading mb-4 flex items-center gap-2">
+                          <Users className="w-5 h-5 text-indigo-400" /> Attended GD History
+                        </h3>
+
+                        {gdLiveSessions.filter(s => s.status === "completed").length === 0 ? (
+                          <div className="flex flex-col items-center justify-center py-10 text-center border border-dashed rounded-2xl border-slate-800 bg-slate-950/20">
+                            <Users className="w-8 h-8 text-slate-600 mb-2" />
+                            <p className="text-xs font-semibold text-heading">No GD sessions attended yet</p>
+                          </div>
+                        ) : (
+                          <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
+                            {gdLiveSessions.filter((s: any) => s.status === "completed").slice(0, 5).map((s: any) => (
+                              <div key={s.session_code} className="flex items-center justify-between p-3.5 rounded-xl surface-2 border border-slate-800 hover:border-slate-700 transition">
+                                <div>
+                                  <div className="flex items-center gap-1.5">
+                                    <p className="text-sm font-bold text-heading">Session Code:</p>
+                                    <code className="text-xs font-mono font-bold bg-slate-950 text-indigo-300 px-2 py-0.5 rounded border border-indigo-950">{s.session_code}</code>
+                                  </div>
+                                  <p className="text-xs text-muted-soft mt-1 flex items-center gap-1">
+                                    <Clock className="w-3 h-3" />
+                                    {new Date(s.created_at || Date.now()).toLocaleDateString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                                  </p>
+                                </div>
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 uppercase tracking-wide">
+                                  Attended
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Solo Session History */}
+                    <div className="card p-6 flex flex-col justify-between">
+                      <div>
+                        <h3 className="text-base font-bold text-heading mb-4 flex items-center gap-2">
+                          <Target className="w-5 h-5 text-indigo-400" /> Solo Practice History
+                        </h3>
+
+                        {soloHistory.length === 0 ? (
+                          <div className="flex flex-col items-center justify-center py-10 text-center border border-dashed rounded-2xl border-slate-800 bg-slate-950/20">
+                            <Target className="w-8 h-8 text-slate-600 mb-2" />
+                            <p className="text-xs font-semibold text-heading">No solo practices completed yet</p>
+                          </div>
+                        ) : (
+                          <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
+                            {soloHistory.slice(0, 5).map((s: any) => (
+                              <div key={s.id} className="p-3.5 rounded-xl surface-2 border border-slate-800 hover:border-slate-700 transition">
+                                <div className="flex justify-between items-start gap-2">
+                                  <p className="text-xs font-bold text-heading line-clamp-1 flex-1">{s.topic}</p>
+                                  <span className="text-xs font-extrabold text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                                    {s.overall_score.toFixed(1)}
+                                  </span>
+                                </div>
+                                {s.weaknesses && (
+                                  <p className="text-[10px] text-muted-soft mt-2 line-clamp-1 bg-slate-950/40 p-1.5 rounded flex items-center gap-1">
+                                    <Sparkles className="w-3 h-3 text-cyan-400 shrink-0" />
+                                    <span>Feedback: {s.weaknesses.split(";")[0]}</span>
+                                  </p>
+                                )}
+                                <div className="flex justify-between items-center text-[10px] text-muted-soft mt-2 pt-2 border-t border-slate-800/40">
+                                  <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> {new Date(s.created_at || Date.now()).toLocaleDateString()}</span>
+                                  <span>Session #{s.session_number}</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                /* Admin Dashboard */
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="card p-5 card-hover">
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-xs font-semibold text-muted-soft uppercase tracking-wider font-bold">Total GD Live Sessions</span>
+                        <div className="icon-badge icon-purple"><Users className="w-5 h-5" /></div>
+                      </div>
+                      <p className="text-3xl font-extrabold text-heading">
+                        {gdLiveSessions.length}
+                      </p>
+                      <p className="text-xs text-muted-soft mt-3">All sessions created</p>
+                    </div>
+
+                    <div className="card p-5 card-hover">
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-xs font-semibold text-muted-soft uppercase tracking-wider font-bold">Active Sessions</span>
+                        <div className="icon-badge icon-green"><Radio className="w-5 h-5 text-emerald-400" /></div>
+                      </div>
+                      <p className="text-3xl font-extrabold text-heading">
+                        {gdLiveSessions.filter(s => s.status !== "completed").length}
+                      </p>
+                      <p className="text-xs text-muted-soft mt-3">Sessions in progress/waiting</p>
+                    </div>
+
+                    <div className="card p-5 card-hover">
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-xs font-semibold text-muted-soft uppercase tracking-wider font-bold">Completed Sessions</span>
+                        <div className="icon-badge icon-cyan"><CheckCircle2 className="w-5 h-5" /></div>
+                      </div>
+                      <p className="text-3xl font-extrabold text-heading">
+                        {gdLiveSessions.filter(s => s.status === "completed").length}
+                      </p>
+                      <p className="text-xs text-muted-soft mt-3">Sessions successfully finished</p>
+                    </div>
+                  </div>
+
+                  {/* Admin Actions Panel */}
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div className="card p-6 border border-indigo-500/20 bg-indigo-950/10 flex flex-col justify-between min-h-60">
+                      <div>
+                        <h3 className="text-base font-bold text-heading mb-1.5 flex items-center gap-2">
+                          <Sparkles className="w-5 h-5 text-indigo-400" /> Quick Session Launcher
+                        </h3>
+                        <p className="text-xs text-muted-soft mb-6 leading-normal">
+                          Create and host a live Group Discussion. This will instantly generate a new 4-digit code for students.
+                        </p>
+                      </div>
+                      <Button 
+                        onClick={createGdLiveSession} 
+                        disabled={loading}
+                        className="btn-primary w-full h-11 font-semibold flex items-center justify-center gap-2"
+                      >
+                        {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : (
+                          <>
+                            <Users className="w-4 h-4" />
+                            <span>Create Live GD Session</span>
+                          </>
+                        )}
+                      </Button>
+                    </div>
+
+                    <div className="card p-6 flex flex-col justify-between min-h-60">
+                      <div>
+                        <h3 className="text-base font-bold text-heading mb-1.5 flex items-center gap-2">
+                          <Trophy className="w-5 h-5 text-amber-400" /> Comprehensive Rankings
+                        </h3>
+                        <p className="text-xs text-muted-soft mb-6 leading-normal">
+                          Analyze students' performance across departments, semesters, and overall credit points.
+                        </p>
+                      </div>
+                      <Button 
+                        onClick={() => loadLeaderboard()} 
+                        className="btn-secondary w-full h-11 font-semibold flex items-center justify-center gap-2"
+                      >
+                        <Trophy className="w-4 h-4" />
+                        <span>Open Leaderboard</span>
+                      </Button>
+                    </div>
+
+                    <div className="card p-6 flex flex-col justify-between min-h-60">
+                      <div>
+                        <h3 className="text-base font-bold text-heading mb-1.5 flex items-center gap-2">
+                          <Shield className="w-5 h-5 text-purple-400" /> GD Admin Dashboard
+                        </h3>
+                        <p className="text-xs text-muted-soft mb-6 leading-normal">
+                          View details of active sessions, delete sessions, or monitor active teams in progress.
+                        </p>
+                      </div>
+                      <Button 
+                        onClick={() => setView("gd-live-admin")} 
+                        className="btn-secondary w-full h-11 font-semibold flex items-center justify-center gap-2"
+                      >
+                        <Shield className="w-4 h-4" />
+                        <span>Manage Live Sessions</span>
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Admin: List of Active/Recent Sessions */}
+                  <div className="card p-6">
+                    <h3 className="text-base font-bold text-heading mb-4 flex items-center gap-2">
+                      <Users className="w-5 h-5 text-indigo-400" /> Active and Recent GD Sessions
+                    </h3>
+
+                    {gdLiveSessions.length === 0 ? (
+                      <p className="text-muted-soft text-sm py-4 text-center">No sessions hosted yet.</p>
+                    ) : (
+                      <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
+                        {gdLiveSessions.slice(0, 8).map((s: any) => (
+                          <div key={s.session_code} className="flex items-center justify-between p-4 rounded-xl surface-2 border border-slate-800 hover:border-slate-700 transition">
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-bold text-heading">Code:</span>
+                                <code className="text-xs font-mono font-bold bg-slate-950 text-indigo-300 px-2 py-0.5 rounded border border-indigo-950">{s.session_code}</code>
+                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide border ${
+                                  s.status === "completed" 
+                                    ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" 
+                                    : "bg-amber-500/10 text-amber-400 border-amber-500/20"
+                                }`}>
+                                  {s.status}
+                                </span>
+                              </div>
+                              <p className="text-xs text-muted-soft mt-1">
+                                {s.participant_count || 0} participants joined · {s.team_count || 0} teams active
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {s.status !== "completed" ? (
+                                <Button 
+                                  onClick={() => { setGdLiveAdminViewCode(s.session_code); setView("gd-live-admin-view"); loadGdLiveParticipants(s.session_code); }}
+                                  className="btn-primary text-xs h-8 px-3"
+                                >
+                                  Manage
+                                </Button>
+                              ) : (
+                                <Button 
+                                  onClick={() => loadGdLiveLeaderboard(s.session_code)}
+                                  className="btn-secondary text-xs h-8 px-3"
+                                >
+                                  Leaderboard
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
           )}
           {/* Leaderboard View */}
