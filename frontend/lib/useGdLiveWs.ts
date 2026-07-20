@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-const WS_BASE = "ws://localhost:8000";
+const WS_BASE = typeof window !== "undefined" ? `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.hostname}:8000` : "ws://localhost:8000";
 
 export type GDLiveWsEvent =
   | "SESSION_STARTED"
