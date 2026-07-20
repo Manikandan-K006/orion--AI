@@ -1,0 +1,14 @@
+2026-07-20T03:57:03.097063Z 0 [System] [MY-015017] [Server] MySQL Server Initialization - start.
+2026-07-20T03:57:03.113348Z 0 [System] [MY-013169] [Server] C:\Users\HARIHARAN S\AppData\Roaming\Local\lightning-services\mysql-8.4.0\bin\win64\bin\mysqld.exe (mysqld 8.4.0) initializing of server in progress as process 20072
+2026-07-20T03:57:03.166125Z 1 [System] [MY-013576] [InnoDB] InnoDB initialization has started.
+2026-07-20T03:57:03.648106Z 1 [System] [MY-013577] [InnoDB] InnoDB initialization has ended.
+2026-07-20T03:57:05.678113Z 6 [Warning] [MY-010453] [Server] root@localhost is created with an empty password ! Please consider switching off the --initialize-insecure option.
+2026-07-20T03:57:08.185913Z 0 [System] [MY-015018] [Server] MySQL Server Initialization - end.
+2026-07-20T03:57:30.649076Z 0 [System] [MY-015015] [Server] MySQL Server - start.
+2026-07-20T03:57:30.872619Z 0 [System] [MY-010116] [Server] C:\Users\HARIHARAN S\AppData\Roaming\Local\lightning-services\mysql-8.4.0\bin\win64\bin\mysqld.exe (mysqld 8.4.0) starting as process 8692
+2026-07-20T03:57:31.080449Z 1 [System] [MY-013576] [InnoDB] InnoDB initialization has started.
+2026-07-20T03:57:31.651139Z 1 [System] [MY-013577] [InnoDB] InnoDB initialization has ended.
+2026-07-20T03:57:32.330267Z 0 [Warning] [MY-010068] [Server] CA certificate ca.pem is self signed.
+2026-07-20T03:57:32.332895Z 0 [System] [MY-013602] [Server] Channel mysql_main configured to support TLS. Encrypted connections are now supported for this channel.
+2026-07-20T03:57:32.458285Z 0 [System] [MY-010931] [Server] C:\Users\HARIHARAN S\AppData\Roaming\Local\lightning-services\mysql-8.4.0\bin\win64\bin\mysqld.exe: ready for connections. Version: '8.4.0'  socket: ''  port: 3306  MySQL Community Server - GPL.
+2026-07-20T03:57:32.738372Z 0 [System] [MY-011323] [Server] X Plugin ready for connections. Bind-address: '::' port: 33060
