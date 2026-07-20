@@ -294,20 +294,35 @@ export async function getGdLiveState(sessionCode: string, token: string) {
 }
 
 export async function apiRequest<T>(path: string, options: RequestInit = {}, token?: string): Promise<T> {
-  const response = await fetch(`${API_URL}${path}`, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...options.headers
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10000); // 10-second max timeout
+
+  try {
+    const response = await fetch(`${API_URL}${path}`, {
+      ...options,
+      signal: controller.signal,
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...options.headers
+      }
+    });
+    
+    clearTimeout(timeoutId);
+    
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const detail = typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail || "Request failed");
+      throw new Error(detail);
     }
-  });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    const detail = typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail || "Request failed");
-    throw new Error(detail);
+    return data as T;
+  } catch (err: any) {
+    clearTimeout(timeoutId);
+    if (err.name === "AbortError") {
+      throw new Error("Request timed out (Backend is unreachable). Please try again.");
+    }
+    throw err;
   }
-  return data as T;
 }
 
 export async function uploadAudio(file: File, token: string) {

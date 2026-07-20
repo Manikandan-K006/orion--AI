@@ -287,6 +287,7 @@ export default function Home() {
   const [roomTimerSeconds, setRoomTimerSeconds] = useState(0);
   const [roomTimerRunning, setRoomTimerRunning] = useState(false);
   const roomTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const loginLockRef = useRef(false);
 
   useEffect(() => {
     if (typeof window !== "undefined" && window.innerWidth >= 768) {
@@ -359,16 +360,29 @@ export default function Home() {
   async function loadDashboardData(t = token, currentUser = user) {
     if (!t || !currentUser) return;
     try {
-      const p = await apiRequest<Progress>("/progress", {}, t).catch(() => null);
-      if (p) setProgress(p);
+      const promises = [
+        apiRequest<Progress>("/progress", {}, t)
+          .then((p) => { if (p) setProgress(p); })
+          .catch(() => null),
+        apiRequest<any[]>("/gd-live/sessions", {}, t)
+          .then((sessions) => setGdLiveSessions(sessions || []))
+          .catch(() => setGdLiveSessions([])),
+      ];
+
       if (currentUser.role === "student") {
-        const history = await apiRequest<any[]>("/solo/history", {}, t).catch(() => []);
-        setSoloHistory(history);
-        const quote = await apiRequest<any>("/solo/quote", {}, t).catch(() => null);
-        if (quote) setSoloQuote(quote);
+        promises.push(
+          apiRequest<any[]>("/solo/history", {}, t)
+            .then((history) => setSoloHistory(history || []))
+            .catch(() => setSoloHistory([]))
+        );
+        promises.push(
+          apiRequest<any>("/solo/quote", {}, t)
+            .then((quote) => { if (quote) setSoloQuote(quote); })
+            .catch(() => null)
+        );
       }
-      const sessions = await apiRequest<any[]>("/gd-live/sessions", {}, t).catch(() => []);
-      setGdLiveSessions(sessions);
+
+      await Promise.allSettled(promises);
     } catch (err) {
       console.error("Failed to load dashboard data:", err);
     }
@@ -380,27 +394,48 @@ export default function Home() {
       setUser(profile);
       setView("dashboard");
       voice.announceLogin();
-      await loadDashboardData(t, profile);
+      loadDashboardData(t, profile); // Lazy load without await
     } catch { localStorage.removeItem("mzgd_token"); setView("login"); }
   }
 
 
   async function handleLogin() {
+    if (loginLockRef.current) return;
+    loginLockRef.current = true;
+    console.time("Login-Total");
+
     const rn = loginTab === "student" ? studentRegisterNumber : adminRegisterNumber;
     const pw = loginTab === "student" ? (studentPassword || "Password123") : adminPassword;
-    if (!rn.trim()) { setMessage("Enter your register number / SPR number"); return; }
+    if (!rn.trim()) { 
+      setMessage("Enter your register number / SPR number"); 
+      loginLockRef.current = false; 
+      return; 
+    }
+    
     setLoading(true); setMessage(""); setSuccess("");
     try {
+      console.time("Login-API-Request");
       const res = await apiRequest<{ access_token: string; user: User }>("/login/register-number", {
         method: "POST",
         body: JSON.stringify({ register_number: rn, password: loginTab === "student" ? (pw || "Password123") : pw })
       });
+      console.timeEnd("Login-API-Request");
+
       localStorage.setItem("mzgd_token", res.access_token);
       setToken(res.access_token);
-      await loadProfile(res.access_token);
+      setUser(res.user);
+      setView("dashboard");
+      voice.announceLogin();
+      
+      // Lazy load dashboard data in the background
+      loadDashboardData(res.access_token, res.user);
     } catch (err: any) {
       setMessage(err.message || "Login failed");
-    } finally { setLoading(false); }
+    } finally { 
+      setLoading(false); 
+      loginLockRef.current = false;
+      console.timeEnd("Login-Total");
+    }
   }
 
   async function toggleRecording() {
