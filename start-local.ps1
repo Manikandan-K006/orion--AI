@@ -26,8 +26,7 @@ $mysqlPort = 3306
 $isMysqlRunning = Get-NetTCPConnection -LocalPort $mysqlPort -ErrorAction SilentlyContinue
 if (-not $isMysqlRunning) {
     Write-Host "Starting local MySQL database..." -ForegroundColor Yellow
-    $appdata = $env:APPDATA
-    $mysqlExe = "$appdata\Local\lightning-services\mysql-8.4.0\bin\win64\bin\mysqld.exe"
+    $mysqlExe = "C:\Program Files\MySQL\MySQL Server 8.4\bin\mysqld.exe"
     $mysqlDataDir = "$root\database\data"
     if (Test-Path $mysqlExe) {
         Start-Process -FilePath $mysqlExe -ArgumentList "--datadir='$mysqlDataDir'", "--port=$mysqlPort" -WindowStyle Hidden

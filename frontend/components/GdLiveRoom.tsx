@@ -76,7 +76,7 @@ export default function GdLiveRoom({
   const thinkingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const finishLockRef = useRef(false);
   const userId = user?.user_id ?? user?.id;
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
   const voice = useVoiceAnnouncement();
   const announcedMarkers = useRef<Set<string>>(new Set());
   const [showWarning, setShowWarning] = useState<string | null>(null);
@@ -199,7 +199,7 @@ export default function GdLiveRoom({
       audioStreamRef.current.getTracks().forEach((t) => t.stop());
     }
     if (audioContextRef.current) {
-      audioContextRef.current.close().catch(() => {});
+      audioContextRef.current.close().catch(() => { });
     }
     mediaRecorderRef.current = null;
     audioStreamRef.current = null;
@@ -265,7 +265,7 @@ export default function GdLiveRoom({
       formData.append("file", blob, "gd_" + sessionCode + "_" + userId + "_terminated.webm");
       fetch(apiUrl + "/gd-live/sessions/" + sessionCode + "/upload-audio", {
         method: "POST", headers: { Authorization: "Bearer " + token }, body: formData,
-      }).catch(() => {});
+      }).catch(() => { });
     }
     send("SPEAKER_FINISHED", { user_id: userId, terminated: true, reason: reason });
     setSubmitStep("complete");
@@ -370,10 +370,10 @@ export default function GdLiveRoom({
             <h3 className="text-sm font-semibold text-heading flex items-center gap-1"><Zap className="w-4 h-4 text-amber-400" /> AI Assessment</h3>
             <div className="text-center mb-3"><p className="text-4xl font-extrabold text-amber-300">{myResult.overall_score}%</p><p className="text-xs text-muted-soft">Overall Score</p></div>
             {[{ label: "Grammar", value: myResult.grammar_score, g: "from-emerald-400 to-emerald-600" },
-              { label: "Fluency", value: myResult.fluency_score, g: "from-blue-400 to-blue-600" },
-              { label: "Confidence", value: myResult.confidence_score, g: "from-purple-400 to-purple-600" },
-              { label: "Vocabulary", value: myResult.vocabulary_score, g: "from-amber-400 to-amber-600" },
-              { label: "Pronunciation", value: myResult.pronunciation_score, g: "from-rose-400 to-rose-600" },
+            { label: "Fluency", value: myResult.fluency_score, g: "from-blue-400 to-blue-600" },
+            { label: "Confidence", value: myResult.confidence_score, g: "from-purple-400 to-purple-600" },
+            { label: "Vocabulary", value: myResult.vocabulary_score, g: "from-amber-400 to-amber-600" },
+            { label: "Pronunciation", value: myResult.pronunciation_score, g: "from-rose-400 to-rose-600" },
             ].map((m) => (
               <div key={m.label} className="flex items-center gap-3">
                 <span className="text-sm text-muted-soft w-24 shrink-0">{m.label}</span>
