@@ -6,6 +6,8 @@ export type User = {
   email: string;
   role: string;
   register_number?: string;
+  department?: string;
+  year?: string | number;
 };
 
 export type Question = {

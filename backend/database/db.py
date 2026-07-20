@@ -55,8 +55,7 @@ def get_connection() -> MySQLConnection:
     # Dead/idle connections must be refreshed before reuse, otherwise the
     # caller hits "'NoneType' object has no attribute 'cursor'".
     try:
-        if not conn.is_connected():
-            conn.reconnect(attempts=3, delay=0)
+        conn.ping(reconnect=True, attempts=3, delay=1)
     except Exception:
         try:
             conn = _open()

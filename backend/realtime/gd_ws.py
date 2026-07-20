@@ -354,9 +354,10 @@ async def gd_live_socket(
         session = queries.get_live_session_by_code(connection, session_code)
         topic = queries.get_live_team_topic(connection, session_code)
         participants_list = _participant_snapshot(connection, session_code)
+        teams_from_db = queries.get_live_teams(connection, session_code) if session else []
     except Exception as _exc:
         logger.warning("WS state build error: %s", repr(_exc))
-        session, topic, participants_list = None, None, []
+        session, topic, participants_list, teams_from_db = None, None, [], []
     finally:
         _return(connection)
 
@@ -375,7 +376,6 @@ async def gd_live_socket(
         )
 
     # Initialize TeamState for each team from DB
-    teams_from_db = queries.get_live_teams(connection, session_code) if session else []
     team_topic_map = {t["team_number"]: t["topic"] for t in teams_from_db}
     for p in participants_list:
         tn = p.get("team_number")

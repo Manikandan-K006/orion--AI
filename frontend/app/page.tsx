@@ -235,6 +235,25 @@ export default function Home() {
       voice.announceTeamsAssigned();
     }
   }, [view]);
+
+  // Prevent body scrolling when sidebar is open on mobile/tablet viewports
+  useEffect(() => {
+    if (sidebarOpen) {
+      if (typeof window !== "undefined" && window.innerWidth < 1024) {
+        document.body.style.overflow = "hidden";
+      }
+    } else {
+      if (typeof window !== "undefined") {
+        document.body.style.overflow = "unset";
+      }
+    }
+    return () => {
+      if (typeof window !== "undefined") {
+        document.body.style.overflow = "unset";
+      }
+    };
+  }, [sidebarOpen]);
+
   const [isSessionLocked, setIsSessionLocked] = useState(false);
   const [tabSwitchWarning, setTabSwitchWarning] = useState(false);
   const lockWarningRef = useRef<boolean>(false);
@@ -868,22 +887,22 @@ export default function Home() {
   function renderSidebarContent(isMobile = false) {
     if (!user) return null;
     return (
-      <>
-        <div className="flex items-center justify-between p-4 md:p-5 border-b animate-ping-once" style={{ borderColor: "var(--border)" }}>
+      <div className="flex flex-col h-full">
+        <div className="flex items-center justify-between p-5 border-b" style={{ borderColor: "var(--border)" }}>
           <div className="flex items-center gap-3">
-            <img src="/MZ_logo_DB.webp" alt="Mount Zion Logo" className="w-10 h-10 rounded-xl object-cover shadow-lg shrink-0" />
+            <img src="/MZ_logo_DB.webp" alt="Mount Zion Logo" className="w-10 h-10 rounded-xl object-cover shadow-md shrink-0" />
             <div className="truncate">
               <p className="text-sm font-bold text-heading">MZ Orator</p>
               <p className="text-xs text-muted-soft">{user.name}</p>
             </div>
           </div>
           {isMobile && (
-            <button className="p-2 text-muted-soft hover:text-heading hover:bg-[var(--surface-hover)] rounded-lg" onClick={() => setSidebarOpen(false)}>
+            <button className="p-2 text-muted-soft hover:text-heading hover:bg-[var(--surface-hover)] rounded-lg transition-colors duration-200" onClick={() => setSidebarOpen(false)}>
               <X className="w-5 h-5" />
             </button>
           )}
         </div>
-        <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
+        <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
           {[
             { icon: <Users className="w-5 h-5 shrink-0" />, label: "Dashboard", view: "dashboard" as PageView },
             ...(user?.role !== "admin" ? [
@@ -908,7 +927,7 @@ export default function Home() {
                 else setView(item.view);
                 if (isMobile) setSidebarOpen(false);
               }}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all whitespace-nowrap ${view === item.view ? "bg-[rgba(139,92,246,0.12)] text-[#7c3aed] dark:text-[#a78bfa] border border-[#8b5cf6]" : "text-body hover:bg-[var(--surface-hover)] hover:text-heading"} ${isSessionLocked ? "opacity-40 cursor-not-allowed" : ""}`}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 whitespace-nowrap ${view === item.view ? "bg-[rgba(139,92,246,0.12)] text-[#7c3aed] dark:text-[#a78bfa] border border-[#8b5cf6]/30 shadow-sm" : "text-body hover:bg-[var(--surface-hover)] hover:text-heading"} ${isSessionLocked ? "opacity-40 cursor-not-allowed" : ""}`}
             >
               {item.icon}
               <span>{item.label}</span>
@@ -916,15 +935,15 @@ export default function Home() {
             </button>
           ))}
         </nav>
-        <div className="p-3 border-t space-y-2" style={{ borderColor: "var(--border)" }}>
-          <button onClick={() => voice.setEnabled(!voice.enabled)} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all whitespace-nowrap text-muted-soft hover:text-heading hover:bg-[var(--surface-hover)]">
+        <div className="mt-auto p-4 border-t space-y-2" style={{ borderColor: "var(--border)" }}>
+          <button onClick={() => voice.setEnabled(!voice.enabled)} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 whitespace-nowrap text-muted-soft hover:text-heading hover:bg-[var(--surface-hover)]">
             <VolumeX className="w-5 h-5 shrink-0" /> {voice.enabled ? "Mute Voice" : "Unmute Voice"}
           </button>
-          <button onClick={logout} disabled={isSessionLocked} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all whitespace-nowrap ${isSessionLocked ? "text-slate-600 cursor-not-allowed" : "text-red-600 dark:text-red-400 hover:bg-red-500/10"}`}>
+          <button onClick={logout} disabled={isSessionLocked} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 whitespace-nowrap ${isSessionLocked ? "text-slate-600 cursor-not-allowed" : "text-red-600 dark:text-red-400 hover:bg-red-500/10"}`}>
             <LogOut className="w-5 h-5 shrink-0" /> Sign Out
           </button>
         </div>
-      </>
+      </div>
     );
   }
 
@@ -942,30 +961,30 @@ export default function Home() {
       </div>
 
       {/* Theme toggle */}
-      <button onClick={toggleTheme} className="fixed top-4 right-4 z-50 p-2.5 rounded-xl btn-secondary" title="Toggle theme">
+      <button onClick={toggleTheme} className="fixed top-4 right-4 z-30 p-2.5 rounded-xl btn-secondary" title="Toggle theme">
         {theme === "dark" ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
       </button>
 
       {/* Mobile backdrop overlay when sidebar open */}
       {sidebarOpen && (
-        <div className="fixed inset-0 z-20 bg-black/50 md:hidden" onClick={() => setSidebarOpen(false)} />
+        <div className="fixed inset-0 z-40 bg-black/60 lg:hidden transition-opacity duration-300" onClick={() => setSidebarOpen(false)} />
       )}
 
       {/* Mobile Sidebar */}
-      <aside className={`fixed z-30 h-full inset-y-0 left-0 transition-all duration-300 ease-in-out flex flex-col shrink-0 surface border-r border-[var(--border)] ${sidebarOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full"} md:hidden`} style={{ width: "16rem", background: "var(--surface)" }}>
+      <aside className={`fixed z-50 h-screen inset-y-0 left-0 transition-transform duration-300 ease-in-out flex flex-col shrink-0 border-r border-[var(--border)] bg-[var(--surface)] shadow-2xl ${sidebarOpen ? "translate-x-0" : "-translate-x-full"} w-full md:w-[280px] lg:hidden`}>
         {renderSidebarContent(true)}
       </aside>
 
       {/* Desktop Docked Sidebar */}
-      <aside className="hidden md:flex flex-col shrink-0 h-screen sticky top-0 border-r border-[var(--border)] bg-[var(--surface)]" style={{ width: "16rem" }}>
+      <aside className="hidden lg:flex flex-col shrink-0 h-screen sticky top-0 border-r border-[var(--border)] bg-[var(--surface)] z-10 w-[280px]">
         {renderSidebarContent(false)}
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-auto min-h-screen">
+      <main className="flex-1 overflow-x-hidden overflow-y-auto min-h-screen">
         <div className="p-4 md:p-6 max-w-6xl mx-auto animate-fade-up">
           {/* Top bar */}
-          <div className={`flex items-center justify-between mb-4 sticky top-0 z-10 py-3 -mx-4 px-4 md:px-0 md:py-3 md:mx-0 surface rounded-b-2xl md:hidden`} style={{ background: "var(--surface)", borderBottom: "1px solid var(--border)" }}>
+          <div className={`flex items-center justify-between mb-4 sticky top-0 z-10 py-3 -mx-4 px-4 lg:px-0 lg:py-3 lg:mx-0 surface rounded-b-2xl lg:hidden`} style={{ background: "var(--surface)", borderBottom: "1px solid var(--border)" }}>
             <button onClick={() => { if (!isSessionLocked) setSidebarOpen(!sidebarOpen); }} className={`p-2 rounded-lg transition-all hover:scale-110 text-muted-soft hover:bg-[var(--surface-hover)] ${isSessionLocked ? "opacity-40 cursor-not-allowed" : ""}`} title={sidebarOpen ? "Close menu" : "Open menu"}>
               {sidebarOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
             </button>
@@ -1163,14 +1182,14 @@ export default function Home() {
                           <div className="space-y-4">
                             <div className="rounded-xl p-3 surface-2 border text-xs mb-2">
                               <p className="text-muted-soft font-medium">LATEST PRACTICE TOPIC</p>
-                              <p className="text-heading font-bold mt-1 line-clamp-1">{soloHistory[0].topic}</p>
+                              <p className="text-heading font-bold mt-1 line-clamp-1">{soloHistory[0]?.topic}</p>
                             </div>
 
                             {[
-                              { label: "Grammar & Structure", val: soloHistory[0].grammar_score, icon: "📝", color: "bg-indigo-500", text: "text-indigo-400" },
-                              { label: "Fluency & Speech Rate", val: soloHistory[0].fluency_score, icon: "⚡", color: "bg-purple-500", text: "text-purple-400" },
-                              { label: "Pronunciation & Clarity", val: soloHistory[0].accent_score, icon: "🗣️", color: "bg-cyan-500", text: "text-cyan-400" },
-                              { label: "Confidence & Delivery", val: soloHistory[0].delivery_score, icon: "🚀", color: "bg-emerald-500", text: "text-emerald-400" },
+                              { label: "Grammar & Structure", val: soloHistory[0]?.grammar_score, icon: "📝", color: "bg-indigo-500", text: "text-indigo-400" },
+                              { label: "Fluency & Speech Rate", val: soloHistory[0]?.fluency_score, icon: "⚡", color: "bg-purple-500", text: "text-purple-400" },
+                              { label: "Pronunciation & Clarity", val: soloHistory[0]?.accent_score, icon: "🗣️", color: "bg-cyan-500", text: "text-cyan-400" },
+                              { label: "Confidence & Delivery", val: soloHistory[0]?.delivery_score, icon: "🚀", color: "bg-emerald-500", text: "text-emerald-400" },
                             ].map((skill) => (
                               <div key={skill.label} className="space-y-1.5">
                                 <div className="flex items-center justify-between text-xs">
