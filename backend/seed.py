@@ -2,6 +2,8 @@
 import hashlib
 from backend.security import hash_password
 import os
+from dotenv import load_dotenv
+load_dotenv('backend/.env')
 import mysql.connector
 from backend.security import hash_password
 
@@ -67,6 +69,7 @@ STUDENTS = [
     ("911724205301", "RUNESH"),
     ("911724205302", "MUKHA"),
     ("911724205701", "AHAMED AASHIQ S"),
+    ("911723104007", "CSE STUDENT"),
 ]
 
 salt = os.urandom(32)
@@ -75,7 +78,7 @@ hash_pw = salt.hex() + ":" + hashlib.pbkdf2_hmac("sha256", "Password123".encode(
 conn = mysql.connector.connect(
     host=os.environ.get("MYSQL_HOST", "localhost"), port=int(os.environ.get("MYSQL_PORT", 3306)),
     user=os.environ.get("MYSQL_USER", "root"),
-    password="",
+    password=os.environ.get("MYSQL_PASSWORD", ""),
     database=os.environ.get("MYSQL_DATABASE", "speaksense_ai"),
 )
 cursor = conn.cursor()
@@ -144,6 +147,26 @@ STUDENT_EMAILS = {
     "911724205701": "ahamedaashiq10376@mountzion.ac.in",
 }
 
+def get_dept(reg):
+    if len(reg) >= 9:
+        c = reg[6:9]
+        if c == "104": return "CSE"
+        if c == "205": return "IT"
+        if c == "106": return "ECE"
+        if c == "105": return "EEE"
+        if c == "114": return "MECH"
+        if c == "103": return "CIVIL"
+    return "IT"
+
+def get_year(reg):
+    if len(reg) >= 6:
+        y = reg[4:6]
+        if y == "26": return "1st Year"
+        if y == "25": return "2nd Year"
+        if y == "24": return "3rd Year"
+        if y == "23": return "4th Year"
+    return "3rd Year"
+
 for reg_no, name in STUDENTS:
     email = STUDENT_EMAILS.get(reg_no, f"{reg_no}@mzgd.edu")
     cursor.execute(
@@ -156,10 +179,12 @@ for reg_no, name in STUDENTS:
     row = cursor.fetchone()
     if row:
         uid = row[0]
+        dept = get_dept(reg_no)
+        yr = get_year(reg_no)
         cursor.execute(
-            "INSERT INTO student_profile (user_id, department, year) VALUES (%s, 'IT', '3rd Year') "
+            "INSERT INTO student_profile (user_id, department, year) VALUES (%s, %s, %s) "
             "ON DUPLICATE KEY UPDATE department = VALUES(department), year = VALUES(year)",
-            (uid,)
+            (uid, dept, yr)
         )
 
 conn.commit()
