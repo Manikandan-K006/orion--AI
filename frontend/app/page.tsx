@@ -409,12 +409,12 @@ export default function Home() {
 
     const rn = loginTab === "student" ? studentRegisterNumber : adminRegisterNumber;
     const pw = loginTab === "student" ? (studentPassword || "Password123") : adminPassword;
-    if (!rn.trim()) { 
-      setMessage("Enter your register number / SPR number"); 
-      loginLockRef.current = false; 
-      return; 
+    if (!rn.trim()) {
+      setMessage("Enter your register number / SPR number");
+      loginLockRef.current = false;
+      return;
     }
-    
+
     setLoading(true); setMessage(""); setSuccess("");
     try {
       console.time("Login-API-Request");
@@ -429,13 +429,13 @@ export default function Home() {
       setUser(res.user);
       setView("dashboard");
       voice.announceLogin();
-      
+
       // Lazy load dashboard data in the background
       loadDashboardData(res.access_token, res.user);
     } catch (err: any) {
       setMessage(err.message || "Login failed");
-    } finally { 
-      setLoading(false); 
+    } finally {
+      setLoading(false);
       loginLockRef.current = false;
       console.timeEnd("Login-Total");
     }
@@ -1155,7 +1155,7 @@ export default function Home() {
                         <div className="icon-badge icon-purple"><Trophy className="w-5 h-5" /></div>
                       </div>
                       <p className="text-3xl font-extrabold text-heading">
-                        {progress && typeof progress.average_score === 'number' ? `${progress.average_score.toFixed(1)}%` : "0.0%"}
+                        {progress && progress.average_score != null ? `${Number(progress.average_score).toFixed(1)}%` : "0.0%"}
                       </p>
                       <div className="w-full bg-slate-800 rounded-full h-1.5 mt-3 overflow-hidden">
                         <div
@@ -1297,7 +1297,7 @@ export default function Home() {
                                   <span className="font-semibold text-heading flex items-center gap-1.5">
                                     <span>{skill.icon}</span> {skill.label}
                                   </span>
-                                  <span className={`font-bold ${skill.text}`}>{skill.val ? `${skill.val.toFixed(0)}/100` : "N/A"}</span>
+                                  <span className={`font-bold ${skill.text}`}>{skill.val != null ? `${Number(skill.val).toFixed(0)}/100` : "N/A"}</span>
                                 </div>
                                 <div className="w-full bg-slate-200 dark:bg-slate-800/80 rounded-full h-2 overflow-hidden border border-slate-300/30 dark:border-slate-700/30">
                                   <div
@@ -1377,7 +1377,7 @@ export default function Home() {
                                 <div className="flex justify-between items-start gap-2">
                                   <p className="text-xs font-bold text-heading line-clamp-1 flex-1">{s.topic}</p>
                                   <span className="text-xs font-extrabold text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
-                                    {(s.overall_score || 0).toFixed(1)}
+                                    {(s.overall_score != null ? Number(s.overall_score) : 0).toFixed(1)}
                                   </span>
                                 </div>
                                 {s.weaknesses && (
@@ -1515,8 +1515,8 @@ export default function Home() {
                                 <span className="text-sm font-bold text-heading">Code:</span>
                                 <code className="text-xs font-mono font-bold bg-[var(--surface-2)] text-indigo-500 dark:text-indigo-300 px-2 py-0.5 rounded border border-[var(--border)]">{s.session_code}</code>
                                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide border ${s.status === "completed"
-                                    ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-                                    : "bg-amber-500/10 text-amber-400 border-amber-500/20"
+                                  ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                                  : "bg-amber-500/10 text-amber-400 border-amber-500/20"
                                   }`}>
                                   {s.status}
                                 </span>
@@ -1596,7 +1596,7 @@ export default function Home() {
                   ].map(c => (
                     <div key={c.label} className="card p-4">
                       <div className="flex items-center gap-2 text-muted-soft text-xs mb-2">{c.icon} {c.label}</div>
-                      <p className={`text-2xl font-bold ${c.color}`}>{typeof c.value === "number" && c.label !== "Active Participants" && c.label !== "Total Interviews Today" ? c.value.toFixed(1) : c.value}</p>
+                      <p className={`text-2xl font-bold ${c.color}`}>{typeof c.value === "number" && c.label !== "Active Participants" && c.label !== "Total Interviews Today" ? Number(c.value).toFixed(1) : c.value}</p>
                     </div>
                   ))}
                 </div>
@@ -1630,9 +1630,9 @@ export default function Home() {
                           <td className="py-3 pr-2 text-body text-xs md:text-sm hidden md:table-cell">{r.department}</td>
                           <td className="py-3 pr-2 text-body text-xs md:text-sm hidden md:table-cell">{r.year}</td>
                           <td className="py-3 pr-2 text-amber-300 font-semibold text-xs md:text-sm">{r.total_credits}</td>
-                          <td className="py-3 pr-2 text-emerald-300 text-xs md:text-sm">{(r.grammar || 0).toFixed(1)}</td>
-                          <td className="py-3 pr-2 text-purple-300 text-xs md:text-sm">{(r.fluency || 0).toFixed(1)}</td>
-                          <td className="py-3 pr-2 text-cyan-300 text-xs md:text-sm hidden md:table-cell">{(r.relevance || 0).toFixed(1)}</td>
+                          <td className="py-3 pr-2 text-emerald-300 text-xs md:text-sm">{(r.grammar != null ? Number(r.grammar) : 0).toFixed(1)}</td>
+                          <td className="py-3 pr-2 text-purple-300 text-xs md:text-sm">{(r.fluency != null ? Number(r.fluency) : 0).toFixed(1)}</td>
+                          <td className="py-3 pr-2 text-cyan-300 text-xs md:text-sm hidden md:table-cell">{(r.relevance != null ? Number(r.relevance) : 0).toFixed(1)}</td>
                           <td className="py-3 pr-2 text-body text-xs md:text-sm hidden md:table-cell">{r.sessions_completed}</td>
                         </tr>
                       ))}
@@ -1905,7 +1905,7 @@ export default function Home() {
                           <p className="text-lg font-bold text-heading">{s.current}</p>
                           <p className={`text-xs flex items-center justify-center gap-1 ${diff >= 0 ? "text-emerald-400" : "text-red-400"}`}>
                             {diff >= 0 ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />}
-                            {Math.abs(diff).toFixed(1)} pts
+                            {Number(Math.abs(diff)).toFixed(1)} pts
                           </p>
                         </div>
                       );
@@ -2078,8 +2078,8 @@ export default function Home() {
                               <td className="py-2 pr-2 text-body hidden md:table-cell">{entry.register_number}</td>
                               <td className="py-2 pr-2 text-amber-300 font-mono">{entry.team_number}</td>
                               <td className="py-2 pr-2 text-purple-300">{entry.anonymous_label || "-"}</td>
-                              <td className="py-2 pr-2 text-emerald-300 font-semibold">{(entry.overall_score || 0).toFixed(1)}</td>
-                              <td className="py-2 pr-2 text-amber-300">{(entry.credential_points || 0).toFixed(1)}</td>
+                              <td className="py-2 pr-2 text-emerald-300 font-semibold">{(entry.overall_score != null ? Number(entry.overall_score) : 0).toFixed(1)}</td>
+                              <td className="py-2 pr-2 text-amber-300">{(entry.credential_points != null ? Number(entry.credential_points) : 0).toFixed(1)}</td>
                               <td className="py-2 pr-2">
                                 <details className="cursor-pointer">
                                   <summary className="text-amber-300 hover:text-amber-200 text-xs">View</summary>
