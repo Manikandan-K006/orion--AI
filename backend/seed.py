@@ -1,5 +1,6 @@
 """Seed the database with all students and proper password hashes."""
 import hashlib
+from backend.security import hash_password
 import os
 import mysql.connector
 from backend.security import hash_password
@@ -74,7 +75,7 @@ hash_pw = salt.hex() + ":" + hashlib.pbkdf2_hmac("sha256", "Password123".encode(
 conn = mysql.connector.connect(
     host=os.environ.get("MYSQL_HOST", "localhost"), port=int(os.environ.get("MYSQL_PORT", 3306)),
     user=os.environ.get("MYSQL_USER", "root"),
-    password=os.environ.get("MYSQL_PASSWORD", "mani_password"),
+    password="",
     database=os.environ.get("MYSQL_DATABASE", "speaksense_ai"),
 )
 cursor = conn.cursor()
