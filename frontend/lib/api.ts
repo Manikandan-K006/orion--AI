@@ -354,3 +354,11 @@ export async function downloadReport(sessionId: number, token: string) {
   a.click();
   window.URL.revokeObjectURL(url);
 }
+
+export async function changePassword(payload: { current_password: string; new_password: string }, token: string) {
+  return apiRequest<{ message: string }>(
+    `/change-password`,
+    { method: "POST", body: JSON.stringify(payload) },
+    token
+  );
+}

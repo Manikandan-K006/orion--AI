@@ -62,12 +62,28 @@ def get_user_by_id(connection: MySQLConnection, user_id: int) -> dict[str, Any] 
     )
 
 
+def update_password(connection: MySQLConnection, user_id: int, new_password_hash: str) -> int:
+    return execute(
+        connection,
+        "UPDATE users SET password_hash = %s WHERE id = %s",
+        (new_password_hash, user_id),
+    )
+
+
 
 def create_user(connection: MySQLConnection, name: str, email: str, password_hash: str, role: str, register_number: str = "") -> int:
     return execute(
         connection,
         "INSERT INTO users (name, email, password_hash, role, register_number) VALUES (%s, %s, %s, %s, %s)",
         (name, email, password_hash, role, register_number),
+    )
+
+
+def update_password(connection: MySQLConnection, user_id: int, password_hash: str) -> int:
+    return execute(
+        connection,
+        "UPDATE users SET password_hash = %s WHERE id = %s",
+        (password_hash, user_id),
     )
 
 

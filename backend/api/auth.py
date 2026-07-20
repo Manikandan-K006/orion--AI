@@ -5,7 +5,7 @@ from mysql.connector import MySQLConnection
 
 from backend.database.db import get_db
 from backend.database import queries
-from backend.models.schemas import LoginRequest, RegisterNumberLogin, RegisterRequest, TokenResponse, UserResponse
+from backend.models.schemas import ChangePasswordRequest, LoginRequest, RegisterNumberLogin, RegisterRequest, TokenResponse, UserResponse
 from backend.security import create_access_token, get_current_user, hash_password, verify_password
 
 router = APIRouter(tags=["Authentication"])
@@ -63,3 +63,21 @@ def login_by_register_number(payload: RegisterNumberLogin, connection: MySQLConn
 @router.get("/profile", response_model=UserResponse)
 def profile(current_user: dict = Depends(get_current_user)) -> UserResponse:
     return UserResponse(**current_user)
+
+
+@router.post("/change-password")
+def change_password(
+    payload: ChangePasswordRequest,
+    current_user: dict = Depends(get_current_user),
+    connection: MySQLConnection = Depends(get_db)
+):
+    user = queries.get_user_by_id(connection, current_user["id"])
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        
+    user_with_hash = queries.get_user_by_email(connection, user["email"])
+    if not user_with_hash or not verify_password(payload.current_password, user_with_hash["password_hash"]):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid current password")
+
+    queries.update_password(connection, current_user["id"], hash_password(payload.new_password))
+    return {"message": "Password updated successfully"}

@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircle, Award, Clock, LogOut, MessageSquare, Mic, MicOff, Trophy, Users, Zap, Loader2, Copy, Check, Target, TrendingUp, ArrowUp, ArrowDown, Sparkles, Menu, X, Shield, Sun, Moon, RefreshCw, Video, VideoOff, Hand, MessageCircle, Maximize, PhoneOff, Radio, CheckCircle2, Mail, Phone, Globe, Eye, VolumeX } from "lucide-react";
+import { AlertCircle, Award, Clock, LogOut, MessageSquare, Mic, MicOff, Trophy, Users, User as UserIcon, Lock, Zap, Loader2, Copy, Check, Target, TrendingUp, ArrowUp, ArrowDown, Sparkles, Menu, X, Shield, Sun, Moon, RefreshCw, Video, VideoOff, Hand, MessageCircle, Maximize, PhoneOff, Radio, CheckCircle2, Mail, Phone, Globe, Eye, VolumeX } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Bar, BarChart, CartesianGrid, Cell, Legend, PolarAngleAxis, PolarGrid, Radar, RadarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
@@ -11,7 +11,7 @@ import GdLiveRoom from "@/components/GdLiveRoom";
 import GdLiveAdminMonitor from "@/components/GdLiveAdminMonitor";
 import { useGdLiveWs, GDLiveWsMessage } from "@/lib/useGdLiveWs";
 import { useVoiceAnnouncement } from "@/services/voice/useVoiceAnnouncement";
-import { AllTimeAchiever, ComprehensiveLeaderboard, GDLiveLeaderboardEntry, LeaderboardRanking, LeaderboardStats, Progress, SoloQuote, SoloStartResponse, SoloSubmitResponse, User, apiRequest, hostGdLiveMeeting, endGdLiveMeeting, getGdLiveState } from "@/lib/api";
+import { AllTimeAchiever, ComprehensiveLeaderboard, GDLiveLeaderboardEntry, LeaderboardRanking, LeaderboardStats, Progress, SoloQuote, SoloStartResponse, SoloSubmitResponse, User, apiRequest, hostGdLiveMeeting, endGdLiveMeeting, getGdLiveState, changePassword } from "@/lib/api";
 
 function speak(text: string) {
   if (typeof window === "undefined" || !window.speechSynthesis) return;
@@ -31,7 +31,7 @@ const MOTIVATIONAL_PHRASES = [
   "Fantastic! Your hard work is paying off.",
 ];
 
-type PageView = "login" | "dashboard" | "gd-leaderboard" | "solo-practice" | "solo-session" | "solo-result" | "gd-live" | "gd-live-session" | "gd-live-results" | "gd-live-admin" | "gd-live-admin-view" | "gd-live-room" | "gd-live-monitor";
+type PageView = "login" | "dashboard" | "profile" | "gd-leaderboard" | "solo-practice" | "solo-session" | "solo-result" | "gd-live" | "gd-live-session" | "gd-live-results" | "gd-live-admin" | "gd-live-admin-view" | "gd-live-room" | "gd-live-monitor";
 
 /** Student-side waiter: opens a WebSocket to the session and auto-redirects into the
  *  live room when the admin hosts the meeting (SESSION_STARTED broadcast). */
@@ -168,6 +168,9 @@ export default function Home() {
   const [view, setView] = useState<PageView>("login");
   const [message, setMessage] = useState("");
   const [success, setSuccess] = useState("");
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
   const [studentRegisterNumber, setStudentRegisterNumber] = useState("");
@@ -920,8 +923,8 @@ export default function Home() {
   function renderSidebarContent(isMobile = false) {
     if (!user) return null;
     return (
-      <div className="flex flex-col h-full">
-        <div className="flex items-center justify-between p-5 border-b" style={{ borderColor: "var(--border)" }}>
+      <>
+        <div className="flex items-center justify-between p-5 border-b shrink-0" style={{ borderColor: "var(--border)" }}>
           <div className="flex items-center gap-3">
             <img src="/MZ_logo_DB.webp" alt="Mount Zion Logo" className="w-10 h-10 rounded-xl object-cover shadow-md shrink-0" />
             <div className="truncate">
@@ -946,6 +949,7 @@ export default function Home() {
               { icon: <Shield className="w-5 h-5 shrink-0" />, label: "Admin", view: "gd-live-admin" as PageView },
             ] : []),
             { icon: <Trophy className="w-5 h-5 shrink-0" />, label: "Leaderboard", view: "gd-leaderboard" as PageView },
+            { icon: <UserIcon className="w-5 h-5 shrink-0" />, label: "Profile", view: "profile" as PageView },
           ].filter(Boolean).map((item: { icon: React.ReactNode; label: string; view: PageView; badge?: string }) => (
             <button
               key={item.label}
@@ -968,7 +972,7 @@ export default function Home() {
             </button>
           ))}
         </nav>
-        <div className="mt-auto p-4 border-t space-y-2" style={{ borderColor: "var(--border)" }}>
+        <div className="p-4 border-t space-y-2 shrink-0" style={{ borderColor: "var(--border)" }}>
           <button onClick={() => voice.setEnabled(!voice.enabled)} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 whitespace-nowrap text-muted-soft hover:text-heading hover:bg-[var(--surface-hover)]">
             <VolumeX className="w-5 h-5 shrink-0" /> {voice.enabled ? "Mute Voice" : "Unmute Voice"}
           </button>
@@ -976,12 +980,12 @@ export default function Home() {
             <LogOut className="w-5 h-5 shrink-0" /> Sign Out
           </button>
         </div>
-      </div>
+      </>
     );
   }
 
   return (
-    <div className={`min-h-screen flex relative overflow-hidden ${theme === "dark" ? "dark" : ""}`}>
+    <div className={`h-screen flex relative overflow-hidden ${theme === "dark" ? "dark" : ""}`}>
       {/* Theme-based animated background */}
       <div className="fixed inset-0 z-0">
         <img
@@ -1014,14 +1018,14 @@ export default function Home() {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-x-hidden overflow-y-auto min-h-screen">
+      <main className={`flex-1 overflow-x-hidden overflow-y-auto h-full transition-all duration-300 ease-in-out ${sidebarOpen ? "translate-x-0 md:translate-x-[280px] lg:translate-x-0" : "translate-x-0"}`}>
         <div className="p-4 md:p-6 max-w-6xl mx-auto animate-fade-up">
           {/* Top bar */}
           <div className={`flex items-center justify-between mb-4 sticky top-0 z-10 py-3 -mx-4 px-4 lg:px-0 lg:py-3 lg:mx-0 surface rounded-b-2xl lg:hidden`} style={{ background: "var(--surface)", borderBottom: "1px solid var(--border)" }}>
             <button onClick={() => { if (!isSessionLocked) setSidebarOpen(!sidebarOpen); }} className={`p-2 rounded-lg transition-all hover:scale-110 text-muted-soft hover:bg-[var(--surface-hover)] ${isSessionLocked ? "opacity-40 cursor-not-allowed" : ""}`} title={sidebarOpen ? "Close menu" : "Open menu"}>
               {sidebarOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
             </button>
-            <div className="text-sm font-semibold text-heading">{view === "dashboard" ? "Dashboard" : view === "gd-leaderboard" ? "Leaderboard" : view === "solo-practice" ? "Solo Practice" : view === "solo-session" ? "Solo Session" : view === "solo-result" ? "Results" : view === "gd-live" ? "GD" : view === "gd-live-session" ? "GD Room" : view === "gd-live-results" ? "GD Results" : view === "gd-live-admin" ? "GD Admin" : ""}</div>
+            <div className="text-sm font-semibold text-heading">{view === "profile" ? "Profile" : view === "dashboard" ? "Dashboard" : view === "gd-leaderboard" ? "Leaderboard" : view === "solo-practice" ? "Solo Practice" : view === "solo-session" ? "Solo Session" : view === "solo-result" ? "Results" : view === "gd-live" ? "GD" : view === "gd-live-session" ? "GD Room" : view === "gd-live-results" ? "GD Results" : view === "gd-live-admin" ? "GD Admin" : ""}</div>
             <div className="w-10" /> {/* spacer */}
           </div>
           {(success || message) && (
@@ -1034,6 +1038,70 @@ export default function Home() {
           {pageLoading && (
             <div className="mb-4 flex items-center gap-2 rounded-xl p-3 text-sm surface-2 text-body border">
               <Loader2 className="h-4 w-4 animate-spin shrink-0" /> Loading...
+            </div>
+          )}
+
+          {/* Profile View */}
+          {view === "profile" && user && (
+            <div className="max-w-md mx-auto space-y-6 animate-in slide-in-from-bottom-4 fade-in duration-500 pb-12">
+              <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-6 shadow-sm">
+                <h2 className="text-xl font-bold text-heading mb-1">Profile</h2>
+                <p className="text-sm text-muted mb-6">Manage your account settings.</p>
+                <div className="space-y-4 mb-8">
+                  <div>
+                    <label className="text-xs font-semibold text-muted-soft uppercase tracking-wider mb-1 block">Name</label>
+                    <p className="text-body font-medium">{user.name}</p>
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-muted-soft uppercase tracking-wider mb-1 block">Email</label>
+                    <p className="text-body font-medium">{user.email}</p>
+                  </div>
+                  {user.register_number && (
+                    <div>
+                      <label className="text-xs font-semibold text-muted-soft uppercase tracking-wider mb-1 block">Register Number</label>
+                      <p className="text-body font-medium">{user.register_number}</p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="border-t border-[var(--border)] pt-6">
+                  <h3 className="text-lg font-bold text-heading mb-4">Change Password</h3>
+                  <form onSubmit={async (e) => {
+                    e.preventDefault();
+                    if (newPassword.length < 8) return alert("New password must be at least 8 characters");
+                    if (newPassword !== confirmPassword) return alert("Passwords do not match");
+                    try {
+                      setLoading(true);
+                      const res = await changePassword({ current_password: currentPassword, new_password: newPassword }, token!);
+                      alert(res.message || "Password updated successfully");
+                      setCurrentPassword("");
+                      setNewPassword("");
+                      setConfirmPassword("");
+                    } catch (err: any) {
+                      alert(err.message || "Failed to change password");
+                    } finally {
+                      setLoading(false);
+                    }
+                  }} className="space-y-4">
+                    <div>
+                      <label className="text-xs font-semibold text-heading mb-1 block">Current Password</label>
+                      <Input type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} required className="w-full bg-[var(--background)] border-[var(--border)] focus:border-indigo-500/50" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-heading mb-1 block">New Password</label>
+                      <Input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} required minLength={8} className="w-full bg-[var(--background)] border-[var(--border)] focus:border-indigo-500/50" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-heading mb-1 block">Confirm New Password</label>
+                      <Input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} required minLength={8} className="w-full bg-[var(--background)] border-[var(--border)] focus:border-indigo-500/50" />
+                    </div>
+                    <Button type="submit" disabled={loading} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white mt-2">
+                      {loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Lock className="w-4 h-4 mr-2" />}
+                      Change Password
+                    </Button>
+                  </form>
+                </div>
+              </div>
             </div>
           )}
 
