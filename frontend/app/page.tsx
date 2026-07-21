@@ -950,18 +950,7 @@ export default function Home() {
           )}
         </div>
 
-        {/* Student Profile summary banner inside sidebar */}
-        {user.role === "student" && (
-          <div className="mx-4 mt-4 p-3 bg-gradient-to-br from-indigo-500/5 to-purple-500/5 border border-slate-200/40 dark:border-slate-800/40 rounded-2xl flex items-center gap-2.5 select-none shrink-0">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center text-white text-sm font-bold shadow-sm shrink-0">
-              {user.name ? user.name[0].toUpperCase() : "S"}
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-xs font-semibold text-heading truncate">{user.name}</p>
-              <p className="text-[10px] text-muted-soft truncate font-mono uppercase tracking-wider">{user.role}</p>
-            </div>
-          </div>
-        )}
+
 
         {/* Navigation list */}
         <nav className="flex-1 p-4 space-y-1.5 overflow-y-auto">
@@ -1083,6 +1072,15 @@ export default function Home() {
                 className="pl-9 pr-3 py-1.5 w-full text-xs rounded-xl border border-slate-200/50 dark:border-slate-800/50 bg-white/30 dark:bg-slate-900/30 text-heading placeholder-muted focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all duration-200"
               />
             </div>
+
+            {/* Theme Toggle Button */}
+            <button
+              onClick={toggleTheme}
+              className="p-2 rounded-xl border border-slate-200/50 dark:border-slate-800/50 bg-white/40 dark:bg-slate-900/40 hover:bg-indigo-500/5 text-heading hover:scale-105 active:scale-95 transition-all duration-200"
+              aria-label="Toggle Theme"
+            >
+              {theme === "dark" ? <Sun className="w-4 h-4 text-amber-500" /> : <Moon className="w-4 h-4 text-indigo-500" />}
+            </button>
 
             {/* Notification Bell */}
             <button
