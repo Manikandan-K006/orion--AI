@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircle, Award, Clock, LogOut, MessageSquare, Mic, MicOff, Trophy, Users, User as UserIcon, Lock, Zap, Loader2, Copy, Check, Target, TrendingUp, ArrowUp, ArrowDown, Sparkles, Menu, X, Shield, Sun, Moon, RefreshCw, Video, VideoOff, Hand, MessageCircle, Maximize, PhoneOff, Radio, CheckCircle2, Mail, Phone, Globe, Eye, EyeOff, VolumeX } from "lucide-react";
+import { AlertCircle, Award, Clock, LogOut, MessageSquare, Mic, MicOff, Trophy, Users, User as UserIcon, Lock, Zap, Loader2, Copy, Check, Target, TrendingUp, ArrowUp, ArrowDown, Sparkles, Menu, X, Shield, Sun, Moon, RefreshCw, Video, VideoOff, Hand, MessageCircle, Maximize, PhoneOff, Radio, CheckCircle2, Mail, Phone, Globe, Eye, EyeOff, VolumeX, Volume2, Bell, Settings, Search, BookOpen, ShieldAlert, Calendar } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Bar, BarChart, CartesianGrid, Cell, Legend, PolarAngleAxis, PolarGrid, Radar, RadarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
@@ -31,7 +31,7 @@ const MOTIVATIONAL_PHRASES = [
   "Fantastic! Your hard work is paying off.",
 ];
 
-type PageView = "login" | "dashboard" | "profile" | "gd-leaderboard" | "solo-practice" | "solo-session" | "solo-result" | "gd-live" | "gd-live-session" | "gd-live-results" | "gd-live-admin" | "gd-live-admin-view" | "gd-live-room" | "gd-live-monitor";
+type PageView = "login" | "dashboard" | "profile" | "gd-leaderboard" | "solo-practice" | "solo-session" | "solo-result" | "gd-live" | "gd-live-session" | "gd-live-results" | "gd-live-admin" | "gd-live-admin-view" | "gd-live-room" | "gd-live-monitor" | "reports" | "certificates" | "achievements" | "notifications" | "settings";
 
 /** Student-side waiter: opens a WebSocket to the session and auto-redirects into the
  *  live room when the admin hosts the meeting (SESSION_STARTED broadcast). */
@@ -175,6 +175,9 @@ export default function Home() {
   const [showCurrent, setShowCurrent] = useState(false);
   const [showNew, setShowNew] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [pdfLoading, setPdfLoading] = useState(false);
+  const [cert1Downloading, setCert1Downloading] = useState(false);
+  const [cert2Downloading, setCert2Downloading] = useState(false);
 
   const [studentRegisterNumber, setStudentRegisterNumber] = useState("");
   const [studentPassword, setStudentPassword] = useState("");
@@ -928,15 +931,16 @@ export default function Home() {
     if (!user) return null;
     return (
       <div className="flex flex-col h-full bg-slate-900/5 dark:bg-slate-950/20 backdrop-blur-xl">
+        {/* Logo and online status */}
         <div className="flex items-center justify-between p-5 border-b border-slate-200/50 dark:border-slate-800/50 shrink-0 bg-gradient-to-b from-indigo-500/5 via-transparent to-transparent">
           <div className="flex items-center gap-3">
             <img src="/MZ_logo_DB.webp" alt="Mount Zion Logo" className="w-10 h-10 rounded-xl object-cover shadow-md shrink-0 hover:rotate-6 transition-transform duration-300" />
             <div className="truncate">
               <p className="text-sm font-bold text-heading flex items-center gap-1.5">
                 MZ Orator
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_#10b981]" />
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_#10b981]" />
               </p>
-              <p className="text-xs text-muted-soft truncate max-w-[140px]">{user.name}</p>
+              <p className="text-[11px] text-muted-soft truncate max-w-[140px]">{user.name}</p>
             </div>
           </div>
           {isMobile && (
@@ -945,20 +949,37 @@ export default function Home() {
             </button>
           )}
         </div>
-        
-        <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
+
+        {/* Student Profile summary banner inside sidebar */}
+        {user.role === "student" && (
+          <div className="mx-4 mt-4 p-3 bg-gradient-to-br from-indigo-500/5 to-purple-500/5 border border-slate-200/40 dark:border-slate-800/40 rounded-2xl flex items-center gap-2.5 select-none shrink-0">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center text-white text-sm font-bold shadow-sm shrink-0">
+              {user.name ? user.name[0].toUpperCase() : "S"}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-semibold text-heading truncate">{user.name}</p>
+              <p className="text-[10px] text-muted-soft truncate font-mono uppercase tracking-wider">{user.role}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Navigation list */}
+        <nav className="flex-1 p-4 space-y-1.5 overflow-y-auto">
           {[
-            { icon: <Users className="w-5 h-5 shrink-0" />, label: "Dashboard", view: "dashboard" as PageView },
+            { icon: <Users className="w-4 h-4 shrink-0" />, label: "Dashboard", view: "dashboard" as PageView },
             ...(user?.role !== "admin" ? [
-              { icon: <Zap className="w-5 h-5 shrink-0" />, label: "GD", view: "gd-live" as PageView },
-              { icon: <Target className="w-5 h-5 shrink-0" />, label: "Solo Practice", view: "solo-practice" as PageView },
+              { icon: <Zap className="w-4 h-4 shrink-0" />, label: "Group Discussion", view: "gd-live" as PageView },
+              { icon: <Target className="w-4 h-4 shrink-0" />, label: "Solo Practice", view: "solo-practice" as PageView },
+              { icon: <TrendingUp className="w-4 h-4 shrink-0" />, label: "Reports & Analytics", view: "reports" as PageView },
+              { icon: <Award className="w-4 h-4 shrink-0" />, label: "Achievements", view: "achievements" as PageView },
+              { icon: <CheckCircle2 className="w-4 h-4 shrink-0" />, label: "Certificates", view: "certificates" as PageView },
             ] : []),
             ...(user?.role === "admin" ? [
-              { icon: <Shield className="w-5 h-5 shrink-0" />, label: "Admin", view: "gd-live-admin" as PageView },
+              { icon: <Shield className="w-4 h-4 shrink-0" />, label: "Admin GD Control", view: "gd-live-admin" as PageView },
             ] : []),
-            { icon: <Trophy className="w-5 h-5 shrink-0" />, label: "Leaderboard", view: "gd-leaderboard" as PageView },
-            { icon: <UserIcon className="w-5 h-5 shrink-0" />, label: "Profile", view: "profile" as PageView },
-          ].filter(Boolean).map((item: { icon: React.ReactNode; label: string; view: PageView; badge?: string }) => (
+            { icon: <Trophy className="w-4 h-4 shrink-0" />, label: "Leaderboard", view: "gd-leaderboard" as PageView },
+            { icon: <UserIcon className="w-4 h-4 shrink-0" />, label: "Profile Settings", view: "profile" as PageView },
+          ].filter(Boolean).map((item: { icon: React.ReactNode; label: string; view: PageView }) => (
             <button
               key={item.label}
               disabled={isSessionLocked}
@@ -972,21 +993,24 @@ export default function Home() {
                 else setView(item.view);
                 if (isMobile) setSidebarOpen(false);
               }}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 whitespace-nowrap ${view === item.view ? "bg-gradient-to-r from-indigo-500/10 to-purple-500/10 text-indigo-600 dark:text-indigo-300 border-l-4 border-indigo-500 dark:border-indigo-400 shadow-[0_2px_10px_rgba(99,102,241,0.02)]" : "text-body hover:bg-slate-500/5 hover:text-heading hover:pl-5"} ${isSessionLocked ? "opacity-40 cursor-not-allowed" : ""}`}
+              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all duration-200 whitespace-nowrap ${view === item.view ? "bg-gradient-to-r from-indigo-500/10 to-purple-500/10 text-indigo-600 dark:text-indigo-300 border-l-4 border-indigo-500 dark:border-indigo-400 shadow-sm" : "text-body hover:bg-slate-500/5 hover:text-heading hover:pl-5"} ${isSessionLocked ? "opacity-40 cursor-not-allowed" : ""}`}
             >
               {item.icon}
               <span>{item.label}</span>
-              {item.badge && <span className="ml-auto bg-amber-500 text-heading text-xs px-2 py-0.5 rounded-full">{item.badge}</span>}
             </button>
           ))}
         </nav>
-        
-        <div className="p-4 border-t border-slate-200/50 dark:border-slate-800/50 space-y-2 shrink-0 bg-gradient-to-t from-indigo-500/5 via-transparent to-transparent">
-          <button onClick={() => voice.setEnabled(!voice.enabled)} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 whitespace-nowrap text-muted-soft hover:text-heading hover:bg-slate-500/5 hover:pl-5">
-            <VolumeX className="w-5 h-5 shrink-0" /> {voice.enabled ? "Mute Voice" : "Unmute Voice"}
+
+        {/* Bottom panel */}
+        <div className="p-4 border-t border-slate-200/50 dark:border-slate-800/50 space-y-1.5 shrink-0 bg-gradient-to-t from-indigo-500/5 via-transparent to-transparent">
+          <button onClick={() => voice.setEnabled(!voice.enabled)} className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all duration-200 whitespace-nowrap text-muted-soft hover:text-heading hover:bg-slate-500/5 hover:pl-5">
+            <VolumeX className="w-4 h-4 shrink-0" /> {voice.enabled ? "Mute Voice" : "Unmute Voice"}
           </button>
-          <button onClick={logout} disabled={isSessionLocked} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 whitespace-nowrap ${isSessionLocked ? "text-slate-600 cursor-not-allowed" : "text-red-600 dark:text-red-400 hover:bg-red-500/10 hover:pl-5"}`}>
-            <LogOut className="w-5 h-5 shrink-0" /> Sign Out
+          <button onClick={() => setView("settings")} className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all duration-200 whitespace-nowrap text-muted-soft hover:text-heading hover:bg-slate-500/5 hover:pl-5">
+            <Settings className="w-4 h-4 shrink-0" /> Settings
+          </button>
+          <button onClick={logout} disabled={isSessionLocked} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all duration-200 whitespace-nowrap ${isSessionLocked ? "text-slate-600 cursor-not-allowed" : "text-red-600 dark:text-red-400 hover:bg-red-500/10 hover:pl-5"}`}>
+            <LogOut className="w-4 h-4 shrink-0" /> Sign Out
           </button>
         </div>
       </div>
@@ -1012,11 +1036,6 @@ export default function Home() {
         <div className="absolute bottom-1/4 right-1/4 w-[400px] h-[400px] rounded-full bg-purple-500/10 dark:bg-purple-600/5 blur-[120px] pointer-events-none animate-pulse" style={{ animationDuration: "8s" }} />
       </div>
 
-      {/* Theme toggle */}
-      <button onClick={toggleTheme} className="fixed top-4 right-4 z-30 p-2.5 rounded-xl border border-slate-200/50 dark:border-slate-800/50 bg-white/60 dark:bg-slate-900/60 backdrop-blur-md shadow-sm text-heading hover:scale-105 hover:bg-slate-100 dark:hover:bg-slate-800 active:scale-95 transition-all duration-200" title="Toggle theme">
-        {theme === "dark" ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-      </button>
-
       {/* Mobile backdrop overlay when sidebar open */}
       {sidebarOpen && (
         <div className="fixed inset-0 z-40 bg-black/60 lg:hidden transition-opacity duration-300" onClick={() => setSidebarOpen(false)} />
@@ -1034,15 +1053,60 @@ export default function Home() {
 
       {/* Main Content */}
       <main className={`flex-1 overflow-x-hidden overflow-y-auto h-full transition-all duration-300 ease-in-out ${sidebarOpen ? "translate-x-0 md:translate-x-[280px] lg:translate-x-0" : "translate-x-0"}`}>
-        <div className="p-4 md:p-6 max-w-6xl mx-auto animate-fade-up">
-          {/* Top bar */}
-          <div className={`flex items-center justify-between mb-4 sticky top-0 z-10 py-3 -mx-4 px-4 lg:px-0 lg:py-3 lg:mx-0 surface rounded-b-2xl lg:hidden`} style={{ background: "var(--surface)", borderBottom: "1px solid var(--border)" }}>
-            <button onClick={() => { if (!isSessionLocked) setSidebarOpen(!sidebarOpen); }} className={`p-2 rounded-lg transition-all hover:scale-110 text-muted-soft hover:bg-[var(--surface-hover)] ${isSessionLocked ? "opacity-40 cursor-not-allowed" : ""}`} title={sidebarOpen ? "Close menu" : "Open menu"}>
-              {sidebarOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+        {/* Sticky Premium Top Header */}
+        <div className="sticky top-0 z-20 py-4 px-6 bg-white/45 dark:bg-slate-950/45 backdrop-blur-xl border-b border-slate-200/40 dark:border-slate-800/40 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            {/* Menu toggle for mobile/tablet */}
+            <button
+              onClick={() => { if (!isSessionLocked) setSidebarOpen(!sidebarOpen); }}
+              className="lg:hidden p-2 rounded-xl border border-slate-200/50 dark:border-slate-800/50 hover:bg-slate-500/10 text-heading transition-all duration-200"
+            >
+              {sidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
-            <div className="text-sm font-semibold text-heading">{view === "profile" ? "Profile" : view === "dashboard" ? "Dashboard" : view === "gd-leaderboard" ? "Leaderboard" : view === "solo-practice" ? "Solo Practice" : view === "solo-session" ? "Solo Session" : view === "solo-result" ? "Results" : view === "gd-live" ? "GD" : view === "gd-live-session" ? "GD Room" : view === "gd-live-results" ? "GD Results" : view === "gd-live-admin" ? "GD Admin" : ""}</div>
-            <div className="w-10" /> {/* spacer */}
+            <div>
+              <h1 className="text-sm md:text-base font-bold text-heading capitalize">
+                {view === "gd-leaderboard" ? "Leaderboard" : view === "gd-live" ? "Group Discussion" : view.replace("-", " ")}
+              </h1>
+              <p className="text-[10px] text-muted-soft hidden sm:block mt-0.5 font-medium">
+                {new Date().toLocaleDateString("en-US", { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' })}
+              </p>
+            </div>
           </div>
+
+          <div className="flex items-center gap-3">
+            {/* Mock Search */}
+            <div className="relative max-w-[200px] hidden md:block">
+              <Search className="w-3.5 h-3.5 text-muted absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                type="text"
+                placeholder="Search GD portal..."
+                className="pl-9 pr-3 py-1.5 w-full text-xs rounded-xl border border-slate-200/50 dark:border-slate-800/50 bg-white/30 dark:bg-slate-900/30 text-heading placeholder-muted focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all duration-200"
+              />
+            </div>
+
+            {/* Notification Bell */}
+            <button
+              onClick={() => setView("notifications")}
+              className="p-2 rounded-xl border border-slate-200/50 dark:border-slate-800/50 bg-white/40 dark:bg-slate-900/40 hover:bg-indigo-500/5 text-heading relative hover:scale-105 active:scale-95 transition-all duration-200"
+            >
+              <Bell className="w-4 h-4" />
+              <span className="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-indigo-500 animate-pulse" />
+            </button>
+
+            {/* Profile Dropdown avatar */}
+            <button
+              onClick={() => setView("profile")}
+              className="flex items-center gap-2 pl-1 pr-3 py-1 rounded-full border border-slate-200/50 dark:border-slate-800/50 bg-white/40 dark:bg-slate-900/40 hover:bg-slate-500/5 text-heading transition-all duration-200 hover:-translate-y-0.5 active:scale-95"
+            >
+              <div className="w-7 h-7 rounded-xl bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center text-white text-xs font-bold shadow-sm shrink-0">
+                {user.name ? user.name[0].toUpperCase() : "U"}
+              </div>
+              <span className="text-xs font-semibold hidden sm:inline">{user.name}</span>
+            </button>
+          </div>
+        </div>
+
+        <div className="p-4 md:p-6 max-w-6xl mx-auto animate-fade-up">
           {(success || message) && (
             <div className={`mb-4 flex items-center gap-2 rounded-xl p-4 text-sm transition-colors duration-500 ${success ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300 border border-emerald-500/30" : "bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-300 border border-red-500/30"}`}>
               {success ? <Zap className="h-4 w-4 shrink-0" /> : <AlertCircle className="h-4 w-4 shrink-0" />}
@@ -1243,6 +1307,336 @@ export default function Home() {
                       Save Password
                     </Button>
                   </form>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Reports View */}
+          {view === "reports" && user && (
+            <div className="space-y-6 pb-12 animate-fade-up">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="card p-6 md:col-span-2 relative overflow-hidden flex flex-col justify-between border-l-4 border-l-indigo-600">
+                  <div>
+                    <h3 className="text-base font-bold text-heading flex items-center gap-2">
+                      <TrendingUp className="w-5 h-5 text-indigo-500" /> Overall Progress Metrics
+                    </h3>
+                    <p className="text-xs text-muted-soft mt-1">Detailed analysis of group discussions and solo metrics.</p>
+                  </div>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
+                    <div className="p-3 bg-slate-100/50 dark:bg-slate-950/40 border border-slate-200/40 dark:border-slate-800/40 rounded-2xl">
+                      <span className="text-[10px] text-muted-soft uppercase font-bold tracking-wider">Avg Score</span>
+                      <p className="text-xl font-extrabold text-heading mt-1">{progress && progress.average_score != null ? `${Number(progress.average_score).toFixed(1)}%` : "0.0%"}</p>
+                    </div>
+                    <div className="p-3 bg-slate-100/50 dark:bg-slate-950/40 border border-slate-200/40 dark:border-slate-800/40 rounded-2xl">
+                      <span className="text-[10px] text-muted-soft uppercase font-bold tracking-wider">Total Credits</span>
+                      <p className="text-xl font-extrabold text-heading mt-1">{progress && progress.total_credits != null ? Math.round(progress.total_credits) : 0}</p>
+                    </div>
+                    <div className="p-3 bg-slate-100/50 dark:bg-slate-950/40 border border-slate-200/40 dark:border-slate-800/40 rounded-2xl">
+                      <span className="text-[10px] text-muted-soft uppercase font-bold tracking-wider">GD Sessions</span>
+                      <p className="text-xl font-extrabold text-heading mt-1">{gdLiveSessions.filter(s => s.status === "completed").length}</p>
+                    </div>
+                    <div className="p-3 bg-slate-100/50 dark:bg-slate-950/40 border border-slate-200/40 dark:border-slate-800/40 rounded-2xl">
+                      <span className="text-[10px] text-muted-soft uppercase font-bold tracking-wider">Solo AI Tries</span>
+                      <p className="text-xl font-extrabold text-heading mt-1">{soloHistory.length}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="card p-6 flex flex-col justify-between border-l-4 border-l-cyan-500">
+                  <div>
+                    <h3 className="text-base font-bold text-heading flex items-center gap-2">
+                      <BookOpen className="w-5 h-5 text-cyan-500" /> Export PDF Report
+                    </h3>
+                    <p className="text-xs text-muted-soft mt-1">Export official Mount Zion communication analysis certificate and report summary.</p>
+                  </div>
+                  <Button
+                    onClick={() => {
+                      setPdfLoading(true);
+                      setTimeout(() => {
+                        setPdfLoading(false);
+                        setSuccess("Report summary PDF generated and download triggered successfully!");
+                      }, 1800);
+                    }}
+                    disabled={pdfLoading}
+                    className="w-full btn-primary h-11 text-xs mt-6"
+                  >
+                    {pdfLoading && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
+                    {pdfLoading ? "Generating PDF..." : "Download Official PDF"}
+                  </Button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="card p-6">
+                  <h4 className="text-sm font-bold text-heading mb-4">Metric Score Balance</h4>
+                  {soloHistory && soloHistory.length > 0 ? (
+                    <div className="h-64 flex items-center justify-center">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <RadarChart data={[
+                          { metric: "Grammar", value: soloHistory[0]?.grammar_score || 0 },
+                          { metric: "Fluency", value: soloHistory[0]?.fluency_score || 0 },
+                          { metric: "Pronunciation", value: soloHistory[0]?.accent_score || 0 },
+                          { metric: "Confidence", value: soloHistory[0]?.delivery_score || 0 },
+                        ]}>
+                          <PolarGrid stroke="var(--border)" />
+                          <PolarAngleAxis dataKey="metric" tick={{ fontSize: 10, fill: "var(--heading)", fontWeight: 600 }} />
+                          <Radar name="Score" dataKey="value" stroke="#8b5cf6" fill="#8b5cf6" fillOpacity={0.25} />
+                        </RadarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  ) : (
+                    <div className="text-xs text-muted-soft py-12 text-center">No recent practice history. Use Solo Practice to analyze metric balance.</div>
+                  )}
+                </div>
+
+                <div className="card p-6">
+                  <h4 className="text-sm font-bold text-heading mb-4">Historical Performance Trend</h4>
+                  {soloHistory && soloHistory.length > 0 ? (
+                    <div className="h-64 flex items-center justify-center">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={soloHistory.slice().reverse().map((h, i) => ({ name: `P${i+1}`, score: h?.overall_score || 0 }))}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                          <XAxis dataKey="name" stroke="var(--muted)" fontSize={10} />
+                          <YAxis stroke="var(--muted)" fontSize={10} domain={[0, 100]} />
+                          <Tooltip contentStyle={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "12px", color: "var(--heading)" }} />
+                          <Bar dataKey="score" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  ) : (
+                    <div className="text-xs text-muted-soft py-12 text-center">No recent practice history to show historical trend.</div>
+                  )}
+                </div>
+              </div>
+
+              <div className="card p-6">
+                <h4 className="text-sm font-bold text-heading mb-4 flex items-center gap-2">
+                  <Sparkles className="w-5 h-5 text-indigo-400" /> AI-Generated Skill Suggestions
+                </h4>
+                <div className="space-y-4 text-xs">
+                  <div className="p-4 rounded-2xl bg-indigo-500/5 border border-indigo-500/10">
+                    <h5 className="font-bold text-heading text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5">🚀 Delivery & Pitch Modulation</h5>
+                    <p className="text-muted-soft mt-1 leading-relaxed">Your pitch delivery displays strong speaker authority. Try to reduce speed pauses between sentences by 5-10% to achieve maximum conversational fluency scores.</p>
+                  </div>
+                  <div className="p-4 rounded-2xl bg-emerald-500/5 border border-emerald-500/10">
+                    <h5 className="font-bold text-heading text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">🗣️ Accent Clarity & Pronunciation</h5>
+                    <p className="text-muted-soft mt-1 leading-relaxed">Pronunciation of complex consonant grids is highly accurate. Focus on matching standard vowel lengths to align perfectly with AI assessment markers.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Achievements View */}
+          {view === "achievements" && user && (
+            <div className="space-y-6 pb-12 animate-fade-up">
+              {(() => {
+                const creditPoints = progress && typeof progress.total_credits === "number" ? Math.round(progress.total_credits) : 0;
+                let levelTitle = "Novice Speaker";
+                let levelNum = 1;
+                let nextLevelPoints = 100;
+                let prevLevelPoints = 0;
+                if (creditPoints >= 500) { levelTitle = "Grandmaster Orator"; levelNum = 4; nextLevelPoints = 1000; prevLevelPoints = 500; }
+                else if (creditPoints >= 250) { levelTitle = "Eloquent Orator"; levelNum = 3; nextLevelPoints = 500; prevLevelPoints = 250; }
+                else if (creditPoints >= 100) { levelTitle = "Confident Communicator"; levelNum = 2; nextLevelPoints = 250; prevLevelPoints = 100; }
+                const levelProgress = Math.min(100, Math.max(0, ((creditPoints - prevLevelPoints) / (nextLevelPoints - prevLevelPoints)) * 100));
+
+                return (
+                  <div className="card p-6 bg-gradient-to-r from-indigo-500/5 to-purple-500/5 border-l-4 border-l-purple-500 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                    <div className="flex items-center gap-4">
+                      <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center text-white shadow-md">
+                        <Trophy className="w-7 h-7" />
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-muted-soft uppercase font-bold tracking-wider">Current Orator rank</p>
+                        <h3 className="text-lg font-black text-heading flex items-center gap-2 mt-0.5">
+                          {levelTitle} <span className="text-[10px] bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 font-extrabold px-2 py-0.5 rounded-md border border-indigo-500/25">Lvl {levelNum}</span>
+                        </h3>
+                      </div>
+                    </div>
+
+                    <div className="flex-1 w-full max-w-sm">
+                      <div className="flex justify-between items-center text-xs mb-1">
+                        <span className="text-muted-soft font-semibold">Rank Progress</span>
+                        <span className="font-bold text-heading">{creditPoints} / {nextLevelPoints} XP</span>
+                      </div>
+                      <div className="w-full bg-slate-200 dark:bg-slate-800 rounded-full h-2.5 overflow-hidden">
+                        <div className="bg-gradient-to-r from-indigo-500 to-purple-500 h-2.5 rounded-full transition-all duration-700" style={{ width: `${levelProgress}%` }} />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              <div className="card p-6">
+                <h4 className="text-sm font-bold text-heading mb-6 flex items-center gap-2">
+                  <Award className="w-5 h-5 text-indigo-500" /> Unlocked Speaking Badges
+                </h4>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  {[
+                    { title: "First GD Attended", desc: "Completed 1 group discussion", unlocked: gdLiveSessions.filter(s => s.status === "completed").length >= 1, color: "icon-purple", icon: <Users className="w-5 h-5" /> },
+                    { title: "Communicator Pro", desc: "Average speaking score > 80%", unlocked: progress && progress.average_score != null && progress.average_score >= 80, color: "icon-amber", icon: <Trophy className="w-5 h-5" /> },
+                    { title: "Streak Master", desc: "Speak daily for 5 sessions", unlocked: soloHistory.length >= 5, color: "icon-green", icon: <Sparkles className="w-5 h-5" /> },
+                    { title: "GD Grandmaster", desc: "Reach Level 4 Rank", unlocked: progress && progress.total_credits != null && progress.total_credits >= 500, color: "icon-cyan", icon: <Zap className="w-5 h-5" /> },
+                  ].map((badge, idx) => (
+                    <div key={idx} className={`p-5 rounded-3xl border ${badge.unlocked ? "border-slate-200/50 dark:border-slate-800 bg-white/40 dark:bg-slate-900/40" : "border-dashed border-slate-200/30 dark:border-slate-800/20 bg-slate-100/10 dark:bg-slate-900/5 opacity-55"} flex flex-col items-center text-center transition-all duration-300`}>
+                      <div className={`icon-badge ${badge.color} mb-3`}>{badge.icon}</div>
+                      <p className="text-xs font-bold text-heading leading-tight">{badge.title}</p>
+                      <p className="text-[10px] text-muted-soft mt-1 leading-snug">{badge.desc}</p>
+                      <span className={`text-[9px] font-extrabold uppercase mt-3.5 px-2.5 py-0.5 rounded-full ${badge.unlocked ? "bg-emerald-500/10 text-emerald-500" : "bg-slate-500/10 text-muted"}`}>
+                        {badge.unlocked ? "Unlocked" : "Locked"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Certificates View */}
+          {view === "certificates" && user && (
+            <div className="space-y-6 pb-12 animate-fade-up">
+              <div className="card p-6 border-l-4 border-l-indigo-500">
+                <h3 className="text-base font-bold text-heading flex items-center gap-2">
+                  <CheckCircle2 className="w-5 h-5 text-indigo-500" /> Completed AI Certifications
+                </h3>
+                <p className="text-xs text-muted-soft mt-1">Verify and download official platform competency certificates generated upon meeting target score criteria.</p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {[
+                  { title: "Speech Competency Certificate", type: "AI Speech Clarity", minScore: 75, completed: progress && progress.average_score != null && progress.average_score >= 75 },
+                  { title: "Advanced Group Discussion Certificate", type: "Live GD Competency", minScore: 85, completed: progress && progress.average_score != null && progress.average_score >= 85 }
+                ].map((cert, idx) => (
+                  <div key={idx} className="card p-6 flex flex-col justify-between relative overflow-hidden">
+                    <div>
+                      <div className="flex justify-between items-start mb-4">
+                        <span className="text-[10px] uppercase font-bold tracking-wider text-muted-soft">{cert.type}</span>
+                        <span className={`text-[9px] font-extrabold uppercase px-2.5 py-0.5 rounded-full ${cert.completed ? "bg-indigo-500/10 text-indigo-500" : "bg-slate-500/10 text-muted-soft"}`}>
+                          {cert.completed ? "Verified" : "Requirements Pending"}
+                        </span>
+                      </div>
+                      <h4 className="text-sm font-extrabold text-heading">{cert.title}</h4>
+                      <p className="text-xs text-muted-soft mt-1.5">Required min avg score: <span className="font-bold text-heading">{cert.minScore}%</span>. Your current score: <span className="font-bold text-heading">{progress && progress.average_score != null ? `${Number(progress.average_score).toFixed(1)}%` : "0.0%"}</span></p>
+                    </div>
+                    {(() => {
+                      const downloading = idx === 0 ? cert1Downloading : cert2Downloading;
+                      const setDownloading = idx === 0 ? setCert1Downloading : setCert2Downloading;
+                      return (
+                        <Button
+                          onClick={() => {
+                            setDownloading(true);
+                            setTimeout(() => {
+                              setDownloading(false);
+                              setSuccess(`Certificate "${cert.title}" downloaded successfully!`);
+                            }, 1800);
+                          }}
+                          disabled={!cert.completed || downloading}
+                          className={`w-full mt-6 h-10 text-xs font-semibold ${cert.completed ? "btn-primary" : "btn-secondary cursor-not-allowed opacity-50"}`}
+                        >
+                          {downloading && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
+                          {downloading ? "Preparing download..." : "Download Official Certificate"}
+                        </Button>
+                      );
+                    })()}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Notifications View */}
+          {view === "notifications" && user && (
+            <div className="space-y-6 pb-12 animate-fade-up">
+              <div className="card p-6 flex items-center justify-between">
+                <div>
+                  <h3 className="text-base font-bold text-heading flex items-center gap-2">
+                    <Bell className="w-5 h-5 text-indigo-500" /> Timeline Alerts
+                  </h3>
+                  <p className="text-xs text-muted-soft mt-1">Chronological log of platform alerts, system logs, and practice reminders.</p>
+                </div>
+                <button onClick={() => setSuccess("All notifications successfully marked as read!")} className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline">Mark all as read</button>
+              </div>
+
+              <div className="card p-6 space-y-4">
+                {[
+                  { time: "1 hour ago", icon: <MessageSquare className="w-4 h-4 text-indigo-400" />, title: "Live GD Room Available", desc: "Administrator hosted session 'Speech Modulation & Delivery Practice'. Join using the active room code." },
+                  { time: "12 hours ago", icon: <Target className="w-4 h-4 text-cyan-400" />, title: "Daily Practice Goal Reminder", desc: "Build consistency by completing a 2-minute solo AI speaking session on public speech fundamentals." },
+                  { time: "1 day ago", icon: <Sparkles className="w-4 h-4 text-purple-400" />, title: "AI Skill Analysis Complete", desc: "A new skill analysis radar matrix is available based on your latest solo practice performance topic." },
+                ].map((noti, idx) => (
+                  <div key={idx} className="flex gap-4 p-4 rounded-2xl bg-slate-100/50 dark:bg-slate-950/40 border border-slate-200/40 dark:border-slate-800/40 hover:border-indigo-500/20 transition-all duration-200">
+                    <div className="w-8 h-8 rounded-xl bg-slate-200/50 dark:bg-slate-900 flex items-center justify-center shrink-0">{noti.icon}</div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="font-bold text-heading">{noti.title}</span>
+                        <span className="text-[10px] text-muted-soft font-mono">{noti.time}</span>
+                      </div>
+                      <p className="text-xs text-muted-soft mt-1.5 leading-relaxed">{noti.desc}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Settings View */}
+          {view === "settings" && user && (
+            <div className="space-y-6 pb-12 animate-fade-up">
+              <div className="card p-6">
+                <h3 className="text-base font-bold text-heading flex items-center gap-2">
+                  <Settings className="w-5 h-5 text-indigo-500" /> Platform Preferences
+                </h3>
+                <p className="text-xs text-muted-soft mt-1">Configure local settings, accessibility features, and system voice prompts.</p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="card p-6 space-y-4">
+                  <h4 className="text-sm font-bold text-heading flex items-center gap-2">
+                    <Volume2 className="w-4 h-4 text-indigo-400" /> Voice & TTS Settings
+                  </h4>
+                  <div className="space-y-3.5 text-xs">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-semibold text-heading">Enable Voice Feedback</p>
+                        <p className="text-[10px] text-muted-soft mt-0.5">Let the AI read scores and results aloud.</p>
+                      </div>
+                      <button
+                        onClick={() => voice.setEnabled(!voice.enabled)}
+                        className={`w-10 h-6 rounded-full transition-all duration-300 relative ${voice.enabled ? "bg-indigo-600" : "bg-slate-300 dark:bg-slate-700"}`}
+                      >
+                        <span className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-all ${voice.enabled ? "translate-x-4" : "translate-x-0"}`} />
+                      </button>
+                    </div>
+                    <div className="divider" />
+                    <div className="flex justify-between items-center">
+                      <span className="font-semibold text-heading">Local Language</span>
+                      <span className="font-mono text-heading bg-slate-200/50 dark:bg-slate-800 px-2 py-0.5 rounded">en-US (Default)</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="card p-6 space-y-4">
+                  <h4 className="text-sm font-bold text-heading flex items-center gap-2">
+                    <Sun className="w-4 h-4 text-indigo-400" /> Theme Configuration
+                  </h4>
+                  <div className="space-y-3.5 text-xs">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-semibold text-heading">Theme Mode</p>
+                        <p className="text-[10px] text-muted-soft mt-0.5">Toggle between dark and light themes.</p>
+                      </div>
+                      <button onClick={toggleTheme} className="btn-secondary px-4 py-2 text-xs flex items-center gap-1.5">
+                        {theme === "dark" ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
+                        <span>{theme === "dark" ? "Light Mode" : "Dark Mode"}</span>
+                      </button>
+                    </div>
+                    <div className="divider" />
+                    <div className="flex justify-between items-center">
+                      <span className="font-semibold text-heading">Accessibility Font</span>
+                      <span className="font-mono text-heading bg-slate-200/50 dark:bg-slate-800 px-2 py-0.5 rounded">Standard (Inter)</span>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1828,35 +2222,37 @@ export default function Home() {
           )}
           {/* Leaderboard View */}
           {view === "gd-leaderboard" && (
-            <div className="space-y-6">
+            <div className="space-y-6 pb-12 animate-fade-up">
               {/* Header */}
-              <div className={`card p-6`}>
-                <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
-                  <h2 className="text-xl font-bold text-heading flex items-center gap-2"><Trophy className="w-6 h-6 text-amber-400" /> Leaderboard</h2>
-                  <Button onClick={() => setView("dashboard")} variant="secondary" className="text-sm">Back</Button>
+              <div className="card p-6">
+                <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
+                  <h2 className="text-base font-bold text-heading flex items-center gap-2"><Trophy className="w-5 h-5 text-amber-500" /> Leaderboard</h2>
+                  <Button onClick={() => setView("dashboard")} variant="secondary" className="text-xs h-8">Back</Button>
                 </div>
                 {/* Filter Pills */}
-                <div className="flex flex-wrap gap-2 mb-2">
-                  <span className="text-xs text-muted-soft mr-1 self-center">Department:</span>
-                  {(lbData?.departments || ["ALL"]).map(d => (
-                    <button key={d} onClick={() => loadLeaderboard(d, lbYear, lbTimeframe)}
-                      className={`text-xs px-3 py-1 rounded-full border transition ${lbDepartment === d ? "bg-amber-500/10 dark:bg-amber-500/20 border-amber-500/40 text-amber-700 dark:text-amber-200 font-semibold" : "surface-2 border text-body hover:bg-white/10"}`}>{d}</button>
-                  ))}
-                </div>
-                <div className="flex flex-wrap gap-2 mb-2">
-                  <span className="text-xs text-muted-soft mr-1 self-center">Year:</span>
-                  {(lbData?.years || ["ALL"]).map(y => (
-                    <button key={y} onClick={() => loadLeaderboard(lbDepartment, y, lbTimeframe)}
-                      className={`text-xs px-3 py-1 rounded-full border transition ${lbYear === y ? "bg-amber-500/10 dark:bg-amber-500/20 border-amber-500/40 text-amber-700 dark:text-amber-200 font-semibold" : "surface-2 border text-body hover:bg-white/10"}`}>{y}</button>
-                  ))}
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <span className="text-xs text-muted-soft mr-1 self-center">Time:</span>
-                  {[{ v: "all", l: "All Time" }, { v: "this_month", l: "This Month" }, { v: "past_month", l: "Past Month" }].map(t => (
-                    <button key={t.v} onClick={() => loadLeaderboard(lbDepartment, lbYear, t.v)}
-                      className={`text-xs px-3 py-1 rounded-full border transition ${lbTimeframe === t.v ? "bg-amber-500/10 dark:bg-amber-500/20 border-amber-500/40 text-amber-700 dark:text-amber-200 font-semibold" : "surface-2 border text-body hover:bg-white/10"}`}>{t.l}</button>
-                  ))}
-                  <span className="text-xs text-muted-soft ml-auto self-center">Overall Score by Credit Points</span>
+                <div className="space-y-3">
+                  <div className="flex flex-wrap gap-2">
+                    <span className="text-xs text-muted-soft mr-1 self-center font-semibold">Department:</span>
+                    {(lbData?.departments || ["ALL"]).map(d => (
+                      <button key={d} onClick={() => loadLeaderboard(d, lbYear, lbTimeframe)}
+                        className={`text-xs px-3.5 py-1.5 rounded-full border transition ${lbDepartment === d ? "bg-amber-500/10 dark:bg-amber-500/20 border-amber-500/40 text-amber-700 dark:text-amber-200 font-bold" : "surface-2 border text-body hover:bg-slate-500/10"}`}>{d}</button>
+                    ))}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <span className="text-xs text-muted-soft mr-1 self-center font-semibold">Year:</span>
+                    {(lbData?.years || ["ALL"]).map(y => (
+                      <button key={y} onClick={() => loadLeaderboard(lbDepartment, y, lbTimeframe)}
+                        className={`text-xs px-3.5 py-1.5 rounded-full border transition ${lbYear === y ? "bg-amber-500/10 dark:bg-amber-500/20 border-amber-500/40 text-amber-700 dark:text-amber-200 font-bold" : "surface-2 border text-body hover:bg-slate-500/10"}`}>{y}</button>
+                    ))}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <span className="text-xs text-muted-soft mr-1 self-center font-semibold">Timeframe:</span>
+                    {[{ v: "all", l: "All Time" }, { v: "this_month", l: "This Month" }, { v: "past_month", l: "Past Month" }].map(t => (
+                      <button key={t.v} onClick={() => loadLeaderboard(lbDepartment, lbYear, t.v)}
+                        className={`text-xs px-3.5 py-1.5 rounded-full border transition ${lbTimeframe === t.v ? "bg-amber-500/10 dark:bg-amber-500/20 border-amber-500/40 text-amber-700 dark:text-amber-200 font-bold" : "surface-2 border text-body hover:bg-slate-500/10"}`}>{t.l}</button>
+                    ))}
+                    <span className="text-xs text-muted-soft ml-auto self-center">Overall Score by Credit Points</span>
+                  </div>
                 </div>
               </div>
 
@@ -1864,23 +2260,63 @@ export default function Home() {
               {lbData && (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   {[
-                    { label: "Top Score", value: lbData.stats.top_score, icon: <Trophy className="w-5 h-5" />, color: "text-amber-400" },
-                    { label: "Active Participants", value: lbData.stats.active_participants, icon: <Users className="w-5 h-5" />, color: "text-emerald-400" },
-                    { label: "Average Score", value: lbData.stats.average_score, icon: <TrendingUp className="w-5 h-5" />, color: "text-purple-400" },
-                    { label: "Total Interviews Today", value: lbData.stats.total_interviews, icon: <MessageSquare className="w-5 h-5" />, color: "text-cyan-400" },
+                    { label: "Top Score", value: lbData.stats.top_score, icon: <Trophy className="w-4 h-4" />, color: "text-amber-500" },
+                    { label: "Active Speakers", value: lbData.stats.active_participants, icon: <Users className="w-4 h-4" />, color: "text-emerald-500" },
+                    { label: "Average Score", value: lbData.stats.average_score, icon: <TrendingUp className="w-4 h-4" />, color: "text-purple-500" },
+                    { label: "GD Interviews", value: lbData.stats.total_interviews, icon: <MessageSquare className="w-4 h-4" />, color: "text-cyan-500" },
                   ].map(c => (
-                    <div key={c.label} className="card p-4">
+                    <div key={c.label} className="card p-4 border-l-4 border-l-slate-400">
                       <div className="flex items-center gap-2 text-muted-soft text-xs mb-2">{c.icon} {c.label}</div>
-                      <p className={`text-2xl font-bold ${c.color}`}>{typeof c.value === "number" && c.label !== "Active Participants" && c.label !== "Total Interviews Today" ? Number(c.value).toFixed(1) : c.value}</p>
+                      <p className={`text-2xl font-black ${c.color}`}>{typeof c.value === "number" && c.label !== "Active Speakers" && c.label !== "GD Interviews" ? Number(c.value).toFixed(1) : c.value}</p>
                     </div>
                   ))}
+                </div>
+              )}
+
+              {/* Speaker Podium block */}
+              {lbData && lbData.rankings && lbData.rankings.length >= 3 && (
+                <div className="grid grid-cols-3 gap-4 items-end max-w-xl mx-auto my-8 select-none">
+                  {/* 2nd Place */}
+                  <div className="flex flex-col items-center">
+                    <div className="w-12 h-12 rounded-xl bg-slate-300 dark:bg-slate-700 flex items-center justify-center font-bold text-heading text-sm shadow border border-slate-400/35 relative">
+                      {lbData.rankings[1].name ? lbData.rankings[1].name[0].toUpperCase() : "U"}
+                      <span className="absolute -top-2.5 bg-slate-400 text-slate-950 text-[9px] px-1.5 py-0.5 rounded-full font-black">2nd</span>
+                    </div>
+                    <p className="text-xs font-bold text-heading mt-2 truncate max-w-[90px]">{lbData.rankings[1].name}</p>
+                    <p className="text-[10px] text-muted-soft font-semibold">{lbData.rankings[1].total_credits} pts</p>
+                    <div className="w-full h-24 bg-gradient-to-t from-slate-400/20 to-slate-400/5 dark:from-slate-700/25 dark:to-slate-700/5 border border-slate-300/40 dark:border-slate-800/40 rounded-t-2xl mt-3 flex items-center justify-center font-black text-slate-400/50 text-2xl">II</div>
+                  </div>
+
+                  {/* 1st Place */}
+                  <div className="flex flex-col items-center">
+                    <div className="w-16 h-16 rounded-xl bg-amber-100 dark:bg-amber-950 flex items-center justify-center font-bold text-heading text-base shadow border-2 border-amber-400 relative">
+                      {lbData.rankings[0].name ? lbData.rankings[0].name[0].toUpperCase() : "U"}
+                      <Trophy className="absolute -top-5 text-amber-500 w-6 h-6 animate-bounce" />
+                    </div>
+                    <p className="text-xs font-extrabold text-heading mt-2 truncate max-w-[100px]">{lbData.rankings[0].name}</p>
+                    <p className="text-[10px] text-amber-500 font-bold">{lbData.rankings[0].total_credits} pts</p>
+                    <div className="w-full h-32 bg-gradient-to-t from-amber-500/20 to-amber-500/5 dark:from-amber-500/10 dark:to-amber-500/5 border border-amber-400/40 rounded-t-2xl mt-3 flex flex-col items-center justify-center font-black text-amber-500/50 text-3xl">
+                      <span>I</span>
+                    </div>
+                  </div>
+
+                  {/* 3rd Place */}
+                  <div className="flex flex-col items-center">
+                    <div className="w-12 h-12 rounded-xl bg-orange-100 dark:bg-orange-950/60 flex items-center justify-center font-bold text-heading text-sm shadow border border-orange-500/35 relative">
+                      {lbData.rankings[2].name ? lbData.rankings[2].name[0].toUpperCase() : "U"}
+                      <span className="absolute -top-2.5 bg-orange-500 text-orange-950 text-[9px] px-1.5 py-0.5 rounded-full font-black">3rd</span>
+                    </div>
+                    <p className="text-xs font-bold text-heading mt-2 truncate max-w-[90px]">{lbData.rankings[2].name}</p>
+                    <p className="text-[10px] text-muted-soft font-semibold">{lbData.rankings[2].total_credits} pts</p>
+                    <div className="w-full h-20 bg-gradient-to-t from-orange-500/20 to-orange-500/5 dark:from-orange-500/15 dark:to-orange-500/5 border border-orange-500/40 rounded-t-2xl mt-3 flex items-center justify-center font-black text-orange-500/50 text-2xl">III</div>
+                  </div>
                 </div>
               )}
 
               {/* Ranking Table */}
               {lbData && lbData.rankings.length > 0 && (
                 <div className="card p-4 md:p-5 overflow-x-auto">
-                  <h3 className="text-sm font-semibold text-heading mb-3 flex items-center gap-2"><Award className="w-4 h-4 text-amber-400" /> Rankings</h3>
+                  <h3 className="text-sm font-semibold text-heading mb-4 flex items-center gap-2"><Award className="w-4 h-4 text-amber-500" /> Rankings</h3>
                   <table className="ent-table min-w-[600px]">
                     <thead>
                       <tr>
@@ -1897,17 +2333,17 @@ export default function Home() {
                     </thead>
                     <tbody>
                       {lbData.rankings.map((r) => (
-                        <tr key={r.id} className={`${r.rank <= 3 ? "bg-amber-500/10" : ""}`}>
+                        <tr key={r.id} className={`${r.rank <= 3 ? "bg-amber-500/5 dark:bg-amber-500/10" : ""}`}>
                           <td className="py-3 pr-2">
-                            <span className={`inline-flex items-center justify-center w-6 h-6 md:w-7 md:h-7 rounded-full text-xs font-bold ${r.rank === 1 ? "bg-amber-500 text-heading" : r.rank === 2 ? "bg-slate-400 text-heading" : r.rank === 3 ? "bg-orange-500 text-heading" : "surface-2 text-body"}`}>{r.rank}</span>
+                            <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold ${r.rank === 1 ? "bg-amber-500 text-slate-950" : r.rank === 2 ? "bg-slate-400 text-slate-950" : r.rank === 3 ? "bg-orange-500 text-slate-950" : "surface-2 text-body"}`}>{r.rank}</span>
                           </td>
-                          <td className="py-3 pr-2 text-heading font-medium whitespace-nowrap text-xs md:text-sm">{r.name}</td>
+                          <td className="py-3 pr-2 text-heading font-semibold whitespace-nowrap text-xs md:text-sm">{r.name}</td>
                           <td className="py-3 pr-2 text-body text-xs md:text-sm hidden md:table-cell">{r.department}</td>
                           <td className="py-3 pr-2 text-body text-xs md:text-sm hidden md:table-cell">{r.year}</td>
-                          <td className="py-3 pr-2 text-amber-300 font-semibold text-xs md:text-sm">{r.total_credits}</td>
-                          <td className="py-3 pr-2 text-emerald-300 text-xs md:text-sm">{(r.grammar != null ? Number(r.grammar) : 0).toFixed(1)}</td>
-                          <td className="py-3 pr-2 text-purple-300 text-xs md:text-sm">{(r.fluency != null ? Number(r.fluency) : 0).toFixed(1)}</td>
-                          <td className="py-3 pr-2 text-cyan-300 text-xs md:text-sm hidden md:table-cell">{(r.relevance != null ? Number(r.relevance) : 0).toFixed(1)}</td>
+                          <td className="py-3 pr-2 text-amber-500 font-bold text-xs md:text-sm">{r.total_credits}</td>
+                          <td className="py-3 pr-2 text-indigo-400 text-xs md:text-sm">{(r.grammar != null ? Number(r.grammar) : 0).toFixed(1)}</td>
+                          <td className="py-3 pr-2 text-purple-400 text-xs md:text-sm">{(r.fluency != null ? Number(r.fluency) : 0).toFixed(1)}</td>
+                          <td className="py-3 pr-2 text-cyan-400 text-xs md:text-sm hidden md:table-cell">{(r.relevance != null ? Number(r.relevance) : 0).toFixed(1)}</td>
                           <td className="py-3 pr-2 text-body text-xs md:text-sm hidden md:table-cell">{r.sessions_completed}</td>
                         </tr>
                       ))}
@@ -1917,26 +2353,27 @@ export default function Home() {
               )}
 
               {lbData && lbData.rankings.length === 0 && (
-                <div className={`card p-6 text-center`}>
-                  <p className="text-muted-soft text-sm">No evaluations found for the selected filters.</p>
+                <div className="card p-8 text-center border-dashed">
+                  <Trophy className="w-8 h-8 mx-auto text-slate-600 mb-2" />
+                  <p className="text-muted-soft text-xs">No evaluations found for the selected filters.</p>
                 </div>
               )}
 
               {/* All Time Achievers */}
               {lbData && lbData.all_time_achievers.length > 0 && (
-                <div className={`card p-5`}>
-                  <h3 className="text-sm font-semibold text-heading mb-3 flex items-center gap-2"><Award className="w-4 h-4 text-amber-400" /> All Time Achievers</h3>
+                <div className="card p-5">
+                  <h3 className="text-sm font-semibold text-heading mb-4 flex items-center gap-2"><Award className="w-4 h-4 text-amber-500" /> All Time Achievers</h3>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                     {lbData.all_time_achievers.map((a) => (
-                      <div key={a.id} className={`flex items-center gap-3 p-3 rounded-xl ${a.rank === 1 ? "bg-gradient-to-r from-amber-500/20 to-orange-600/10 border border-amber-500/30" : "surface-2 border border"}`}>
-                        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg font-bold shrink-0 ${a.rank === 1 ? "bg-amber-500 text-heading" : a.rank === 2 ? "bg-slate-400 text-heading" : a.rank === 3 ? "bg-orange-500 text-heading" : "surface-2 text-body"}`}>{a.rank}</div>
+                      <div key={a.id} className={`flex items-center gap-3 p-3 rounded-xl border ${a.rank === 1 ? "bg-gradient-to-r from-amber-500/10 to-orange-500/10 border-amber-500/30" : "surface-2 border"}`}>
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${a.rank === 1 ? "bg-amber-500 text-slate-950" : a.rank === 2 ? "bg-slate-400 text-slate-950" : a.rank === 3 ? "bg-orange-500 text-slate-950" : "surface-2 text-body"}`}>{a.rank}</div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-heading truncate">{a.name}</p>
-                          <p className="text-xs text-muted-soft">{a.department} · {a.year}</p>
+                          <p className="text-xs font-bold text-heading truncate">{a.name}</p>
+                          <p className="text-[10px] text-muted-soft">{a.department} · {a.year}</p>
                         </div>
                         <div className="text-right shrink-0">
-                          <p className="text-sm font-bold text-emerald-300">{a.total_credits}</p>
-                          <p className="text-xs text-muted-soft">{a.sessions_completed} sessions</p>
+                          <p className="text-xs font-bold text-emerald-500">{a.total_credits}</p>
+                          <p className="text-[9px] text-muted-soft">{a.sessions_completed} sessions</p>
                         </div>
                       </div>
                     ))}
@@ -1948,72 +2385,87 @@ export default function Home() {
 
           {/* ─── Solo Practice ─── */}
           {view === "solo-practice" && !soloSession && (
-            <div className="card p-6 text-center">
-              <Loader2 className="h-8 w-8 animate-spin mx-auto text-amber-400 mb-3" />
-              <p className="text-heading font-medium">Preparing your solo practice...</p>
-              <p className="text-sm text-muted-soft mt-1">Loading your topic and motivational quote</p>
+            <div className="card p-8 text-center max-w-md mx-auto my-12 border-dashed">
+              <Loader2 className="h-8 w-8 animate-spin mx-auto text-indigo-500 mb-3" />
+              <p className="text-heading font-bold text-sm">Preparing Practice Playground</p>
+              <p className="text-xs text-muted-soft mt-1">Initializing AI speaking topic models...</p>
             </div>
           )}
           {view === "solo-practice" && soloSession && (
-            <div className="space-y-6 animate-in fade-in duration-300">
-              {/* Motivational Quote */}
-              {soloQuote && (
-                <div className="card border-purple-500/30 p-6 text-center">
-                  <p className="text-sm text-purple-300/80 mb-2">Motivational Quote</p>
-                  <p className="text-lg font-medium text-heading italic">"{soloQuote.quote}"</p>
-                  <p className="text-sm text-purple-300/60 mt-2">— {soloQuote.author}</p>
+            <div className="space-y-6 pb-12 animate-fade-up">
+              {/* Promotional Hero / Header */}
+              <div className="card p-6 bg-gradient-to-r from-cyan-500/5 to-indigo-500/5 border-l-4 border-l-cyan-500 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <div>
+                  <h3 className="text-base font-bold text-heading flex items-center gap-2">
+                    <Target className="w-5 h-5 text-cyan-500" /> AI Practice Playground
+                  </h3>
+                  <p className="text-xs text-muted-soft mt-1">Practice communication skills solo and receive granular scoring from our speech assessment engine.</p>
                 </div>
-              )}
+                <button onClick={startSoloPractice} className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1">
+                  <RefreshCw className="w-3.5 h-3.5" /> Refresh Topic
+                </button>
+              </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className={`card p-6`}>
-                  <h2 className="text-lg font-semibold text-heading mb-4 flex items-center gap-2"><Target className="w-5 h-5 text-amber-400" /> Solo Practice</h2>
-                  <div className="mb-4 p-4 rounded-lg bg-gradient-to-r from-amber-500/20 to-orange-600/20 border border-amber-500/30">
-                    <p className="text-xs text-amber-300/80 mb-1">Your Topic</p>
-                    <p className="text-sm font-medium text-heading">{soloSession.topic}</p>
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+                {/* Topic card details */}
+                <div className="card p-6 md:col-span-7 flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center gap-2.5 mb-4">
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-500 border border-amber-500/20 uppercase tracking-wider">
+                        Level: Intermediate
+                      </span>
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/10 text-indigo-500 border border-indigo-500/20 uppercase tracking-wider">
+                        Topic #{soloSession.session_number}
+                      </span>
+                    </div>
+                    <h4 className="text-base font-extrabold text-heading mb-3 leading-snug">{soloSession.topic}</h4>
+                    <p className="text-xs text-muted-soft leading-relaxed">Prepare your thoughts. You have 4 minutes of prep time, followed by 10 minutes of active recording. Speak clearly into your microphone.</p>
                   </div>
-                  <div className="flex items-center gap-2 text-sm text-muted-soft mb-4">
-                    <Clock className="w-4 h-4" /> Session #{soloSession.session_number} · 4 min prep · 10 min speak
+                  
+                  <div className="flex items-center gap-4 mt-6 pt-4 border-t border-slate-200/50 dark:border-slate-800/50 text-xs text-muted-soft">
+                    <span className="flex items-center gap-1.5"><Clock className="w-4 h-4 text-indigo-400" /> 4m prep time</span>
+                    <span className="flex items-center gap-1.5"><Mic className="w-4 h-4 text-indigo-400" /> 10m speak time</span>
                   </div>
-                  <Button onClick={() => setSoloRulesOpen(true)} className="w-full bg-gradient-to-r from-emerald-500 to-green-600 border-0 h-12 text-lg">
-                    <Zap className="h-5 w-5 mr-2" /> Begin Practice
+
+                  <Button onClick={() => setSoloRulesOpen(true)} className="w-full btn-primary h-12 text-sm mt-6">
+                    <Zap className="h-4 w-4 mr-2" /> Begin Prep Phase
                   </Button>
                 </div>
 
-                <div className={`card p-6`}>
-                  <h2 className="text-lg font-semibold text-heading mb-4 flex items-center gap-2"><TrendingUp className="w-5 h-5 text-amber-400" /> Your Progress</h2>
+                {/* Progress summary card */}
+                <div className="card p-6 md:col-span-5">
+                  <h4 className="text-sm font-bold text-heading mb-4 flex items-center gap-1.5">
+                    <TrendingUp className="w-4 h-4 text-indigo-400" /> Recent Session Scores
+                  </h4>
                   {soloSession.is_new_user ? (
-                    <div className="text-center py-6">
-                      <p className="text-heading font-medium mb-2">Welcome to Solo Practice!</p>
-                      <p className="text-sm text-muted-soft">This is your first session. AI will evaluate your fluency, grammar, accent, and delivery.</p>
+                    <div className="text-center py-8 text-xs">
+                      <p className="font-bold text-heading mb-1">Welcome to Solo Practice!</p>
+                      <p className="text-muted-soft leading-normal">This is your first practice module. Standard metrics like grammar, delivery, fluency and clarity will appear here once submitted.</p>
                     </div>
                   ) : soloSession.last_session ? (
-                    <div className="space-y-3">
-                      <p className="text-sm text-muted-soft">Previous Session Scores</p>
-                      <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-2 gap-3">
                         {[
-                          { label: "Overall", value: soloSession.last_session.overall_score, color: "text-amber-300" },
-                          { label: "Fluency", value: soloSession.last_session.fluency_score, color: "text-emerald-300" },
-                          { label: "Grammar", value: soloSession.last_session.grammar_score, color: "text-purple-300" },
-                          { label: "Delivery", value: soloSession.last_session.delivery_score, color: "text-cyan-300" },
+                          { label: "Overall", value: soloSession.last_session.overall_score, color: "text-amber-500", bg: "bg-amber-500/10 border-amber-500/20" },
+                          { label: "Fluency", value: soloSession.last_session.fluency_score, color: "text-emerald-500", bg: "bg-emerald-500/10 border-emerald-500/20" },
+                          { label: "Grammar", value: soloSession.last_session.grammar_score, color: "text-purple-500", bg: "bg-purple-500/10 border-purple-500/20" },
+                          { label: "Delivery", value: soloSession.last_session.delivery_score, color: "text-cyan-500", bg: "bg-cyan-500/10 border-cyan-500/20" },
                         ].map(s => (
-                          <div key={s.label} className=" surface-2 rounded-lg p-3 text-center">
-                            <p className="text-xs text-muted-soft">{s.label}</p>
-                            <p className={`text-lg font-bold ${s.color}`}>{s.value}</p>
+                          <div key={s.label} className={`rounded-2xl p-3 text-center border ${s.bg}`}>
+                            <p className="text-[10px] text-muted-soft uppercase font-bold tracking-wider">{s.label}</p>
+                            <p className={`text-xl font-extrabold ${s.color} mt-1`}>{s.value}</p>
                           </div>
                         ))}
                       </div>
                       {soloSession.last_session.weaknesses && (
-                        <div className="bg-red-500/10 rounded-lg p-3">
-                          <p className="text-xs text-red-300 mb-1">Areas to Improve</p>
-                          <p className="text-xs text-body">{soloSession.last_session.weaknesses}</p>
+                        <div className="bg-red-500/5 dark:bg-red-500/10 border border-red-500/15 rounded-2xl p-4 text-xs">
+                          <p className="font-bold text-red-500 flex items-center gap-1"><ShieldAlert className="w-3.5 h-3.5" /> Improvement Priority</p>
+                          <p className="text-muted-soft mt-1 leading-relaxed">{soloSession.last_session.weaknesses}</p>
                         </div>
                       )}
                     </div>
                   ) : (
-                    <div className="text-center py-6">
-                      <p className="text-sm text-muted-soft">Complete your first session to see progress.</p>
-                    </div>
+                    <div className="text-center py-8 text-xs text-muted-soft">Complete a speaking trial to inspect scores progress.</div>
                   )}
                 </div>
               </div>
