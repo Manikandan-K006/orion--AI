@@ -927,21 +927,25 @@ export default function Home() {
   function renderSidebarContent(isMobile = false) {
     if (!user) return null;
     return (
-      <>
-        <div className="flex items-center justify-between p-5 border-b shrink-0" style={{ borderColor: "var(--border)" }}>
+      <div className="flex flex-col h-full bg-slate-900/5 dark:bg-slate-950/20 backdrop-blur-xl">
+        <div className="flex items-center justify-between p-5 border-b border-slate-200/50 dark:border-slate-800/50 shrink-0 bg-gradient-to-b from-indigo-500/5 via-transparent to-transparent">
           <div className="flex items-center gap-3">
-            <img src="/MZ_logo_DB.webp" alt="Mount Zion Logo" className="w-10 h-10 rounded-xl object-cover shadow-md shrink-0" />
+            <img src="/MZ_logo_DB.webp" alt="Mount Zion Logo" className="w-10 h-10 rounded-xl object-cover shadow-md shrink-0 hover:rotate-6 transition-transform duration-300" />
             <div className="truncate">
-              <p className="text-sm font-bold text-heading">MZ Orator</p>
-              <p className="text-xs text-muted-soft">{user.name}</p>
+              <p className="text-sm font-bold text-heading flex items-center gap-1.5">
+                MZ Orator
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_#10b981]" />
+              </p>
+              <p className="text-xs text-muted-soft truncate max-w-[140px]">{user.name}</p>
             </div>
           </div>
           {isMobile && (
-            <button className="p-2 text-muted-soft hover:text-heading hover:bg-[var(--surface-hover)] rounded-lg transition-colors duration-200" onClick={() => setSidebarOpen(false)}>
+            <button className="p-2 text-muted-soft hover:text-heading hover:bg-slate-500/10 rounded-lg transition-colors duration-200" onClick={() => setSidebarOpen(false)}>
               <X className="w-5 h-5" />
             </button>
           )}
         </div>
+        
         <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
           {[
             { icon: <Users className="w-5 h-5 shrink-0" />, label: "Dashboard", view: "dashboard" as PageView },
@@ -968,7 +972,7 @@ export default function Home() {
                 else setView(item.view);
                 if (isMobile) setSidebarOpen(false);
               }}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 whitespace-nowrap ${view === item.view ? "bg-[rgba(139,92,246,0.12)] text-[#7c3aed] dark:text-[#a78bfa] border border-[#8b5cf6]/30 shadow-sm" : "text-body hover:bg-[var(--surface-hover)] hover:text-heading"} ${isSessionLocked ? "opacity-40 cursor-not-allowed" : ""}`}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 whitespace-nowrap ${view === item.view ? "bg-gradient-to-r from-indigo-500/10 to-purple-500/10 text-indigo-600 dark:text-indigo-300 border-l-4 border-indigo-500 dark:border-indigo-400 shadow-[0_2px_10px_rgba(99,102,241,0.02)]" : "text-body hover:bg-slate-500/5 hover:text-heading hover:pl-5"} ${isSessionLocked ? "opacity-40 cursor-not-allowed" : ""}`}
             >
               {item.icon}
               <span>{item.label}</span>
@@ -976,15 +980,16 @@ export default function Home() {
             </button>
           ))}
         </nav>
-        <div className="p-4 border-t space-y-2 shrink-0" style={{ borderColor: "var(--border)" }}>
-          <button onClick={() => voice.setEnabled(!voice.enabled)} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 whitespace-nowrap text-muted-soft hover:text-heading hover:bg-[var(--surface-hover)]">
+        
+        <div className="p-4 border-t border-slate-200/50 dark:border-slate-800/50 space-y-2 shrink-0 bg-gradient-to-t from-indigo-500/5 via-transparent to-transparent">
+          <button onClick={() => voice.setEnabled(!voice.enabled)} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 whitespace-nowrap text-muted-soft hover:text-heading hover:bg-slate-500/5 hover:pl-5">
             <VolumeX className="w-5 h-5 shrink-0" /> {voice.enabled ? "Mute Voice" : "Unmute Voice"}
           </button>
-          <button onClick={logout} disabled={isSessionLocked} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 whitespace-nowrap ${isSessionLocked ? "text-slate-600 cursor-not-allowed" : "text-red-600 dark:text-red-400 hover:bg-red-500/10"}`}>
+          <button onClick={logout} disabled={isSessionLocked} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 whitespace-nowrap ${isSessionLocked ? "text-slate-600 cursor-not-allowed" : "text-red-600 dark:text-red-400 hover:bg-red-500/10 hover:pl-5"}`}>
             <LogOut className="w-5 h-5 shrink-0" /> Sign Out
           </button>
         </div>
-      </>
+      </div>
     );
   }
 
@@ -995,14 +1000,20 @@ export default function Home() {
         <img
           src={theme === "dark" ? "/animated_gd_bg.jpeg" : "/gd_light_bg.jpeg"}
           alt=""
-          className="w-full h-full object-cover"
+          className="w-full h-full object-cover opacity-80"
           style={theme === "dark" ? { animation: "ken-burns 30s ease-in-out infinite alternate" } : undefined}
         />
-        <div className="absolute inset-0" style={{ background: theme === "dark" ? "rgba(15,23,42,0.72)" : "rgba(248,250,252,0.78)" }} />
+        {/* Glowing background meshes */}
+        <div className="absolute inset-0 bg-gradient-to-tr from-slate-950 via-slate-900 to-indigo-950/40 opacity-90 dark:block hidden" />
+        <div className="absolute inset-0 bg-gradient-to-tr from-slate-50 via-indigo-50/20 to-purple-50/30 dark:hidden block" />
+        
+        {/* Soft floating dynamic gradient orbs */}
+        <div className="absolute top-1/4 left-1/4 w-[450px] h-[450px] rounded-full bg-indigo-500/10 dark:bg-indigo-600/5 blur-[120px] pointer-events-none animate-pulse" style={{ animationDuration: "12s" }} />
+        <div className="absolute bottom-1/4 right-1/4 w-[400px] h-[400px] rounded-full bg-purple-500/10 dark:bg-purple-600/5 blur-[120px] pointer-events-none animate-pulse" style={{ animationDuration: "8s" }} />
       </div>
 
       {/* Theme toggle */}
-      <button onClick={toggleTheme} className="fixed top-4 right-4 z-30 p-2.5 rounded-xl btn-secondary" title="Toggle theme">
+      <button onClick={toggleTheme} className="fixed top-4 right-4 z-30 p-2.5 rounded-xl border border-slate-200/50 dark:border-slate-800/50 bg-white/60 dark:bg-slate-900/60 backdrop-blur-md shadow-sm text-heading hover:scale-105 hover:bg-slate-100 dark:hover:bg-slate-800 active:scale-95 transition-all duration-200" title="Toggle theme">
         {theme === "dark" ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
       </button>
 
@@ -1012,12 +1023,12 @@ export default function Home() {
       )}
 
       {/* Mobile Sidebar */}
-      <aside className={`fixed z-50 h-screen inset-y-0 left-0 transition-transform duration-300 ease-in-out flex flex-col shrink-0 border-r border-[var(--border)] bg-[var(--surface)] shadow-2xl ${sidebarOpen ? "translate-x-0" : "-translate-x-full"} w-full md:w-[280px] lg:hidden`}>
+      <aside className={`fixed z-50 h-screen inset-y-0 left-0 transition-transform duration-300 ease-in-out flex flex-col shrink-0 border-r border-slate-200/50 dark:border-slate-800/50 bg-white/95 dark:bg-slate-950/90 backdrop-blur-xl shadow-2xl ${sidebarOpen ? "translate-x-0" : "-translate-x-full"} w-full md:w-[280px] lg:hidden`}>
         {renderSidebarContent(true)}
       </aside>
 
       {/* Desktop Docked Sidebar */}
-      <aside className="hidden lg:flex flex-col shrink-0 h-screen sticky top-0 border-r border-[var(--border)] bg-[var(--surface)] z-10 w-[280px]">
+      <aside className="hidden lg:flex flex-col shrink-0 h-screen sticky top-0 border-r border-slate-200/40 dark:border-slate-800/40 bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl z-10 w-[280px]">
         {renderSidebarContent(false)}
       </aside>
 
@@ -1241,93 +1252,120 @@ export default function Home() {
           {view === "dashboard" && user && (
             <div className="space-y-6">
               {/* Welcome Banner */}
-              <div className="relative overflow-hidden rounded-3xl border border-indigo-500/20 p-6 md:p-8 shadow-xl bg-gradient-to-r from-slate-900 via-indigo-950/60 to-slate-900">
-                <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl -z-10 pointer-events-none" />
-                <div className="absolute bottom-0 left-0 w-64 h-64 bg-purple-500/10 rounded-full blur-3xl -z-10 pointer-events-none" />
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-                  <div>
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                        {user.role === "admin" ? "Admin Access" : "Student Portal"}
-                      </span>
-                      {user.role === "student" && user.department && (
-                        <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-purple-500/20 text-purple-300 border border-purple-500/30">
-                          {user.department}
-                        </span>
+              {(() => {
+                const creditPoints = progress && typeof progress.total_credits === "number" ? Math.round(progress.total_credits) : 0;
+                let levelTitle = "Novice Speaker";
+                let badgeColor = "bg-slate-500/10 text-slate-400 border-slate-500/20 dark:text-slate-300 dark:border-slate-800";
+                if (creditPoints >= 500) {
+                  levelTitle = "Grandmaster Orator";
+                  badgeColor = "bg-gradient-to-r from-cyan-500/15 to-indigo-500/15 text-indigo-600 dark:text-cyan-400 border-indigo-500/20";
+                } else if (creditPoints >= 250) {
+                  levelTitle = "Eloquent Orator";
+                  badgeColor = "bg-gradient-to-r from-amber-500/10 to-orange-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20";
+                } else if (creditPoints >= 100) {
+                  levelTitle = "Confident Communicator";
+                  badgeColor = "bg-gradient-to-r from-purple-500/10 to-indigo-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20";
+                }
+
+                return (
+                  <div className="relative overflow-hidden rounded-3xl border border-slate-200/50 dark:border-slate-800/80 p-6 md:p-8 shadow-lg bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl transition-all duration-300">
+                    <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl -z-10 pointer-events-none" />
+                    <div className="absolute bottom-0 left-0 w-64 h-64 bg-purple-500/10 rounded-full blur-3xl -z-10 pointer-events-none" />
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2 mb-2">
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/10 text-indigo-600 dark:text-indigo-300 border border-indigo-500/20 uppercase tracking-wider">
+                            {user.role === "admin" ? "Admin Portal" : "Student Dashboard"}
+                          </span>
+                          {user.role === "student" && user.department && (
+                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-purple-500/10 text-purple-600 dark:text-purple-300 border border-purple-500/20 uppercase tracking-wider">
+                              {user.department}
+                            </span>
+                          )}
+                          {user.role === "student" && (
+                            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border uppercase tracking-wider ${badgeColor}`}>
+                              {levelTitle}
+                            </span>
+                          )}
+                        </div>
+                        <h2 className="text-2xl md:text-3xl font-extrabold text-heading tracking-tight flex items-center gap-2">
+                          Welcome back, <span className="bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-500 dark:from-white dark:via-indigo-200 dark:to-indigo-400 bg-clip-text text-transparent">{user.name}</span>!
+                        </h2>
+                        <p className="text-sm text-body mt-1.5 max-w-xl">
+                          {user.role === "admin"
+                            ? "Manage group discussions, review student rankings, and monitor active sessions in real-time."
+                            : "Track your communication progress, join live discussions, and build your confidence with AI feedback."}
+                        </p>
+                      </div>
+                      {user.role === "student" && (
+                        <div className="flex flex-wrap gap-2 text-xs bg-slate-100/50 dark:bg-slate-950/40 backdrop-blur-md border border-slate-200/50 dark:border-slate-800 p-4 rounded-2xl shrink-0">
+                          <div>
+                            <p className="font-bold text-heading mb-1 uppercase tracking-wider text-[10px]">Registration Info</p>
+                            <p className="text-body">Reg No: <span className="font-mono text-heading font-semibold">{user.register_number}</span></p>
+                            <p className="text-body">Year: <span className="text-heading font-semibold">{user.year || "3rd Year"}</span></p>
+                          </div>
+                        </div>
                       )}
                     </div>
-                    <h2 className="text-2xl md:text-3xl font-extrabold text-slate-100 tracking-tight flex items-center gap-2">
-                      Welcome back, <span className="bg-gradient-to-r from-white via-indigo-200 to-indigo-400 bg-clip-text text-transparent">{user.name}</span>!
-                    </h2>
-                    <p className="text-sm text-slate-300 mt-1.5 max-w-xl">
-                      {user.role === "admin"
-                        ? "Manage group discussions, review student rankings, and monitor active sessions in real-time."
-                        : "Track your communication progress, join live discussions, and build your confidence with AI feedback."}
-                    </p>
                   </div>
-                  {user.role === "student" && (
-                    <div className="flex flex-wrap gap-2 text-xs text-slate-300 bg-slate-950/50 backdrop-blur-md border border-slate-800 p-4 rounded-2xl shrink-0">
-                      <div>
-                        <p className="font-semibold text-slate-200 mb-1 uppercase tracking-wider">Registration Info</p>
-                        <p className="opacity-80">Reg No: <span className="font-mono text-white">{user.register_number}</span></p>
-                        <p className="opacity-80">Year: <span className="text-white">{user.year || "3rd Year"}</span></p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
+                );
+              })()}
 
               {user.role === "student" ? (
                 <>
                   {/* Metrics Grid */}
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="card p-5 card-hover">
+                    <div className="card p-5 card-hover relative overflow-hidden group border-l-4 border-l-purple-500 shadow-sm">
+                      <div className="absolute top-0 right-0 w-20 h-20 bg-purple-500/5 rounded-full blur-xl pointer-events-none group-hover:bg-purple-500/10 transition-colors" />
                       <div className="flex items-center justify-between mb-3">
-                        <span className="text-xs font-semibold text-muted-soft uppercase tracking-wider">Average Score</span>
-                        <div className="icon-badge icon-purple"><Trophy className="w-5 h-5" /></div>
+                        <span className="text-[10px] font-bold text-muted-soft uppercase tracking-wider">Average Score</span>
+                        <div className="icon-badge icon-purple group-hover:scale-110 transition-transform duration-200"><Trophy className="w-4 h-4" /></div>
                       </div>
-                      <p className="text-3xl font-extrabold text-heading">
+                      <p className="text-3xl font-black text-heading">
                         {progress && progress.average_score != null ? `${Number(progress.average_score).toFixed(1)}%` : "0.0%"}
                       </p>
-                      <div className="w-full bg-slate-800 rounded-full h-1.5 mt-3 overflow-hidden">
+                      <div className="w-full bg-slate-200 dark:bg-slate-800 rounded-full h-1.5 mt-3.5 overflow-hidden">
                         <div
-                          className="bg-indigo-500 h-1.5 rounded-full transition-all duration-500"
+                          className="bg-purple-500 h-1.5 rounded-full transition-all duration-500"
                           style={{ width: `${progress ? progress.average_score : 0}%` }}
                         />
                       </div>
                     </div>
 
-                    <div className="card p-5 card-hover">
+                    <div className="card p-5 card-hover relative overflow-hidden group border-l-4 border-l-amber-500 shadow-sm">
+                      <div className="absolute top-0 right-0 w-20 h-20 bg-amber-500/5 rounded-full blur-xl pointer-events-none group-hover:bg-amber-500/10 transition-colors" />
                       <div className="flex items-center justify-between mb-3">
-                        <span className="text-xs font-semibold text-muted-soft uppercase tracking-wider">Credit Points</span>
-                        <div className="icon-badge icon-amber"><Award className="w-5 h-5" /></div>
+                        <span className="text-[10px] font-bold text-muted-soft uppercase tracking-wider">Credit Points</span>
+                        <div className="icon-badge icon-amber group-hover:scale-110 transition-transform duration-200"><Award className="w-4 h-4" /></div>
                       </div>
-                      <p className="text-3xl font-extrabold text-heading">
+                      <p className="text-3xl font-black text-heading">
                         {progress && typeof progress.total_credits === "number" ? Math.round(progress.total_credits) : 0} <span className="text-xs text-muted-soft font-normal">pts</span>
                       </p>
-                      <p className="text-xs text-muted-soft mt-3">Overall GD credit score</p>
+                      <p className="text-[10px] text-muted mt-3.5">Overall GD credit score</p>
                     </div>
 
-                    <div className="card p-5 card-hover">
+                    <div className="card p-5 card-hover relative overflow-hidden group border-l-4 border-l-emerald-500 shadow-sm">
+                      <div className="absolute top-0 right-0 w-20 h-20 bg-emerald-500/5 rounded-full blur-xl pointer-events-none group-hover:bg-emerald-500/10 transition-colors" />
                       <div className="flex items-center justify-between mb-3">
-                        <span className="text-xs font-semibold text-muted-soft uppercase tracking-wider">GD Sessions</span>
-                        <div className="icon-badge icon-green"><Users className="w-5 h-5" /></div>
+                        <span className="text-[10px] font-bold text-muted-soft uppercase tracking-wider">GD Sessions</span>
+                        <div className="icon-badge icon-green group-hover:scale-110 transition-transform duration-200"><Users className="w-4 h-4" /></div>
                       </div>
-                      <p className="text-3xl font-extrabold text-heading">
+                      <p className="text-3xl font-black text-heading">
                         {gdLiveSessions.filter(s => s.status === "completed").length}
                       </p>
-                      <p className="text-xs text-muted-soft mt-3">Group discussions completed</p>
+                      <p className="text-[10px] text-muted mt-3.5">Group discussions completed</p>
                     </div>
 
-                    <div className="card p-5 card-hover">
+                    <div className="card p-5 card-hover relative overflow-hidden group border-l-4 border-l-cyan-500 shadow-sm">
+                      <div className="absolute top-0 right-0 w-20 h-20 bg-cyan-500/5 rounded-full blur-xl pointer-events-none group-hover:bg-cyan-500/10 transition-colors" />
                       <div className="flex items-center justify-between mb-3">
-                        <span className="text-xs font-semibold text-muted-soft uppercase tracking-wider">Solo Practice</span>
-                        <div className="icon-badge icon-cyan"><Target className="w-5 h-5" /></div>
+                        <span className="text-[10px] font-bold text-muted-soft uppercase tracking-wider">Solo Practice</span>
+                        <div className="icon-badge icon-cyan group-hover:scale-110 transition-transform duration-200"><Target className="w-4 h-4" /></div>
                       </div>
-                      <p className="text-3xl font-extrabold text-heading">
+                      <p className="text-3xl font-black text-heading">
                         {soloHistory.length}
                       </p>
-                      <p className="text-xs text-muted-soft mt-3">Solo AI practices completed</p>
+                      <p className="text-[10px] text-muted mt-3.5">Solo AI practices completed</p>
                     </div>
                   </div>
 
@@ -1336,10 +1374,14 @@ export default function Home() {
                     {/* Left Actions column */}
                     <div className="lg:col-span-5 space-y-6">
                       {/* Join GD Session Form */}
-                      <div className="card p-5 border border-indigo-500/20 bg-indigo-950/10 relative overflow-hidden">
+                      <div className="card p-6 border border-indigo-500/15 bg-gradient-to-tr from-indigo-500/5 via-transparent to-transparent relative overflow-hidden">
+                        <div className="absolute top-3 right-3 flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse shadow-[0_0_8px_#ef4444]" />
+                          <span className="text-[9px] font-extrabold text-red-500 dark:text-red-400 uppercase tracking-widest">Live Room</span>
+                        </div>
                         <div className="absolute -top-12 -right-12 w-28 h-28 bg-indigo-500/10 rounded-full blur-xl pointer-events-none" />
                         <h3 className="text-base font-bold text-heading mb-1.5 flex items-center gap-2">
-                          <Zap className="w-4 h-4 text-indigo-400" /> Join GD Live Session
+                          <Zap className="w-4 h-4 text-indigo-500 animate-bounce" /> Join GD Live Session
                         </h3>
                         <p className="text-xs text-muted-soft mb-4">Enter the 4-digit code provided by your administrator to join the live session.</p>
                         <div className="flex gap-2">
@@ -1348,47 +1390,119 @@ export default function Home() {
                             maxLength={4}
                             value={gdLiveCode}
                             onChange={(e) => setGdLiveCode(e.target.value)}
-                            className="inp flex-1 font-mono uppercase tracking-wider h-11 text-center text-lg"
+                            className="inp flex-1 font-mono uppercase tracking-wider h-11 text-center text-lg focus:ring-indigo-500/20 focus:border-indigo-500/50"
                           />
                           <Button
                             onClick={joinGdLive}
                             disabled={loading}
-                            className="btn-primary px-5 h-11 text-sm font-semibold shrink-0"
+                            className="btn-primary px-5 h-11 text-sm font-semibold shrink-0 bg-gradient-to-r from-indigo-600 to-violet-600 border-0"
                           >
                             {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Join"}
                           </Button>
                         </div>
                       </div>
 
+                      {/* Gamified Speaker Tier Card */}
+                      {(() => {
+                        const creditPoints = progress && typeof progress.total_credits === "number" ? Math.round(progress.total_credits) : 0;
+                        let levelTitle = "Novice Speaker";
+                        let levelNum = 1;
+                        let nextLevelPoints = 100;
+                        let prevLevelPoints = 0;
+                        let badgeIcon = <Award className="w-5 h-5 text-slate-400" />;
+
+                        if (creditPoints >= 500) {
+                          levelTitle = "Grandmaster Orator";
+                          levelNum = 4;
+                          nextLevelPoints = 1000;
+                          prevLevelPoints = 500;
+                          badgeIcon = <Trophy className="w-5 h-5 text-cyan-400 animate-pulse" />;
+                        } else if (creditPoints >= 250) {
+                          levelTitle = "Eloquent Orator";
+                          levelNum = 3;
+                          nextLevelPoints = 500;
+                          prevLevelPoints = 250;
+                          badgeIcon = <Sparkles className="w-5 h-5 text-amber-400" />;
+                        } else if (creditPoints >= 100) {
+                          levelTitle = "Confident Communicator";
+                          levelNum = 2;
+                          nextLevelPoints = 250;
+                          prevLevelPoints = 100;
+                          badgeIcon = <Zap className="w-5 h-5 text-purple-400" />;
+                        }
+
+                        const levelProgress = Math.min(100, Math.max(0, ((creditPoints - prevLevelPoints) / (nextLevelPoints - prevLevelPoints)) * 100));
+
+                        return (
+                          <div className="card p-5 relative overflow-hidden border border-purple-500/10">
+                            <div className="absolute -top-12 -left-12 w-32 h-32 bg-purple-500/5 rounded-full blur-2xl pointer-events-none" />
+                            <div className="flex items-center gap-3.5 mb-4">
+                              <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center text-white shrink-0 shadow-md">
+                                {badgeIcon}
+                              </div>
+                              <div className="min-w-0">
+                                <p className="text-[10px] font-bold text-muted uppercase tracking-wider">Current Tier</p>
+                                <h4 className="text-sm font-bold text-heading truncate flex items-center gap-1.5">
+                                  {levelTitle} <span className="text-[10px] font-extrabold bg-indigo-500/10 text-indigo-400 px-1.5 py-0.5 rounded border border-indigo-500/25">Lvl {levelNum}</span>
+                                </h4>
+                              </div>
+                            </div>
+
+                            <div className="space-y-1.5">
+                              <div className="flex justify-between items-center text-xs">
+                                <span className="text-muted font-medium">Rank Progress</span>
+                                <span className="font-bold text-heading">{creditPoints} / {nextLevelPoints} pts</span>
+                              </div>
+                              <div className="w-full bg-slate-200 dark:bg-slate-800 rounded-full h-2 overflow-hidden">
+                                <div
+                                  className="bg-gradient-to-r from-indigo-500 to-purple-500 h-2 rounded-full transition-all duration-700"
+                                  style={{ width: `${levelProgress}%` }}
+                                />
+                              </div>
+                              {creditPoints < 500 ? (
+                                <p className="text-[10px] text-muted-soft text-right italic mt-1">
+                                  Need {nextLevelPoints - creditPoints} more points to reach the next tier!
+                                </p>
+                              ) : (
+                                <p className="text-[10px] text-muted-soft text-right italic mt-1">
+                                  You are at the peak tier! Keep it up!
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })()}
+
                       {/* Quick Launch Cards */}
                       <div className="grid grid-cols-2 gap-4">
                         <button
                           onClick={startSoloPractice}
-                          className="card p-4 text-left card-hover flex flex-col justify-between h-36"
+                          className="flex flex-col justify-between p-4 rounded-3xl border border-cyan-500/10 hover:border-cyan-500/30 bg-gradient-to-br from-cyan-500/5 via-transparent to-transparent hover:from-cyan-500/10 hover:shadow-[0_8px_30px_rgba(6,182,212,0.15)] group relative overflow-hidden h-36 transition-all duration-300 hover:-translate-y-1 text-left"
                         >
-                          <div className="icon-badge icon-cyan mb-2"><Target className="w-5 h-5" /></div>
+                          <div className="icon-badge icon-cyan mb-2 group-hover:scale-110 transition-transform duration-200"><Target className="w-5 h-5" /></div>
                           <div>
-                            <p className="text-sm font-bold text-heading">Solo Practice</p>
-                            <p className="text-[11px] text-muted-soft mt-0.5 leading-snug">Practice speaking solo with instant AI scores & feedback.</p>
+                            <p className="text-sm font-bold text-heading group-hover:text-cyan-400 transition-colors">Solo Practice</p>
+                            <p className="text-[10px] text-muted-soft mt-1 leading-snug">Practice speaking solo with instant AI scores & feedback.</p>
                           </div>
                         </button>
 
                         <button
                           onClick={() => loadLeaderboard("ALL", "ALL", "all")}
-                          className="card p-4 text-left card-hover flex flex-col justify-between h-36"
+                          className="flex flex-col justify-between p-4 rounded-3xl border border-amber-500/10 hover:border-amber-500/30 bg-gradient-to-br from-amber-500/5 via-transparent to-transparent hover:from-amber-500/10 hover:shadow-[0_8px_30px_rgba(245,158,11,0.15)] group relative overflow-hidden h-36 transition-all duration-300 hover:-translate-y-1 text-left"
                         >
-                          <div className="icon-badge icon-amber mb-2"><Trophy className="w-5 h-5" /></div>
+                          <div className="icon-badge icon-amber mb-2 group-hover:scale-110 transition-transform duration-200"><Trophy className="w-5 h-5" /></div>
                           <div>
-                            <p className="text-sm font-bold text-heading">Leaderboard</p>
-                            <p className="text-[11px] text-muted-soft mt-0.5 leading-snug">Check your ranking among all students and departments.</p>
+                            <p className="text-sm font-bold text-heading group-hover:text-amber-400 transition-colors">Leaderboard</p>
+                            <p className="text-[10px] text-muted-soft mt-1 leading-snug">Check your ranking among all students and departments.</p>
                           </div>
                         </button>
                       </div>
 
                       {/* Motivational Quote */}
                       {soloQuote && (
-                        <div className="card p-5 bg-indigo-500/5 dark:bg-indigo-500/10 border border-indigo-500/20 italic relative">
-                          <div className="absolute top-2 left-3 text-4xl text-slate-700 select-none">“</div>
+                        <div className="card p-5 bg-indigo-500/5 dark:bg-indigo-500/10 border border-indigo-500/20 italic relative overflow-hidden group hover:border-indigo-500/40 transition-colors shadow-sm">
+                          <div className="absolute -right-6 -bottom-6 w-20 h-20 bg-indigo-500/5 rounded-full blur-xl pointer-events-none" />
+                          <div className="absolute top-2 left-3 text-4xl text-slate-700/40 dark:text-slate-500/20 select-none font-serif">“</div>
                           <p className="text-xs text-body leading-relaxed pl-4 pr-2 font-medium z-10 relative">
                             {soloQuote.quote}
                           </p>
@@ -1401,44 +1515,71 @@ export default function Home() {
 
                     {/* Right Chart/Breakdown column */}
                     <div className="lg:col-span-7 flex flex-col">
-                      <div className="card p-6 flex-1 flex flex-col justify-between">
+                      <div className="card p-6 flex-1 flex flex-col justify-between relative overflow-hidden shadow-sm">
+                        <div className="absolute -top-24 -right-24 w-48 h-48 bg-indigo-500/5 rounded-full blur-3xl pointer-events-none" />
                         <div>
                           <h3 className="text-base font-bold text-heading mb-1.5 flex items-center gap-2">
-                            <TrendingUp className="w-5 h-5 text-indigo-400" /> Communication Skills Breakdown
+                            <TrendingUp className="w-5 h-5 text-indigo-400" /> Communication Skills Analysis
                           </h3>
-                          <p className="text-xs text-muted-soft mb-4">
-                            Analysis based on your most recent Solo Practice session. Track sub-scores to target specific skills.
+                          <p className="text-xs text-muted-soft mb-6">
+                            RPG-style breakdown and detail analytics from your most recent Solo Practice session.
                           </p>
                         </div>
 
                         {soloHistory && soloHistory.length > 0 ? (
-                          <div className="space-y-4">
-                            <div className="rounded-xl p-3 surface-2 border text-xs mb-2">
-                              <p className="text-muted-soft font-medium">LATEST PRACTICE TOPIC</p>
-                              <p className="text-heading font-bold mt-1 line-clamp-1">{soloHistory[0]?.topic}</p>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center flex-1">
+                            {/* Radar Chart Panel */}
+                            <div className="h-56 relative flex items-center justify-center">
+                              <ResponsiveContainer width="100%" height="100%">
+                                <RadarChart data={[
+                                  { metric: "Grammar", value: soloHistory[0]?.grammar_score || 0 },
+                                  { metric: "Fluency", value: soloHistory[0]?.fluency_score || 0 },
+                                  { metric: "Pronunciation", value: soloHistory[0]?.accent_score || 0 },
+                                  { metric: "Confidence", value: soloHistory[0]?.delivery_score || 0 },
+                                ]}>
+                                  <defs>
+                                    <radialGradient id="radarGlow" cx="50%" cy="50%" r="50%">
+                                      <stop offset="0%" stopColor="#a78bfa" stopOpacity={0.5} />
+                                      <stop offset="100%" stopColor="#818cf8" stopOpacity={0.1} />
+                                    </radialGradient>
+                                  </defs>
+                                  <PolarGrid stroke="var(--border)" />
+                                  <PolarAngleAxis dataKey="metric" tick={{ fontSize: 10, fill: "var(--heading)", fontWeight: 600 }} />
+                                  <Radar name="Score" dataKey="value" stroke="#8b5cf6" fill="url(#radarGlow)" fillOpacity={1} dot={{ r: 4.5, fill: "#8b5cf6", stroke: "#ffffff", strokeWidth: 1.5 }} />
+                                  <Tooltip contentStyle={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "12px", color: "var(--heading)" }} />
+                                </RadarChart>
+                              </ResponsiveContainer>
                             </div>
 
-                            {[
-                              { label: "Grammar & Structure", val: soloHistory[0]?.grammar_score, icon: "📝", color: "bg-indigo-500", text: "text-indigo-400" },
-                              { label: "Fluency & Speech Rate", val: soloHistory[0]?.fluency_score, icon: "⚡", color: "bg-purple-500", text: "text-purple-400" },
-                              { label: "Pronunciation & Clarity", val: soloHistory[0]?.accent_score, icon: "🗣️", color: "bg-cyan-500", text: "text-cyan-400" },
-                              { label: "Confidence & Delivery", val: soloHistory[0]?.delivery_score, icon: "🚀", color: "bg-emerald-500", text: "text-emerald-400" },
-                            ].map((skill) => (
-                              <div key={skill.label} className="space-y-1.5">
-                                <div className="flex items-center justify-between text-xs">
-                                  <span className="font-semibold text-heading flex items-center gap-1.5">
-                                    <span>{skill.icon}</span> {skill.label}
-                                  </span>
-                                  <span className={`font-bold ${skill.text}`}>{skill.val != null ? `${Number(skill.val).toFixed(0)}/100` : "N/A"}</span>
-                                </div>
-                                <div className="w-full bg-slate-200 dark:bg-slate-800/80 rounded-full h-2 overflow-hidden border border-slate-300/30 dark:border-slate-700/30">
-                                  <div
-                                    className={`${skill.color} h-2 rounded-full transition-all duration-700`}
-                                    style={{ width: `${skill.val || 0}%` }}
-                                  />
-                                </div>
+                            {/* Skills progress lines */}
+                            <div className="space-y-4">
+                              <div className="rounded-xl p-3.5 bg-[var(--bg)] border border-[var(--border)] text-xs mb-1">
+                                <p className="text-muted-soft font-bold text-[9px] uppercase tracking-wider">LATEST TOPIC</p>
+                                <p className="text-heading font-bold mt-1 line-clamp-2">{soloHistory[0]?.topic}</p>
                               </div>
-                            ))}
+
+                              {[
+                                { label: "Grammar & Structure", val: soloHistory[0]?.grammar_score, icon: "📝", color: "bg-indigo-500", text: "text-indigo-400" },
+                                { label: "Fluency & Speech Rate", val: soloHistory[0]?.fluency_score, icon: "⚡", color: "bg-purple-500", text: "text-purple-400" },
+                                { label: "Pronunciation & Clarity", val: soloHistory[0]?.accent_score, icon: "🗣️", color: "bg-cyan-500", text: "text-cyan-400" },
+                                { label: "Confidence & Delivery", val: soloHistory[0]?.delivery_score, icon: "🚀", color: "bg-emerald-500", text: "text-emerald-400" },
+                              ].map((skill) => (
+                                <div key={skill.label} className="space-y-1.5">
+                                  <div className="flex items-center justify-between text-[11px]">
+                                    <span className="font-semibold text-heading flex items-center gap-1.5">
+                                      <span>{skill.icon}</span> {skill.label}
+                                    </span>
+                                    <span className={`font-extrabold ${skill.text}`}>{skill.val != null ? `${Number(skill.val).toFixed(0)}/100` : "N/A"}</span>
+                                  </div>
+                                  <div className="w-full bg-slate-200 dark:bg-slate-800 rounded-full h-1.5 overflow-hidden border border-slate-300/10 dark:border-slate-700/10">
+                                    <div
+                                      className={`${skill.color} h-1.5 rounded-full transition-all duration-700`}
+                                      style={{ width: `${skill.val || 0}%` }}
+                                    />
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
                           </div>
                         ) : (
                           <div className="flex flex-col items-center justify-center py-10 text-center flex-1 border border-dashed rounded-2xl border-slate-800 bg-slate-950/20">
@@ -1455,32 +1596,33 @@ export default function Home() {
                   {/* History Feeds Section */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {/* GD Session History */}
-                    <div className="card p-6 flex flex-col justify-between">
+                    <div className="card p-6 flex flex-col justify-between relative overflow-hidden group shadow-sm">
+                      <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/5 rounded-full blur-xl pointer-events-none" />
                       <div>
                         <h3 className="text-base font-bold text-heading mb-4 flex items-center gap-2">
                           <Users className="w-5 h-5 text-indigo-400" /> Attended GD History
                         </h3>
 
                         {gdLiveSessions.filter(s => s.status === "completed").length === 0 ? (
-                          <div className="flex flex-col items-center justify-center py-10 text-center border border-dashed rounded-2xl border-slate-800 bg-slate-950/20">
+                          <div className="flex flex-col items-center justify-center py-10 text-center border border-dashed rounded-2xl border-slate-800 bg-slate-950/20 flex-1 min-h-[220px]">
                             <Users className="w-8 h-8 text-slate-600 mb-2" />
                             <p className="text-xs font-semibold text-heading">No GD sessions attended yet</p>
                           </div>
                         ) : (
                           <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
                             {gdLiveSessions.filter((s: any) => s.status === "completed").slice(0, 5).map((s: any) => (
-                              <div key={s.session_code} className="flex items-center justify-between p-3.5 rounded-xl surface-2 border border-[var(--border)] hover:border-slate-300 dark:hover:border-slate-700 transition">
+                              <div key={s.session_code} className="flex items-center justify-between p-3.5 rounded-xl bg-[var(--bg)] border border-[var(--border)] hover:border-indigo-500/30 hover:shadow-sm transition-all duration-200">
                                 <div>
                                   <div className="flex items-center gap-1.5">
-                                    <p className="text-sm font-bold text-heading">Session Code:</p>
-                                    <code className="text-xs font-mono font-bold bg-slate-950 text-indigo-300 px-2 py-0.5 rounded border border-indigo-950">{s.session_code}</code>
+                                    <p className="text-xs font-bold text-heading">Session Code:</p>
+                                    <code className="text-[11px] font-mono font-bold bg-slate-950 text-indigo-300 px-2.5 py-0.5 rounded border border-indigo-950">{s.session_code}</code>
                                   </div>
-                                  <p className="text-xs text-muted-soft mt-1 flex items-center gap-1">
+                                  <p className="text-[10px] text-muted-soft mt-1.5 flex items-center gap-1">
                                     <Clock className="w-3 h-3" />
                                     {new Date(s.created_at || Date.now()).toLocaleDateString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
                                   </p>
                                 </div>
-                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 uppercase tracking-wide">
+                                <span className="text-[9px] font-extrabold px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 uppercase tracking-wider">
                                   Attended
                                 </span>
                               </div>
@@ -1491,29 +1633,30 @@ export default function Home() {
                     </div>
 
                     {/* Solo Session History */}
-                    <div className="card p-6 flex flex-col justify-between">
+                    <div className="card p-6 flex flex-col justify-between relative overflow-hidden group shadow-sm">
+                      <div className="absolute top-0 right-0 w-24 h-24 bg-purple-500/5 rounded-full blur-xl pointer-events-none" />
                       <div>
                         <h3 className="text-base font-bold text-heading mb-4 flex items-center gap-2">
                           <Target className="w-5 h-5 text-indigo-400" /> Solo Practice History
                         </h3>
 
                         {soloHistory.length === 0 ? (
-                          <div className="flex flex-col items-center justify-center py-10 text-center border border-dashed rounded-2xl border-slate-800 bg-slate-950/20">
+                          <div className="flex flex-col items-center justify-center py-10 text-center border border-dashed rounded-2xl border-slate-800 bg-slate-950/20 flex-1 min-h-[220px]">
                             <Target className="w-8 h-8 text-slate-600 mb-2" />
                             <p className="text-xs font-semibold text-heading">No solo practices completed yet</p>
                           </div>
                         ) : (
                           <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
                             {soloHistory.slice(0, 5).map((s: any) => (
-                              <div key={s.id} className="p-3.5 rounded-xl surface-2 border border-[var(--border)] hover:border-slate-300 dark:hover:border-slate-700 transition">
+                              <div key={s.id} className="p-3.5 rounded-xl bg-[var(--bg)] border border-[var(--border)] hover:border-indigo-500/30 hover:shadow-sm transition-all duration-200">
                                 <div className="flex justify-between items-start gap-2">
                                   <p className="text-xs font-bold text-heading line-clamp-1 flex-1">{s.topic}</p>
-                                  <span className="text-xs font-extrabold text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                                  <span className="text-xs font-extrabold text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
                                     {(s.overall_score != null ? Number(s.overall_score) : 0).toFixed(1)}
                                   </span>
                                 </div>
                                 {s.weaknesses && (
-                                  <p className="text-[10px] text-muted-soft mt-2 line-clamp-1 bg-[var(--surface-2)] border border-[var(--border)] p-1.5 rounded flex items-center gap-1">
+                                  <p className="text-[10px] text-muted-soft mt-2 line-clamp-1 bg-[var(--surface)] border border-[var(--border)] p-1.5 rounded flex items-center gap-1">
                                     <Sparkles className="w-3 h-3 text-cyan-400 shrink-0" />
                                     <span>Feedback: {s.weaknesses.split(";")[0]}</span>
                                   </p>
