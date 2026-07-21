@@ -58,7 +58,7 @@ function StudentLivePoller({ code, token, onStart }: { code: string; token: stri
       try {
         const st = await getGdLiveState(code, token);
         if (!active) return;
-        if (st.status === "live") {
+        if (st.status === "live" || st.status === "active") {
           onStart(st.topic ?? null, st.members || [], st.teams || []);
         }
       } catch {
@@ -794,6 +794,7 @@ export default function Home() {
         sessionCode={gdLiveRoomCode}
         token={token}
         user={user}
+        theme={theme}
         initialTopic={gdLiveRoomTopic}
         initialMembers={gdLiveRoomMembers}
         initialTeams={gdLiveRoomTeams}
@@ -955,19 +956,19 @@ export default function Home() {
         {/* Navigation list */}
         <nav className="flex-1 p-4 space-y-1.5 overflow-y-auto">
           {[
-            { icon: <Users className="w-4 h-4 shrink-0" />, label: "Dashboard", view: "dashboard" as PageView },
+            { icon: <Users className="w-[18px] h-[18px] shrink-0" />, label: "Dashboard", view: "dashboard" as PageView },
             ...(user?.role !== "admin" ? [
-              { icon: <Zap className="w-4 h-4 shrink-0" />, label: "Group Discussion", view: "gd-live" as PageView },
-              { icon: <Target className="w-4 h-4 shrink-0" />, label: "Solo Practice", view: "solo-practice" as PageView },
-              { icon: <TrendingUp className="w-4 h-4 shrink-0" />, label: "Reports & Analytics", view: "reports" as PageView },
-              { icon: <Award className="w-4 h-4 shrink-0" />, label: "Achievements", view: "achievements" as PageView },
-              { icon: <CheckCircle2 className="w-4 h-4 shrink-0" />, label: "Certificates", view: "certificates" as PageView },
+              { icon: <Zap className="w-[18px] h-[18px] shrink-0" />, label: "Group Discussion", view: "gd-live" as PageView },
+              { icon: <Target className="w-[18px] h-[18px] shrink-0" />, label: "Solo Practice", view: "solo-practice" as PageView },
+              { icon: <TrendingUp className="w-[18px] h-[18px] shrink-0" />, label: "Reports & Analytics", view: "reports" as PageView },
+              { icon: <Award className="w-[18px] h-[18px] shrink-0" />, label: "Achievements", view: "achievements" as PageView },
+              { icon: <CheckCircle2 className="w-[18px] h-[18px] shrink-0" />, label: "Certificates", view: "certificates" as PageView },
             ] : []),
             ...(user?.role === "admin" ? [
-              { icon: <Shield className="w-4 h-4 shrink-0" />, label: "Admin GD Control", view: "gd-live-admin" as PageView },
+              { icon: <Shield className="w-[18px] h-[18px] shrink-0" />, label: "Admin GD Control", view: "gd-live-admin" as PageView },
             ] : []),
-            { icon: <Trophy className="w-4 h-4 shrink-0" />, label: "Leaderboard", view: "gd-leaderboard" as PageView },
-            { icon: <UserIcon className="w-4 h-4 shrink-0" />, label: "Profile Settings", view: "profile" as PageView },
+            { icon: <Trophy className="w-[18px] h-[18px] shrink-0" />, label: "Leaderboard", view: "gd-leaderboard" as PageView },
+            { icon: <UserIcon className="w-[18px] h-[18px] shrink-0" />, label: "Profile Settings", view: "profile" as PageView },
           ].filter(Boolean).map((item: { icon: React.ReactNode; label: string; view: PageView }) => (
             <button
               key={item.label}
@@ -982,7 +983,7 @@ export default function Home() {
                 else setView(item.view);
                 if (isMobile) setSidebarOpen(false);
               }}
-              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all duration-200 whitespace-nowrap ${view === item.view ? "bg-gradient-to-r from-indigo-500/10 to-purple-500/10 text-indigo-600 dark:text-indigo-300 border-l-4 border-indigo-500 dark:border-indigo-400 shadow-sm" : "text-body hover:bg-slate-500/5 hover:text-heading hover:pl-5"} ${isSessionLocked ? "opacity-40 cursor-not-allowed" : ""}`}
+              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 whitespace-nowrap ${view === item.view ? "bg-gradient-to-r from-indigo-500/10 to-purple-500/10 text-indigo-600 dark:text-indigo-300 border-l-4 border-indigo-500 dark:border-indigo-400 shadow-sm" : "text-body hover:bg-slate-500/5 hover:text-heading hover:pl-5"} ${isSessionLocked ? "opacity-40 cursor-not-allowed" : ""}`}
             >
               {item.icon}
               <span>{item.label}</span>
@@ -992,14 +993,14 @@ export default function Home() {
 
         {/* Bottom panel */}
         <div className="p-4 border-t border-slate-200/50 dark:border-slate-800/50 space-y-1.5 shrink-0 bg-gradient-to-t from-indigo-500/5 via-transparent to-transparent">
-          <button onClick={() => voice.setEnabled(!voice.enabled)} className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all duration-200 whitespace-nowrap text-muted-soft hover:text-heading hover:bg-slate-500/5 hover:pl-5">
-            <VolumeX className="w-4 h-4 shrink-0" /> {voice.enabled ? "Mute Voice" : "Unmute Voice"}
+          <button onClick={() => voice.setEnabled(!voice.enabled)} className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 whitespace-nowrap text-muted-soft hover:text-heading hover:bg-slate-500/5 hover:pl-5">
+            <VolumeX className="w-[18px] h-[18px] shrink-0" /> {voice.enabled ? "Mute Voice" : "Unmute Voice"}
           </button>
-          <button onClick={() => setView("settings")} className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all duration-200 whitespace-nowrap text-muted-soft hover:text-heading hover:bg-slate-500/5 hover:pl-5">
-            <Settings className="w-4 h-4 shrink-0" /> Settings
+          <button onClick={() => setView("settings")} className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 whitespace-nowrap text-muted-soft hover:text-heading hover:bg-slate-500/5 hover:pl-5">
+            <Settings className="w-[18px] h-[18px] shrink-0" /> Settings
           </button>
-          <button onClick={logout} disabled={isSessionLocked} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all duration-200 whitespace-nowrap ${isSessionLocked ? "text-slate-600 cursor-not-allowed" : "text-red-600 dark:text-red-400 hover:bg-red-500/10 hover:pl-5"}`}>
-            <LogOut className="w-4 h-4 shrink-0" /> Sign Out
+          <button onClick={logout} disabled={isSessionLocked} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 whitespace-nowrap ${isSessionLocked ? "text-slate-600 cursor-not-allowed" : "text-red-600 dark:text-red-400 hover:bg-red-500/10 hover:pl-5"}`}>
+            <LogOut className="w-[18px] h-[18px] shrink-0" /> Sign Out
           </button>
         </div>
       </div>

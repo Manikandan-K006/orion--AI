@@ -150,7 +150,7 @@ class TeamState:
                 {
                     "user_id": uid,
                     "name": m.get("name"),
-                    "label": m.get("label"),
+                    "label": m.get("label") or m.get("anonymous_label"),
                     "status": "finished" if uid in self.finished_user_ids else "recording",
                 }
                 for uid, m in self.members.items()

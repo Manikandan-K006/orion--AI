@@ -122,7 +122,7 @@ def _host_meeting_db_work(session_code: str):
         queries.execute(conn,
             "UPDATE gd_live_teams SET status = 'active' WHERE session_code = %s AND status = 'waiting'",
             (session_code,))
-        queries.set_live_session_status(conn, session_code, "live")
+        queries.set_live_session_status(conn, session_code, "active")
         return {"topic": topic, "members": members, "teams": teams}
     finally:
         conn.close()
@@ -154,6 +154,8 @@ async def host_gd_live_meeting(
     state = manager.ensure_state(session_code, topic)
     state.ended = False
     state.paused = False
+    state.topic = topic  # Ensure the session topic is updated in the RoomState object
+    state.team_states.clear()  # Clear stale team allocations from previous runs
     for p in members:
         state.participants.setdefault(p["user_id"], {})
         state.participants[p["user_id"]].update(
@@ -167,6 +169,23 @@ async def host_gd_live_meeting(
                 "muted": False,
             }
         )
+
+    # Pre-populate in-memory TeamStates for each assigned team
+    for t in teams:
+        tn = t["team_number"]
+        t_topic = t["topic"]
+        # Map members list format
+        t_members = [
+            {
+                "user_id": m["user_id"],
+                "name": m["name"],
+                "anonymous_label": m["label"],
+                "team_number": tn,
+                "status": "recording",
+            }
+            for m in t["members"]
+        ]
+        state.ensure_team(tn, t_topic, t_members)
 
     # ── Broadcast team assignments FIRST so every client has its team the
     #    instant the session goes live. ──
