@@ -1,0 +1,10 @@
+2026-07-20T10:26:24.397372Z 0 [System] [MY-015015] [Server] MySQL Server - start.
+2026-07-20T10:26:24.755731Z 0 [System] [MY-010116] [Server] C:\Program Files\MySQL\MySQL Server 8.4\bin\mysqld.exe (mysqld 8.4.9) starting as process 16352
+2026-07-20T10:26:24.983280Z 0 [Warning] [MY-010075] [Server] No existing UUID has been found, so we assume that this is the first time that this server has been started. Generating a new UUID: 75c7027d-8425-11f1-af72-1acfc25d8999.
+2026-07-20T10:26:24.997996Z 1 [System] [MY-013576] [InnoDB] InnoDB initialization has started.
+2026-07-20T10:26:25.827858Z 1 [System] [MY-013577] [InnoDB] InnoDB initialization has ended.
+2026-07-20T10:26:25.836084Z 1 [ERROR] [MY-013178] [Server] Execution of server-side SQL statement 'CREATE SCHEMA mysql DEFAULT COLLATE utf8mb4_0900_ai_ci' failed with error code = 1049, error message = 'System schema directory does not exist.'.
+2026-07-20T10:26:25.842197Z 0 [ERROR] [MY-010020] [Server] Data Dictionary initialization failed.
+2026-07-20T10:26:25.844017Z 0 [ERROR] [MY-010119] [Server] Aborting
+2026-07-20T10:26:26.092980Z 0 [System] [MY-010910] [Server] C:\Program Files\MySQL\MySQL Server 8.4\bin\mysqld.exe: Shutdown complete (mysqld 8.4.9)  MySQL Community Server - GPL.
+2026-07-20T10:26:26.096043Z 0 [System] [MY-015016] [Server] MySQL Server - end.
