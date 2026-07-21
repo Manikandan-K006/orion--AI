@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircle, Award, Clock, LogOut, MessageSquare, Mic, MicOff, Trophy, Users, User as UserIcon, Lock, Zap, Loader2, Copy, Check, Target, TrendingUp, ArrowUp, ArrowDown, Sparkles, Menu, X, Shield, Sun, Moon, RefreshCw, Video, VideoOff, Hand, MessageCircle, Maximize, PhoneOff, Radio, CheckCircle2, Mail, Phone, Globe, Eye, VolumeX } from "lucide-react";
+import { AlertCircle, Award, Clock, LogOut, MessageSquare, Mic, MicOff, Trophy, Users, User as UserIcon, Lock, Zap, Loader2, Copy, Check, Target, TrendingUp, ArrowUp, ArrowDown, Sparkles, Menu, X, Shield, Sun, Moon, RefreshCw, Video, VideoOff, Hand, MessageCircle, Maximize, PhoneOff, Radio, CheckCircle2, Mail, Phone, Globe, Eye, EyeOff, VolumeX } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Bar, BarChart, CartesianGrid, Cell, Legend, PolarAngleAxis, PolarGrid, Radar, RadarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
@@ -172,6 +172,9 @@ export default function Home() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showCurrent, setShowCurrent] = useState(false);
+  const [showNew, setShowNew] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
 
   const [studentRegisterNumber, setStudentRegisterNumber] = useState("");
   const [studentPassword, setStudentPassword] = useState("");
@@ -1044,29 +1047,96 @@ export default function Home() {
 
           {/* Profile View */}
           {view === "profile" && user && (
-            <div className="max-w-md mx-auto space-y-6 animate-in slide-in-from-bottom-4 fade-in duration-500 pb-12">
-              <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-6 shadow-sm">
-                <h2 className="text-xl font-bold text-heading mb-1">Profile</h2>
-                <p className="text-sm text-muted mb-6">Manage your account settings.</p>
-                <div className="space-y-4 mb-8">
-                  <div>
-                    <label className="text-xs font-semibold text-muted-soft uppercase tracking-wider mb-1 block">Name</label>
-                    <p className="text-body font-medium">{user.name}</p>
+            <div className="max-w-5xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8 pb-12 animate-in slide-in-from-bottom-4 fade-in duration-500">
+              {/* Left Column - Profile Card */}
+              <div className="bg-[var(--surface)] border border-[var(--border)] rounded-3xl p-8 shadow-sm relative overflow-hidden flex flex-col items-center text-center">
+                {/* Decorative gradients */}
+                <div className="absolute -top-12 -left-12 w-32 h-32 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none" />
+                <div className="absolute -bottom-12 -right-12 w-32 h-32 bg-purple-500/10 rounded-full blur-2xl pointer-events-none" />
+                
+                {/* Avatar Initial Bubble */}
+                <div className="relative w-24 h-24 rounded-full flex items-center justify-center bg-gradient-to-tr from-indigo-500 via-purple-500 to-pink-500 p-0.5 mb-4 group shadow-md hover:scale-105 transition-transform duration-300">
+                  <div className="w-full h-full bg-[var(--surface)] rounded-full flex items-center justify-center text-heading font-black text-2xl tracking-tight select-none">
+                    {user.name ? user.name.split(/\s+/).filter(Boolean).map(n => n[0]).join("").toUpperCase().slice(0, 2) : "US"}
                   </div>
-                  <div>
-                    <label className="text-xs font-semibold text-muted-soft uppercase tracking-wider mb-1 block">Email</label>
-                    <p className="text-body font-medium">{user.email}</p>
-                  </div>
-                  {user.register_number && (
-                    <div>
-                      <label className="text-xs font-semibold text-muted-soft uppercase tracking-wider mb-1 block">Register Number</label>
-                      <p className="text-body font-medium">{user.register_number}</p>
-                    </div>
-                  )}
+                  <div className="absolute inset-0 rounded-full border border-indigo-500/30 animate-ping opacity-20 pointer-events-none" />
                 </div>
 
-                <div className="border-t border-[var(--border)] pt-6">
-                  <h3 className="text-lg font-bold text-heading mb-4">Change Password</h3>
+                <h3 className="text-xl font-bold text-heading tracking-tight mb-1">{user.name}</h3>
+                
+                {user.role === "admin" ? (
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-500/10 text-red-500 border border-red-500/20 shadow-sm flex items-center gap-1 mb-6 select-none">
+                    <Shield className="w-3 h-3" />
+                    Administrator
+                  </span>
+                ) : (
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-500/10 text-indigo-500 border border-indigo-500/20 shadow-sm flex items-center gap-1 mb-6 select-none">
+                    <Sparkles className="w-3 h-3" />
+                    Student
+                  </span>
+                )}
+
+                {/* Details Grid */}
+                <div className="w-full space-y-3 text-left border-t border-[var(--border)] pt-6 mt-1">
+                  <div className="flex items-center gap-3 p-3 rounded-2xl bg-[var(--bg)] border border-[var(--border)] hover:border-indigo-500/30 transition-all duration-200">
+                    <div className="w-9 h-9 rounded-xl bg-indigo-500/10 text-indigo-500 flex items-center justify-center shrink-0">
+                      <Mail className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[10px] font-bold text-muted uppercase tracking-wider">Email Address</p>
+                      <p className="text-xs font-semibold text-heading truncate">{user.email}</p>
+                    </div>
+                  </div>
+
+                  {user.register_number && (
+                    <div className="flex items-center gap-3 p-3 rounded-2xl bg-[var(--bg)] border border-[var(--border)] hover:border-indigo-500/30 transition-all duration-200">
+                      <div className="w-9 h-9 rounded-xl bg-purple-500/10 text-purple-500 flex items-center justify-center shrink-0">
+                        <Award className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[10px] font-bold text-muted uppercase tracking-wider">Register Number</p>
+                        <p className="text-xs font-semibold text-heading truncate font-mono">{user.register_number}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {user.department && (
+                    <div className="flex items-center gap-3 p-3 rounded-2xl bg-[var(--bg)] border border-[var(--border)] hover:border-indigo-500/30 transition-all duration-200">
+                      <div className="w-9 h-9 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center shrink-0">
+                        <Shield className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[10px] font-bold text-muted uppercase tracking-wider">Department</p>
+                        <p className="text-xs font-semibold text-heading truncate">{user.department}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex items-center gap-3 p-3 rounded-2xl bg-[var(--bg)] border border-[var(--border)] hover:border-indigo-500/30 transition-all duration-200">
+                    <div className="w-9 h-9 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center shrink-0">
+                      <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[10px] font-bold text-muted uppercase tracking-wider">Account Status</p>
+                      <p className="text-xs font-semibold text-heading">Active / Verified</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Column - Security & Password Form */}
+              <div className="lg:col-span-2 bg-[var(--surface)] border border-[var(--border)] rounded-3xl p-8 shadow-sm relative overflow-hidden flex flex-col justify-between">
+                <div className="absolute -top-12 -right-12 w-48 h-48 bg-indigo-500/5 rounded-full blur-3xl pointer-events-none" />
+                
+                <div>
+                  <div className="mb-6 border-b border-[var(--border)] pb-5">
+                    <h3 className="text-xl font-bold text-heading tracking-tight mb-1 flex items-center gap-2">
+                      <Lock className="w-5 h-5 text-indigo-500" />
+                      Security Settings
+                    </h3>
+                    <p className="text-sm text-muted">Update your password to keep your account secure.</p>
+                  </div>
+
                   <form onSubmit={async (e) => {
                     e.preventDefault();
                     if (newPassword.length < 8) return alert("New password must be at least 8 characters");
@@ -1083,22 +1153,83 @@ export default function Home() {
                     } finally {
                       setLoading(false);
                     }
-                  }} className="space-y-4">
+                  }} className="space-y-5">
                     <div>
-                      <label className="text-xs font-semibold text-heading mb-1 block">Current Password</label>
-                      <Input type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} required className="w-full bg-[var(--background)] border-[var(--border)] focus:border-indigo-500/50" />
+                      <label className="text-xs font-semibold text-heading mb-1.5 block">Current Password</label>
+                      <div className="relative flex items-center">
+                        <Lock className="w-4 h-4 text-muted absolute left-4 pointer-events-none" />
+                        <Input
+                          type={showCurrent ? "text" : "password"}
+                          value={currentPassword}
+                          onChange={e => setCurrentPassword(e.target.value)}
+                          required
+                          placeholder="••••••••"
+                          className="w-full pl-11 pr-11 bg-[var(--bg)] border-[var(--border)] focus:border-indigo-500/50 focus:ring-2 focus:ring-indigo-500/10 rounded-2xl h-12"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowCurrent(!showCurrent)}
+                          className="absolute right-4 text-muted hover:text-heading transition-colors focus:outline-none"
+                        >
+                          {showCurrent ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
                     </div>
+
                     <div>
-                      <label className="text-xs font-semibold text-heading mb-1 block">New Password</label>
-                      <Input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} required minLength={8} className="w-full bg-[var(--background)] border-[var(--border)] focus:border-indigo-500/50" />
+                      <label className="text-xs font-semibold text-heading mb-1.5 block">New Password</label>
+                      <div className="relative flex items-center">
+                        <Lock className="w-4 h-4 text-muted absolute left-4 pointer-events-none" />
+                        <Input
+                          type={showNew ? "text" : "password"}
+                          value={newPassword}
+                          onChange={e => setNewPassword(e.target.value)}
+                          required
+                          minLength={8}
+                          placeholder="••••••••"
+                          className="w-full pl-11 pr-11 bg-[var(--bg)] border-[var(--border)] focus:border-indigo-500/50 focus:ring-2 focus:ring-indigo-500/10 rounded-2xl h-12"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowNew(!showNew)}
+                          className="absolute right-4 text-muted hover:text-heading transition-colors focus:outline-none"
+                        >
+                          {showNew ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
+                      <p className="text-[10px] text-muted mt-1.5 pl-1">Must be at least 8 characters long</p>
                     </div>
+
                     <div>
-                      <label className="text-xs font-semibold text-heading mb-1 block">Confirm New Password</label>
-                      <Input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} required minLength={8} className="w-full bg-[var(--background)] border-[var(--border)] focus:border-indigo-500/50" />
+                      <label className="text-xs font-semibold text-heading mb-1.5 block">Confirm New Password</label>
+                      <div className="relative flex items-center">
+                        <Lock className="w-4 h-4 text-muted absolute left-4 pointer-events-none" />
+                        <Input
+                          type={showConfirm ? "text" : "password"}
+                          value={confirmPassword}
+                          onChange={e => setConfirmPassword(e.target.value)}
+                          required
+                          minLength={8}
+                          placeholder="••••••••"
+                          className="w-full pl-11 pr-11 bg-[var(--bg)] border-[var(--border)] focus:border-indigo-500/50 focus:ring-2 focus:ring-indigo-500/10 rounded-2xl h-12"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowConfirm(!showConfirm)}
+                          className="absolute right-4 text-muted hover:text-heading transition-colors focus:outline-none"
+                        >
+                          {showConfirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
                     </div>
-                    <Button type="submit" disabled={loading} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white mt-2">
-                      {loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Lock className="w-4 h-4 mr-2" />}
-                      Change Password
+
+                    <Button
+                      type="submit"
+                      disabled={loading}
+                      className="w-full h-12 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-semibold rounded-2xl shadow-lg hover:shadow-indigo-500/20 transition-all duration-200 mt-2 flex items-center justify-center gap-2 border-0"
+                    >
+                      {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Lock className="w-4 h-4" />}
+                      Save Password
                     </Button>
                   </form>
                 </div>
