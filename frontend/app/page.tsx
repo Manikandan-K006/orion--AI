@@ -1697,21 +1697,21 @@ export default function Home() {
                   <span className="text-xs text-muted-soft mr-1 self-center">Department:</span>
                   {(lbData?.departments || ["ALL"]).map(d => (
                     <button key={d} onClick={() => loadLeaderboard(d, lbYear, lbTimeframe)}
-                      className={`text-xs px-3 py-1 rounded-full border transition ${lbDepartment === d ? "bg-amber-500/30 border-amber-500/50 text-amber-200" : "surface-2 border text-body hover:bg-white/10"}`}>{d}</button>
+                      className={`text-xs px-3 py-1 rounded-full border transition ${lbDepartment === d ? "bg-amber-500/10 dark:bg-amber-500/20 border-amber-500/40 text-amber-700 dark:text-amber-200 font-semibold" : "surface-2 border text-body hover:bg-white/10"}`}>{d}</button>
                   ))}
                 </div>
                 <div className="flex flex-wrap gap-2 mb-2">
                   <span className="text-xs text-muted-soft mr-1 self-center">Year:</span>
                   {(lbData?.years || ["ALL"]).map(y => (
                     <button key={y} onClick={() => loadLeaderboard(lbDepartment, y, lbTimeframe)}
-                      className={`text-xs px-3 py-1 rounded-full border transition ${lbYear === y ? "bg-amber-500/30 border-amber-500/50 text-amber-200" : "surface-2 border text-body hover:bg-white/10"}`}>{y}</button>
+                      className={`text-xs px-3 py-1 rounded-full border transition ${lbYear === y ? "bg-amber-500/10 dark:bg-amber-500/20 border-amber-500/40 text-amber-700 dark:text-amber-200 font-semibold" : "surface-2 border text-body hover:bg-white/10"}`}>{y}</button>
                   ))}
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <span className="text-xs text-muted-soft mr-1 self-center">Time:</span>
                   {[{ v: "all", l: "All Time" }, { v: "this_month", l: "This Month" }, { v: "past_month", l: "Past Month" }].map(t => (
                     <button key={t.v} onClick={() => loadLeaderboard(lbDepartment, lbYear, t.v)}
-                      className={`text-xs px-3 py-1 rounded-full border transition ${lbTimeframe === t.v ? "bg-amber-500/30 border-amber-500/50 text-amber-200" : "surface-2 border text-body hover:bg-white/10"}`}>{t.l}</button>
+                      className={`text-xs px-3 py-1 rounded-full border transition ${lbTimeframe === t.v ? "bg-amber-500/10 dark:bg-amber-500/20 border-amber-500/40 text-amber-700 dark:text-amber-200 font-semibold" : "surface-2 border text-body hover:bg-white/10"}`}>{t.l}</button>
                   ))}
                   <span className="text-xs text-muted-soft ml-auto self-center">Overall Score by Credit Points</span>
                 </div>
