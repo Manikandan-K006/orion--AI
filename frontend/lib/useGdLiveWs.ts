@@ -1,9 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-
-const WS_BASE = typeof window !== "undefined" ? `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.hostname}:8000` : "ws://localhost:8000";
-
+const WS_BASE = typeof window !== "undefined" ? `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.hostname}:8001` : "ws://localhost:8001";
 export type GDLiveWsEvent =
   | "SESSION_STARTED"
   | "TEAMS_ASSIGNED"

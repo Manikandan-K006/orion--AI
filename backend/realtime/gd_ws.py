@@ -250,7 +250,7 @@ class GDLiveConnectionManager:
 
     async def send_personal(self, ws: WebSocket, event: str, payload: Any = None) -> None:
         try:
-            await ws.send_json({"event": event, "payload": payload})
+            await ws.send_text(json.dumps({"event": event, "payload": payload}, default=str))
         except Exception as exc:
             logger.warning("send_personal failed: %s", exc)
 
@@ -261,7 +261,7 @@ class GDLiveConnectionManager:
         dead: list[WebSocket] = []
         for ws in targets:
             try:
-                await ws.send_json({"event": event, "payload": payload})
+                await ws.send_text(json.dumps({"event": event, "payload": payload}, default=str))
             except Exception as exc:
                 logger.warning("broadcast send failed: %s", exc)
                 dead.append(ws)
@@ -276,7 +276,7 @@ class GDLiveConnectionManager:
         dead: list[WebSocket] = []
         for ws in targets:
             try:
-                await ws.send_json({"event": event, "payload": payload})
+                await ws.send_text(json.dumps({"event": event, "payload": payload}, default=str))
             except Exception as exc:
                 logger.warning("broadcast_to_team send failed: %s", exc)
                 dead.append(ws)
@@ -290,7 +290,7 @@ class GDLiveConnectionManager:
             targets = [ci.ws for ci in room.values() if ci.role == "admin"]
         for ws in targets:
             try:
-                await ws.send_json({"event": event, "payload": payload})
+                await ws.send_text(json.dumps({"event": event, "payload": payload}, default=str))
             except Exception as exc:
                 logger.warning("broadcast_to_admin send failed: %s", exc)
 

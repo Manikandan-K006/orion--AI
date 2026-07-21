@@ -1,4 +1,4 @@
-const API_URL = typeof window !== "undefined" ? `${window.location.protocol}//${window.location.hostname}:8000` : "http://localhost:8000";
+const API_URL = typeof window !== "undefined" ? `${window.location.protocol}//${window.location.hostname}:8001` : "http://localhost:8001";
 
 export type User = {
   id: number;
@@ -307,9 +307,9 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}, tok
         ...options.headers
       }
     });
-    
+
     clearTimeout(timeoutId);
-    
+
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
       const detail = typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail || "Request failed");
