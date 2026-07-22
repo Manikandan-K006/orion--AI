@@ -1170,14 +1170,6 @@ export default function Home() {
               />
             </div>
 
-            {/* Credit Points Badge */}
-            {progress && (
-              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-slate-200/50 dark:border-slate-800/50 bg-white/40 dark:bg-slate-900/40 text-heading text-xs font-bold shadow-sm">
-                <Trophy className="w-3.5 h-3.5 text-amber-500 animate-bounce" style={{ animationDuration: '3s' }} />
-                <span>{Math.round(progress.total_credits || 0)} <span className="text-indigo-500 dark:text-indigo-400">Credits</span></span>
-              </div>
-            )}
-
             {/* Theme Toggle Button */}
             <button
               onClick={toggleTheme}

@@ -145,57 +145,8 @@ def upsert_progress(connection: MySQLConnection, student_id: int, average_score:
 
 
 def get_progress(connection: MySQLConnection, student_id: int) -> dict[str, Any] | None:
-    # 1. Fetch values from standard gd_evaluation
-    gd_evals = fetch_all(connection, "SELECT overall_score, credential_points FROM gd_evaluation WHERE user_id = %s", (student_id,))
-    
-    # 2. Fetch values from gd_live_evaluations
-    gd_live_evals = fetch_all(connection, "SELECT overall_score, credential_points FROM gd_live_evaluations WHERE user_id = %s", (student_id,))
-    
-    # 3. Fetch values from solo_practice_sessions
-    solo_sessions = fetch_all(connection, "SELECT overall_score FROM solo_practice_sessions WHERE user_id = %s AND status = 'completed'", (student_id,))
-    
-    all_scores = []
-    total_credits = 0.0
-    
-    for ev in gd_evals:
-        if ev.get("overall_score") is not None:
-            all_scores.append(float(ev["overall_score"]))
-        if ev.get("credential_points") is not None:
-            total_credits += float(ev["credential_points"])
-            
-    for ev in gd_live_evals:
-        if ev.get("overall_score") is not None:
-            all_scores.append(float(ev["overall_score"]))
-        if ev.get("credential_points") is not None:
-            total_credits += float(ev["credential_points"])
-            
-    for s in solo_sessions:
-        if s.get("overall_score") is not None:
-            all_scores.append(float(s["overall_score"]))
-            total_credits += 5.0  # Award 5.0 credit points per completed Solo practice session
-            
-    avg_score = sum(all_scores) / len(all_scores) if all_scores else 0.0
-    completed_sessions = len(gd_evals) + len(gd_live_evals) + len(solo_sessions)
-    
-    # Merge with progress table storage values if they exist
-    stored = fetch_one(connection, "SELECT average_score, total_credits, interviews_completed FROM progress WHERE student_id = %s", (student_id,))
-    if stored:
-        stored_avg = float(stored["average_score"])
-        stored_credits = float(stored["total_credits"])
-        stored_completed = int(stored["interviews_completed"])
-        
-        if not all_scores and stored_avg > 0:
-            avg_score = stored_avg
-        total_credits = max(total_credits, stored_credits)
-        completed_sessions = max(completed_sessions, stored_completed)
-        
-    return {
-        "student_id": student_id,
-        "average_score": round(avg_score, 2),
-        "interviews_completed": completed_sessions,
-        "total_credits": round(total_credits, 2),
-        "updated_at": None
-    }
+    return fetch_one(connection, "SELECT student_id, average_score, interviews_completed, total_credits, updated_at FROM progress WHERE student_id = %s",
+                     (student_id,))
 
 
 def get_completed_session_stats(connection: MySQLConnection, student_id: int) -> dict[str, Any] | None:
