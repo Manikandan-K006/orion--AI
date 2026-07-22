@@ -404,9 +404,9 @@ export default function Home() {
     return () => clearInterval(interval);
   }, [token, user, view]);
 
-  // Poll certificates progress dynamic data when viewing Certificates to keep it live
+  // Poll achievements dynamic data when viewing Achievements to keep it live
   useEffect(() => {
-    if (!token || !user || view !== "certificates") return;
+    if (!token || !user || view !== "achievements") return;
 
     // Refresh instantly on mount
     loadDashboardData(token, user);
@@ -1031,6 +1031,12 @@ export default function Home() {
                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_#10b981]" />
               </p>
               <p className="text-[11px] text-muted-soft truncate max-w-[140px]">{user.name}</p>
+              {progress && (
+                <p className="text-[10px] text-indigo-500 dark:text-indigo-400 font-extrabold mt-0.5 flex items-center gap-1.5 animate-pulse">
+                  <Trophy className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                  <span>{Math.round(progress.total_credits)} Credits</span>
+                </p>
+              )}
             </div>
           </div>
           {isMobile && (
@@ -1051,7 +1057,6 @@ export default function Home() {
               { icon: <Target className="w-[18px] h-[18px] shrink-0" />, label: "Solo Practice", view: "solo-practice" as PageView },
               { icon: <TrendingUp className="w-[18px] h-[18px] shrink-0" />, label: "Reports & Analytics", view: "reports" as PageView },
               { icon: <Award className="w-[18px] h-[18px] shrink-0" />, label: "Achievements", view: "achievements" as PageView },
-              { icon: <CheckCircle2 className="w-[18px] h-[18px] shrink-0" />, label: "Certificates", view: "certificates" as PageView },
             ] : []),
             ...(user?.role === "admin" ? [
               { icon: <Shield className="w-[18px] h-[18px] shrink-0" />, label: "Admin GD Control", view: "gd-live-admin" as PageView },
@@ -1070,7 +1075,7 @@ export default function Home() {
                 else if (item.view === "gd-live") { setView("gd-live"); loadGdLiveSessions(); }
                 else if (item.view === "gd-live-admin") { setView("gd-live-admin"); loadGdLiveSessions(); }
                 else if (item.view === "reports") { setView("reports"); loadDashboardData(); }
-                else if (item.view === "certificates") { setView("certificates"); loadDashboardData(); }
+                else if (item.view === "achievements") { setView("achievements"); loadDashboardData(); }
                 else setView(item.view);
                 if (isMobile) setSidebarOpen(false);
               }}
@@ -1164,6 +1169,14 @@ export default function Home() {
                 className="pl-9 pr-3 py-1.5 w-full text-xs rounded-xl border border-slate-200/50 dark:border-slate-800/50 bg-white/30 dark:bg-slate-900/30 text-heading placeholder-muted focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all duration-200"
               />
             </div>
+
+            {/* Credit Points Badge */}
+            {progress && (
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-slate-200/50 dark:border-slate-800/50 bg-white/40 dark:bg-slate-900/40 text-heading text-xs font-bold shadow-sm">
+                <Trophy className="w-3.5 h-3.5 text-amber-500 animate-bounce" style={{ animationDuration: '3s' }} />
+                <span>{Math.round(progress.total_credits)} <span className="text-indigo-500 dark:text-indigo-400">Credits</span></span>
+              </div>
+            )}
 
             {/* Theme Toggle Button */}
             <button
@@ -1584,62 +1597,55 @@ export default function Home() {
                   ))}
                 </div>
               </div>
-            </div>
-          )}
 
-          {/* Certificates View */}
-          {view === "certificates" && user && (
-            <div className="space-y-6 pb-12 animate-fade-up">
-              <div className="card p-6 border-l-4 border-l-indigo-500">
-                <h3 className="text-base font-bold text-heading flex items-center gap-2">
+              <div className="card p-6 border-l-4 border-l-cyan-500">
+                <h4 className="text-sm font-bold text-heading mb-6 flex items-center gap-2">
                   <CheckCircle2 className="w-5 h-5 text-indigo-500" /> Completed AI Certifications
-                </h3>
-                <p className="text-xs text-muted-soft mt-1">Verify and download official platform competency certificates generated upon meeting target score criteria.</p>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {[
-                  { title: "Speech Competency Certificate", type: "AI Speech Clarity", minScore: 75, minCredits: 20, completed: progress && progress.average_score != null && progress.average_score >= 75 && progress.total_credits != null && progress.total_credits >= 20 },
-                  { title: "Advanced Group Discussion Certificate", type: "Live GD Competency", minScore: 85, minCredits: 30, completed: progress && progress.average_score != null && progress.average_score >= 85 && progress.total_credits != null && progress.total_credits >= 30 }
-                ].map((cert, idx) => (
-                  <div key={idx} className="card p-6 flex flex-col justify-between relative overflow-hidden">
-                    <div>
-                      <div className="flex justify-between items-start mb-4">
-                        <span className="text-[10px] uppercase font-bold tracking-wider text-muted-soft">{cert.type}</span>
-                        <span className={`text-[9px] font-extrabold uppercase px-2.5 py-0.5 rounded-full ${cert.completed ? "bg-indigo-500/10 text-indigo-500" : "bg-slate-500/10 text-muted-soft"}`}>
-                          {cert.completed ? "Verified" : "Requirements Pending"}
-                        </span>
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {[
+                    { title: "Speech Competency Certificate", type: "AI Speech Clarity", minScore: 75, minCredits: 20, completed: progress && progress.average_score != null && progress.average_score >= 75 && progress.total_credits != null && progress.total_credits >= 20 },
+                    { title: "Advanced Group Discussion Certificate", type: "Live GD Competency", minScore: 85, minCredits: 30, completed: progress && progress.average_score != null && progress.average_score >= 85 && progress.total_credits != null && progress.total_credits >= 30 }
+                  ].map((cert, idx) => (
+                    <div key={idx} className="p-5 rounded-3xl border border-slate-200/50 dark:border-slate-800 bg-white/40 dark:bg-slate-900/40 flex flex-col justify-between relative overflow-hidden">
+                      <div>
+                        <div className="flex justify-between items-start mb-4">
+                          <span className="text-[10px] uppercase font-bold tracking-wider text-muted-soft">{cert.type}</span>
+                          <span className={`text-[9px] font-extrabold uppercase px-2.5 py-0.5 rounded-full ${cert.completed ? "bg-indigo-500/10 text-indigo-500" : "bg-slate-500/10 text-muted-soft"}`}>
+                            {cert.completed ? "Verified" : "Requirements Pending"}
+                          </span>
+                        </div>
+                        <h4 className="text-sm font-extrabold text-heading">{cert.title}</h4>
+                        <p className="text-xs text-muted-soft mt-1.5 font-medium">
+                          Required: <span className="font-semibold text-heading">{cert.minScore}% Avg Score</span> & <span className="font-semibold text-heading">{cert.minCredits} Credits</span>
+                        </p>
+                        <p className="text-xs text-muted-soft mt-1 font-medium">
+                          Current: <span className="font-semibold text-heading">{progress && progress.average_score != null ? `${Number(progress.average_score).toFixed(1)}%` : "0.0%"}</span> & <span className="font-semibold text-heading">{progress && progress.total_credits != null ? Math.round(progress.total_credits) : 0} credits</span>
+                        </p>
                       </div>
-                      <h4 className="text-sm font-extrabold text-heading">{cert.title}</h4>
-                      <p className="text-xs text-muted-soft mt-1.5 font-medium">
-                        Required: <span className="font-semibold text-heading">{cert.minScore}% Avg Score</span> & <span className="font-semibold text-heading">{cert.minCredits} Credits</span>
-                      </p>
-                      <p className="text-xs text-muted-soft mt-1 font-medium">
-                        Current: <span className="font-semibold text-heading">{progress && progress.average_score != null ? `${Number(progress.average_score).toFixed(1)}%` : "0.0%"}</span> & <span className="font-semibold text-heading">{progress && progress.total_credits != null ? Math.round(progress.total_credits) : 0} credits</span>
-                      </p>
+                      {(() => {
+                        const downloading = idx === 0 ? cert1Downloading : cert2Downloading;
+                        const setDownloading = idx === 0 ? setCert1Downloading : setCert2Downloading;
+                        return (
+                          <Button
+                            onClick={() => {
+                              setDownloading(true);
+                              setTimeout(() => {
+                                setDownloading(false);
+                                setSuccess(`Certificate "${cert.title}" downloaded successfully!`);
+                              }, 1800);
+                            }}
+                            disabled={!cert.completed || downloading}
+                            className={`w-full mt-6 h-10 text-xs font-semibold ${cert.completed ? "btn-primary" : "btn-secondary cursor-not-allowed opacity-50"}`}
+                          >
+                            {downloading && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
+                            {downloading ? "Preparing download..." : "Download Official Certificate"}
+                          </Button>
+                        );
+                      })()}
                     </div>
-                    {(() => {
-                      const downloading = idx === 0 ? cert1Downloading : cert2Downloading;
-                      const setDownloading = idx === 0 ? setCert1Downloading : setCert2Downloading;
-                      return (
-                        <Button
-                          onClick={() => {
-                            setDownloading(true);
-                            setTimeout(() => {
-                              setDownloading(false);
-                              setSuccess(`Certificate "${cert.title}" downloaded successfully!`);
-                            }, 1800);
-                          }}
-                          disabled={!cert.completed || downloading}
-                          className={`w-full mt-6 h-10 text-xs font-semibold ${cert.completed ? "btn-primary" : "btn-secondary cursor-not-allowed opacity-50"}`}
-                        >
-                          {downloading && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
-                          {downloading ? "Preparing download..." : "Download Official Certificate"}
-                        </Button>
-                      );
-                    })()}
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             </div>
           )}
