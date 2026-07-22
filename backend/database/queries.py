@@ -139,14 +139,64 @@ def create_report(connection: MySQLConnection, session_id: int, report_path: str
                    (session_id, report_path, summary))
 
 
-def upsert_progress(connection: MySQLConnection, student_id: int, average_score: float, interviews_completed: int, total_credits: float = 0) -> int:
-    return execute(connection, "INSERT INTO progress (student_id, average_score, interviews_completed, total_credits) VALUES (%s, %s, %s, %s) ON DUPLICATE KEY UPDATE average_score = VALUES(average_score), interviews_completed = VALUES(interviews_completed), total_credits = total_credits + VALUES(total_credits), updated_at = CURRENT_TIMESTAMP",
-                   (student_id, average_score, interviews_completed, total_credits))
+def upsert_progress(connection: MySQLConnection, student_id: int, average_score: float = 0, interviews_completed: int = 0, total_credits: float = 0) -> int:
+    get_progress(connection, student_id)
+    return 1
 
 
 def get_progress(connection: MySQLConnection, student_id: int) -> dict[str, Any] | None:
-    return fetch_one(connection, "SELECT student_id, average_score, interviews_completed, total_credits, updated_at FROM progress WHERE student_id = %s",
+    # 1. Interview sessions
+    int_row = fetch_one(connection, 
+        "SELECT COUNT(DISTINCT id) as count, COALESCE(SUM(total_score), 0) as sum_score FROM interview_session WHERE student_id = %s AND status = 'completed'", 
+        (student_id,))
+    int_count = int(int_row["count"] or 0) if int_row else 0
+    int_sum = float(int_row["sum_score"] or 0.0) if int_row else 0.0
+
+    # 2. Solo practice sessions
+    solo_row = fetch_one(connection, 
+        "SELECT COUNT(DISTINCT id) as count, COALESCE(SUM(overall_score), 0) as sum_score FROM solo_practice_sessions WHERE user_id = %s AND status = 'completed'", 
+        (student_id,))
+    solo_count = int(solo_row["count"] or 0) if solo_row else 0
+    solo_sum = float(solo_row["sum_score"] or 0.0) if solo_row else 0.0
+    solo_credits = solo_count * 5.0
+
+    # 3. Traditional GD evaluations
+    gd_row = fetch_one(connection,
+        "SELECT COUNT(DISTINCT session_code) as count, COALESCE(SUM(overall_score), 0) as sum_score, COALESCE(SUM(credential_points), 0) as sum_credits "
+        "FROM gd_evaluation WHERE user_id = %s",
+        (student_id,))
+    gd_count = int(gd_row["count"] or 0) if gd_row else 0
+    gd_sum = float(gd_row["sum_score"] or 0.0) if gd_row else 0.0
+    gd_credits = float(gd_row["sum_credits"] or 0.0) if gd_row else 0.0
+
+    # 4. GD Live evaluations
+    live_row = fetch_one(connection,
+        "SELECT COUNT(DISTINCT session_code) as count, COALESCE(SUM(overall_score), 0) as sum_score, COALESCE(SUM(credential_points), 0) as sum_credits "
+        "FROM gd_live_evaluations WHERE user_id = %s",
+        (student_id,))
+    live_count = int(live_row["count"] or 0) if live_row else 0
+    live_sum = float(live_row["sum_score"] or 0.0) if live_row else 0.0
+    live_credits = float(live_row["sum_credits"] or 0.0) if live_row else 0.0
+
+    total_count = int_count + solo_count + gd_count + live_count
+    total_score_sum = int_sum + solo_sum + gd_sum + live_sum
+    average_score = round(total_score_sum / total_count, 2) if total_count > 0 else 0.0
+    total_credits = solo_credits + gd_credits + live_credits
+
+    # Persist the calculated values to the progress table
+    execute(connection, 
+            "INSERT INTO progress (student_id, average_score, interviews_completed, total_credits) "
+            "VALUES (%s, %s, %s, %s) "
+            "ON DUPLICATE KEY UPDATE average_score = VALUES(average_score), "
+            "interviews_completed = VALUES(interviews_completed), total_credits = VALUES(total_credits), updated_at = CURRENT_TIMESTAMP",
+            (student_id, average_score, total_count, total_credits))
+
+    row = fetch_one(connection, "SELECT student_id, average_score, interviews_completed, total_credits, updated_at FROM progress WHERE student_id = %s",
                      (student_id,))
+    if row:
+        row["average_score"] = float(row["average_score"])
+        row["total_credits"] = float(row["total_credits"])
+    return row
 
 
 def get_completed_session_stats(connection: MySQLConnection, student_id: int) -> dict[str, Any] | None:

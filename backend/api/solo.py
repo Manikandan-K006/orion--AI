@@ -58,6 +58,9 @@ def submit_solo(
     if not session or session["user_id"] != current_user["id"]:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
 
+    if session.get("status") == "completed":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Session already completed and evaluated")
+
     result = evaluate_transcript(transcript)
 
     delivery_score = min(100, result.confidence_score * 0.5 + result.pronunciation_score * 0.5)

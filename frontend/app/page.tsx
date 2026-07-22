@@ -673,6 +673,7 @@ export default function Home() {
       if (gdLiveAdminViewCode) loadGdLiveParticipants(gdLiveAdminViewCode);
     } else {
       setView("dashboard");
+      loadDashboardData(token, user);
       if (typeof loadGdLiveSessions === "function") loadGdLiveSessions();
     }
   }
@@ -842,6 +843,7 @@ export default function Home() {
       // Fetch history
       const history = await apiRequest<SoloSubmitResponse["last_session"][]>("/solo/history", {}, token).catch(() => []);
       setSoloHistory(history);
+      await loadDashboardData(token, user);
     } catch (err: any) { setMessage(err.message); }
     finally { setLoading(false); }
   }
