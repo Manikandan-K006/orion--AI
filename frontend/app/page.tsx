@@ -1034,7 +1034,7 @@ export default function Home() {
               {progress && (
                 <p className="text-[10px] text-indigo-500 dark:text-indigo-400 font-extrabold mt-0.5 flex items-center gap-1.5 animate-pulse">
                   <Trophy className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                  <span>{Math.round(progress.total_credits)} Credits</span>
+                  <span>{Math.round(progress.total_credits || 0)} Credits</span>
                 </p>
               )}
             </div>
@@ -1174,7 +1174,7 @@ export default function Home() {
             {progress && (
               <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-slate-200/50 dark:border-slate-800/50 bg-white/40 dark:bg-slate-900/40 text-heading text-xs font-bold shadow-sm">
                 <Trophy className="w-3.5 h-3.5 text-amber-500 animate-bounce" style={{ animationDuration: '3s' }} />
-                <span>{Math.round(progress.total_credits)} <span className="text-indigo-500 dark:text-indigo-400">Credits</span></span>
+                <span>{Math.round(progress.total_credits || 0)} <span className="text-indigo-500 dark:text-indigo-400">Credits</span></span>
               </div>
             )}
 
