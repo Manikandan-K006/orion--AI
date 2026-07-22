@@ -390,6 +390,20 @@ export default function Home() {
     return () => clearInterval(interval);
   }, [token, user]);
 
+  // Poll dashboard database data (progress, sessions, history) when viewing Reports to keep it live
+  useEffect(() => {
+    if (!token || !user || view !== "reports") return;
+
+    // Refresh instantly on mount
+    loadDashboardData(token, user);
+
+    const interval = setInterval(() => {
+      loadDashboardData(token, user);
+    }, 10000); // Poll every 10 seconds
+
+    return () => clearInterval(interval);
+  }, [token, user, view]);
+
   // Keep the admin's participant list live: as students join/leave, the backend
   // broadcasts PARTICIPANTS_UPDATED over the session WebSocket. Update the list
   // in place so the admin never has to refresh or leave the page.
@@ -1041,6 +1055,7 @@ export default function Home() {
                 else if (item.view === "dashboard") { setView("dashboard"); loadDashboardData(); }
                 else if (item.view === "gd-live") { setView("gd-live"); loadGdLiveSessions(); }
                 else if (item.view === "gd-live-admin") { setView("gd-live-admin"); loadGdLiveSessions(); }
+                else if (item.view === "reports") { setView("reports"); loadDashboardData(); }
                 else setView(item.view);
                 if (isMobile) setSidebarOpen(false);
               }}
@@ -1635,8 +1650,8 @@ export default function Home() {
                   <div
                     key={noti.id}
                     className={`flex gap-4 p-4 rounded-2xl border transition-all duration-200 ${noti.read
-                        ? "bg-slate-100/50 dark:bg-slate-950/40 border-slate-200/40 dark:border-slate-800/40 hover:border-indigo-500/10"
-                        : "bg-indigo-500/5 dark:bg-indigo-950/20 border-indigo-500/20 dark:border-indigo-500/30 hover:border-indigo-500/30"
+                      ? "bg-slate-100/50 dark:bg-slate-950/40 border-slate-200/40 dark:border-slate-800/40 hover:border-indigo-500/10"
+                      : "bg-indigo-500/5 dark:bg-indigo-950/20 border-indigo-500/20 dark:border-indigo-500/30 hover:border-indigo-500/30"
                       }`}
                   >
                     <div className="w-8 h-8 rounded-xl bg-slate-200/50 dark:bg-slate-900 flex items-center justify-center shrink-0">
