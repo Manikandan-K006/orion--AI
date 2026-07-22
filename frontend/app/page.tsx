@@ -688,6 +688,7 @@ export default function Home() {
       if (gdLiveAdminViewCode) loadGdLiveParticipants(gdLiveAdminViewCode);
     } else {
       setView("dashboard");
+      loadDashboardData(token, user);
       if (typeof loadGdLiveSessions === "function") loadGdLiveSessions();
     }
   }
@@ -857,6 +858,7 @@ export default function Home() {
       // Fetch history
       const history = await apiRequest<SoloSubmitResponse["last_session"][]>("/solo/history", {}, token).catch(() => []);
       setSoloHistory(history);
+      await loadDashboardData(token, user);
     } catch (err: any) { setMessage(err.message); }
     finally { setLoading(false); }
   }
@@ -1184,14 +1186,6 @@ export default function Home() {
                 className="pl-9 pr-3 py-1.5 w-full text-xs rounded-xl border border-slate-200/50 dark:border-slate-800/50 bg-white/30 dark:bg-slate-900/30 text-heading placeholder-muted focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all duration-200"
               />
             </div>
-
-            {/* Credit Points Badge */}
-            {progress && (
-              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-slate-200/50 dark:border-slate-800/50 bg-white/40 dark:bg-slate-900/40 text-heading text-xs font-bold shadow-sm">
-                <Trophy className="w-3.5 h-3.5 text-amber-500 animate-bounce" style={{ animationDuration: '3s' }} />
-                <span>{Math.round(progress.total_credits || 0)} <span className="text-indigo-500 dark:text-indigo-400">Credits</span></span>
-              </div>
-            )}
 
             {/* Theme Toggle Button */}
             <button

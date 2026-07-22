@@ -58,6 +58,9 @@ def submit_solo(
     if not session or session["user_id"] != current_user["id"]:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
 
+    if session.get("status") == "completed":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Session already completed and evaluated")
+
     result = evaluate_transcript(transcript)
 
     delivery_score = min(100, result.confidence_score * 0.5 + result.pronunciation_score * 0.5)
@@ -91,6 +94,20 @@ def submit_solo(
                                   result.fluency_score, result.grammar_score,
                                   result.pronunciation_score, delivery_score,
                                   weakness_text, tips_text)
+
+    # 1. Fetch current profile progress
+    progress_row = queries.get_progress(connection, current_user["id"])
+    if progress_row:
+        stored_avg = float(progress_row.get("average_score") or 0.0)
+        stored_completed = int(progress_row.get("interviews_completed") or 0)
+        new_count = stored_completed + 1
+        new_avg = round(((stored_avg * stored_completed) + overall) / new_count, 2)
+    else:
+        new_count = 1
+        new_avg = overall
+
+    # 2. Add 5.0 credits on completion of a solo practice session
+    queries.upsert_progress(connection, current_user["id"], average_score=new_avg, interviews_completed=new_count, total_credits=5.0)
 
     last_session = queries.get_last_solo_session(connection, current_user["id"])
 
