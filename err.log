@@ -1,0 +1,10 @@
+INFO:     Started server process [16760]
+INFO:     Waiting for application startup.
+2026-07-22 13:24:27,875 INFO package: mysql.connector.plugins
+2026-07-22 13:24:27,875 INFO plugin_name: caching_sha2_password
+2026-07-22 13:24:27,875 INFO AUTHENTICATION_PLUGIN_CLASS: MySQLCachingSHA2PasswordAuthPlugin
+2026-07-22 13:24:28,081 INFO DB connection pool warmed at startup
+INFO:     Application startup complete.
+ERROR:    [Errno 10048] error while attempting to bind on address ('0.0.0.0', 8000): [winerror 10048] only one usage of each socket address (protocol/network address/port) is normally permitted
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
