@@ -1533,14 +1533,15 @@ export default function Home() {
             <div className="space-y-6 pb-12 animate-fade-up">
               {(() => {
                 const creditPoints = progress && typeof progress.total_credits === "number" ? Math.round(progress.total_credits) : 0;
+                const xpPoints = creditPoints * 1000;
                 let levelTitle = "Novice Speaker";
                 let levelNum = 1;
-                let nextLevelPoints = 100;
+                let nextLevelPoints = 100000;
                 let prevLevelPoints = 0;
-                if (creditPoints >= 500) { levelTitle = "Grandmaster Orator"; levelNum = 4; nextLevelPoints = 1000; prevLevelPoints = 500; }
-                else if (creditPoints >= 250) { levelTitle = "Eloquent Orator"; levelNum = 3; nextLevelPoints = 500; prevLevelPoints = 250; }
-                else if (creditPoints >= 100) { levelTitle = "Confident Communicator"; levelNum = 2; nextLevelPoints = 250; prevLevelPoints = 100; }
-                const levelProgress = Math.min(100, Math.max(0, ((creditPoints - prevLevelPoints) / (nextLevelPoints - prevLevelPoints)) * 100));
+                if (xpPoints >= 500000) { levelTitle = "Grandmaster Orator"; levelNum = 4; nextLevelPoints = 1000000; prevLevelPoints = 500000; }
+                else if (xpPoints >= 250000) { levelTitle = "Eloquent Orator"; levelNum = 3; nextLevelPoints = 500000; prevLevelPoints = 250000; }
+                else if (xpPoints >= 100000) { levelTitle = "Confident Communicator"; levelNum = 2; nextLevelPoints = 250000; prevLevelPoints = 100000; }
+                const levelProgress = Math.min(100, Math.max(0, ((xpPoints - prevLevelPoints) / (nextLevelPoints - prevLevelPoints)) * 100));
 
                 return (
                   <div className="card p-6 bg-gradient-to-r from-indigo-500/5 to-purple-500/5 border-l-4 border-l-purple-500 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
@@ -1559,7 +1560,7 @@ export default function Home() {
                     <div className="flex-1 w-full max-w-sm">
                       <div className="flex justify-between items-center text-xs mb-1">
                         <span className="text-muted-soft font-semibold">Rank Progress</span>
-                        <span className="font-bold text-heading">{creditPoints} / {nextLevelPoints} XP</span>
+                        <span className="font-bold text-heading">{xpPoints.toLocaleString()} / {nextLevelPoints.toLocaleString()} XP</span>
                       </div>
                       <div className="w-full bg-slate-200 dark:bg-slate-800 rounded-full h-2.5 overflow-hidden">
                         <div className="bg-gradient-to-r from-indigo-500 to-purple-500 h-2.5 rounded-full transition-all duration-700" style={{ width: `${levelProgress}%` }} />
@@ -1769,15 +1770,16 @@ export default function Home() {
               {/* Welcome Banner */}
               {(() => {
                 const creditPoints = progress && typeof progress.total_credits === "number" ? Math.round(progress.total_credits) : 0;
+                const xpPoints = creditPoints * 1000;
                 let levelTitle = "Novice Speaker";
                 let badgeColor = "bg-slate-500/10 text-slate-400 border-slate-500/20 dark:text-slate-300 dark:border-slate-800";
-                if (creditPoints >= 500) {
+                if (xpPoints >= 500000) {
                   levelTitle = "Grandmaster Orator";
                   badgeColor = "bg-gradient-to-r from-cyan-500/15 to-indigo-500/15 text-indigo-600 dark:text-cyan-400 border-indigo-500/20";
-                } else if (creditPoints >= 250) {
+                } else if (xpPoints >= 250000) {
                   levelTitle = "Eloquent Orator";
                   badgeColor = "bg-gradient-to-r from-amber-500/10 to-orange-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20";
-                } else if (creditPoints >= 100) {
+                } else if (xpPoints >= 100000) {
                   levelTitle = "Confident Communicator";
                   badgeColor = "bg-gradient-to-r from-purple-500/10 to-indigo-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20";
                 }
@@ -1920,33 +1922,34 @@ export default function Home() {
                       {/* Gamified Speaker Tier Card */}
                       {(() => {
                         const creditPoints = progress && typeof progress.total_credits === "number" ? Math.round(progress.total_credits) : 0;
+                        const xpPoints = creditPoints * 1000;
                         let levelTitle = "Novice Speaker";
                         let levelNum = 1;
-                        let nextLevelPoints = 100;
+                        let nextLevelPoints = 100000;
                         let prevLevelPoints = 0;
                         let badgeIcon = <Award className="w-5 h-5 text-slate-400" />;
 
-                        if (creditPoints >= 500) {
+                        if (xpPoints >= 500000) {
                           levelTitle = "Grandmaster Orator";
                           levelNum = 4;
-                          nextLevelPoints = 1000;
-                          prevLevelPoints = 500;
+                          nextLevelPoints = 1000000;
+                          prevLevelPoints = 500000;
                           badgeIcon = <Trophy className="w-5 h-5 text-cyan-400 animate-pulse" />;
-                        } else if (creditPoints >= 250) {
+                        } else if (xpPoints >= 250000) {
                           levelTitle = "Eloquent Orator";
                           levelNum = 3;
-                          nextLevelPoints = 500;
-                          prevLevelPoints = 250;
+                          nextLevelPoints = 500000;
+                          prevLevelPoints = 250000;
                           badgeIcon = <Sparkles className="w-5 h-5 text-amber-400" />;
-                        } else if (creditPoints >= 100) {
+                        } else if (xpPoints >= 100000) {
                           levelTitle = "Confident Communicator";
                           levelNum = 2;
-                          nextLevelPoints = 250;
-                          prevLevelPoints = 100;
+                          nextLevelPoints = 250000;
+                          prevLevelPoints = 100000;
                           badgeIcon = <Zap className="w-5 h-5 text-purple-400" />;
                         }
 
-                        const levelProgress = Math.min(100, Math.max(0, ((creditPoints - prevLevelPoints) / (nextLevelPoints - prevLevelPoints)) * 100));
+                        const levelProgress = Math.min(100, Math.max(0, ((xpPoints - prevLevelPoints) / (nextLevelPoints - prevLevelPoints)) * 100));
 
                         return (
                           <div className="card p-5 relative overflow-hidden border border-purple-500/10">
@@ -1966,7 +1969,7 @@ export default function Home() {
                             <div className="space-y-1.5">
                               <div className="flex justify-between items-center text-xs">
                                 <span className="text-muted font-medium">Rank Progress</span>
-                                <span className="font-bold text-heading">{creditPoints} / {nextLevelPoints} pts</span>
+                                <span className="font-bold text-heading">{xpPoints.toLocaleString()} / {nextLevelPoints.toLocaleString()} XP</span>
                               </div>
                               <div className="w-full bg-slate-200 dark:bg-slate-800 rounded-full h-2 overflow-hidden">
                                 <div
@@ -1974,9 +1977,9 @@ export default function Home() {
                                   style={{ width: `${levelProgress}%` }}
                                 />
                               </div>
-                              {creditPoints < 500 ? (
+                              {xpPoints < 500000 ? (
                                 <p className="text-[10px] text-muted-soft text-right italic mt-1">
-                                  Need {nextLevelPoints - creditPoints} more points to reach the next tier!
+                                  Need {(nextLevelPoints - xpPoints).toLocaleString()} more XP to reach the next tier!
                                 </p>
                               ) : (
                                 <p className="text-[10px] text-muted-soft text-right italic mt-1">
