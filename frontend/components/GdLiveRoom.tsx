@@ -182,7 +182,9 @@ export default function GdLiveRoom({
       recorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
       recorder.onstop = () => {
         stream.getTracks().forEach((t) => t.stop());
-        ctx.close();
+        if (ctx.state !== "closed") {
+          ctx.close().catch(() => {});
+        }
         setIsRecording(false);
         setAudioLevel(0);
       };
@@ -201,7 +203,7 @@ export default function GdLiveRoom({
     if (audioStreamRef.current) {
       audioStreamRef.current.getTracks().forEach((t) => t.stop());
     }
-    if (audioContextRef.current) {
+    if (audioContextRef.current && audioContextRef.current.state !== "closed") {
       audioContextRef.current.close().catch(() => { });
     }
     mediaRecorderRef.current = null;
