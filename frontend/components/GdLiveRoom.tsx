@@ -570,23 +570,38 @@ export default function GdLiveRoom({
               </div>
             </div>
 
-            {/* Instructions */}
-            <div className="card p-5 text-left space-y-2.5">
-              <p className="text-[10px] text-muted-soft uppercase font-bold tracking-wider">Instructions</p>
-              <ul className="space-y-2 text-xs text-body">
-                <li className="flex items-start gap-2">
-                  <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0" />
-                  <span>You will have a <strong>2-minute preparation phase</strong> to gather your thoughts.</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0" />
-                  <span>The voice recording begins automatically after preparation or by clicking <strong>Begin Speaking</strong>.</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0" />
-                  <span>Stay focused and click <strong>Finish Discussion</strong> when you are done.</span>
-                </li>
-              </ul>
+            {/* AI Rules Display Screen */}
+            <div className="card p-5 text-left space-y-3">
+              <p className="text-[10px] text-muted-soft uppercase font-bold tracking-wider flex items-center justify-between">
+                <span>AI Discussion Rules</span>
+                <span className="text-emerald-500 font-bold">10 Minutes</span>
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                <div className="flex items-center gap-2 p-2 rounded-lg bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 font-medium">
+                  <CheckCircle2 className="w-4 h-4 text-indigo-500 shrink-0" />
+                  <span>Discussion Time: 10 Minutes</span>
+                </div>
+                <div className="flex items-center gap-2 p-2 rounded-lg bg-purple-500/10 text-purple-700 dark:text-purple-300 font-medium">
+                  <CheckCircle2 className="w-4 h-4 text-purple-500 shrink-0" />
+                  <span>Speak one by one</span>
+                </div>
+                <div className="flex items-center gap-2 p-2 rounded-lg bg-rose-500/10 text-rose-700 dark:text-rose-300 font-medium">
+                  <CheckCircle2 className="w-4 h-4 text-rose-500 shrink-0" />
+                  <span>Don't interrupt other speakers</span>
+                </div>
+                <div className="flex items-center gap-2 p-2 rounded-lg bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 font-medium">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                  <span>Respect everyone's opinion</span>
+                </div>
+                <div className="flex items-center gap-2 p-2 rounded-lg bg-cyan-500/10 text-cyan-700 dark:text-cyan-300 font-medium">
+                  <CheckCircle2 className="w-4 h-4 text-cyan-500 shrink-0" />
+                  <span>English Only Communication</span>
+                </div>
+                <div className="flex items-center gap-2 p-2 rounded-lg bg-amber-500/10 text-amber-700 dark:text-amber-300 font-medium">
+                  <CheckCircle2 className="w-4 h-4 text-amber-500 shrink-0" />
+                  <span>Camera Optional · Mic Required</span>
+                </div>
+              </div>
             </div>
 
             {/* Start Button */}

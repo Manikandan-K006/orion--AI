@@ -134,7 +134,31 @@ export function announceRecordingStopped() {
   say("Recording has stopped.");
 }
 
-/* ── 21. Logout ── */
+/* ── 21. User Workflow Specific AI Announcements ── */
+export function announceMeetingStart(topic: string, firstSpeaker: string) {
+  sayImmediate(`Welcome everyone. Today's topic is ${topic}. You have 10 minutes. ${firstSpeaker}, please start.`);
+}
+
+export function announceInterruptionWarning(currentSpeaker: string) {
+  sayImmediate(`Please allow ${currentSpeaker} to complete.`);
+}
+
+export function announceFollowUpQuestion(studentName?: string) {
+  if (studentName) {
+    say(`${studentName}, what is your opinion?`, 5);
+  } else {
+    say("Can anyone provide an example?", 5);
+  }
+}
+
+export function announceMeetingEnded() {
+  sayImmediate("Discussion completed. Thank you.");
+}
+
+export function announceSpeakerTurn(speakerName: string) {
+  sayImmediate(`${speakerName}, it is now your turn to speak. You have 2 minutes.`);
+}
+
 export function announceLogout() {
   say("Thank you for using MZ Orator. Have a great day.");
 }
