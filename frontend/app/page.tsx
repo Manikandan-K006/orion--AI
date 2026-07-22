@@ -404,6 +404,20 @@ export default function Home() {
     return () => clearInterval(interval);
   }, [token, user, view]);
 
+  // Poll certificates progress dynamic data when viewing Certificates to keep it live
+  useEffect(() => {
+    if (!token || !user || view !== "certificates") return;
+
+    // Refresh instantly on mount
+    loadDashboardData(token, user);
+
+    const interval = setInterval(() => {
+      loadDashboardData(token, user);
+    }, 10000); // Poll every 10 seconds
+
+    return () => clearInterval(interval);
+  }, [token, user, view]);
+
   // Keep the admin's participant list live: as students join/leave, the backend
   // broadcasts PARTICIPANTS_UPDATED over the session WebSocket. Update the list
   // in place so the admin never has to refresh or leave the page.
@@ -1056,6 +1070,7 @@ export default function Home() {
                 else if (item.view === "gd-live") { setView("gd-live"); loadGdLiveSessions(); }
                 else if (item.view === "gd-live-admin") { setView("gd-live-admin"); loadGdLiveSessions(); }
                 else if (item.view === "reports") { setView("reports"); loadDashboardData(); }
+                else if (item.view === "certificates") { setView("certificates"); loadDashboardData(); }
                 else setView(item.view);
                 if (isMobile) setSidebarOpen(false);
               }}
@@ -1584,8 +1599,8 @@ export default function Home() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {[
-                  { title: "Speech Competency Certificate", type: "AI Speech Clarity", minScore: 75, completed: progress && progress.average_score != null && progress.average_score >= 75 },
-                  { title: "Advanced Group Discussion Certificate", type: "Live GD Competency", minScore: 85, completed: progress && progress.average_score != null && progress.average_score >= 85 }
+                  { title: "Speech Competency Certificate", type: "AI Speech Clarity", minScore: 75, minCredits: 20, completed: progress && progress.average_score != null && progress.average_score >= 75 && progress.total_credits != null && progress.total_credits >= 20 },
+                  { title: "Advanced Group Discussion Certificate", type: "Live GD Competency", minScore: 85, minCredits: 30, completed: progress && progress.average_score != null && progress.average_score >= 85 && progress.total_credits != null && progress.total_credits >= 30 }
                 ].map((cert, idx) => (
                   <div key={idx} className="card p-6 flex flex-col justify-between relative overflow-hidden">
                     <div>
@@ -1596,7 +1611,12 @@ export default function Home() {
                         </span>
                       </div>
                       <h4 className="text-sm font-extrabold text-heading">{cert.title}</h4>
-                      <p className="text-xs text-muted-soft mt-1.5">Required min avg score: <span className="font-bold text-heading">{cert.minScore}%</span>. Your current score: <span className="font-bold text-heading">{progress && progress.average_score != null ? `${Number(progress.average_score).toFixed(1)}%` : "0.0%"}</span></p>
+                      <p className="text-xs text-muted-soft mt-1.5 font-medium">
+                        Required: <span className="font-semibold text-heading">{cert.minScore}% Avg Score</span> & <span className="font-semibold text-heading">{cert.minCredits} Credits</span>
+                      </p>
+                      <p className="text-xs text-muted-soft mt-1 font-medium">
+                        Current: <span className="font-semibold text-heading">{progress && progress.average_score != null ? `${Number(progress.average_score).toFixed(1)}%` : "0.0%"}</span> & <span className="font-semibold text-heading">{progress && progress.total_credits != null ? Math.round(progress.total_credits) : 0} credits</span>
+                      </p>
                     </div>
                     {(() => {
                       const downloading = idx === 0 ? cert1Downloading : cert2Downloading;
