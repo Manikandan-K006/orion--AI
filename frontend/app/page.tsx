@@ -186,6 +186,11 @@ export default function Home() {
   const [loginTab, setLoginTab] = useState<"student" | "admin">("student");
   const [theme, setTheme] = useState<"light" | "dark">("dark");
   const [mounted, setMounted] = useState(false);
+  const [notifications, setNotifications] = useState<Array<{ id: string | number; time: string; icon: string; title: string; desc: string; read: boolean }>>([
+    { id: 1, time: "1 hour ago", icon: "MessageSquare", title: "Live GD Room Available", desc: "Administrator hosted session 'Speech Modulation & Delivery Practice'. Join using the active room code.", read: false },
+    { id: 2, time: "12 hours ago", icon: "Target", title: "Daily Practice Goal Reminder", desc: "Build consistency by completing a 2-minute solo AI speaking session on public speech fundamentals.", read: true },
+    { id: 3, time: "1 day ago", icon: "Sparkles", title: "AI Skill Analysis Complete", desc: "A new skill analysis radar matrix is available based on your latest solo practice performance topic.", read: true },
+  ]);
 
   useEffect(() => {
     setMounted(true);
@@ -338,6 +343,52 @@ export default function Home() {
       loadProfile(savedToken);
     }
   }, []);
+
+  // Poll live sessions list in background to trigger real-time notifications
+  useEffect(() => {
+    if (!token || !user || user.role === "admin") return;
+
+    // Load initial
+    loadGdLiveSessions();
+
+    const interval = setInterval(async () => {
+      try {
+        const sessions = await apiRequest<any[]>("/gd-live/sessions", {}, token);
+
+        setGdLiveSessions((prevSessions) => {
+          const newSessions = sessions.filter(
+            (s) => s.status !== "completed" && !prevSessions.some((ps) => ps.session_code === s.session_code)
+          );
+
+          if (newSessions.length > 0) {
+            newSessions.forEach((sess) => {
+              const code = sess.session_code;
+              setNotifications((prevNoti) => {
+                if (prevNoti.some((n) => n.id === `gd-session-${code}`)) return prevNoti;
+                return [
+                  {
+                    id: `gd-session-${code}`,
+                    time: "Just now",
+                    icon: "MessageSquare",
+                    title: "Live GD Room Available",
+                    desc: `Administrator hosted a new GD session. Join using active room code ${code}.`,
+                    read: false,
+                  },
+                  ...prevNoti,
+                ];
+              });
+              voice.announceSessionCreated();
+            });
+          }
+          return sessions;
+        });
+      } catch (err) {
+        console.error("Failed to poll live sessions for notifications:", err);
+      }
+    }, 10000);
+
+    return () => clearInterval(interval);
+  }, [token, user]);
 
   // Keep the admin's participant list live: as students join/leave, the backend
   // broadcasts PARTICIPANTS_UPDATED over the session WebSocket. Update the list
@@ -1100,7 +1151,9 @@ export default function Home() {
               className="p-2 rounded-xl border border-slate-200/50 dark:border-slate-800/50 bg-white/40 dark:bg-slate-900/40 hover:bg-indigo-500/5 text-heading relative hover:scale-105 active:scale-95 transition-all duration-200"
             >
               <Bell className="w-4 h-4" />
-              <span className="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-indigo-500 animate-pulse" />
+              {notifications.some(n => !n.read) && (
+                <span className="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-indigo-500 animate-pulse" />
+              )}
             </button>
 
             {/* Profile Dropdown avatar */}
@@ -1566,20 +1619,43 @@ export default function Home() {
                   </h3>
                   <p className="text-xs text-muted-soft mt-1">Chronological log of platform alerts, system logs, and practice reminders.</p>
                 </div>
-                <button onClick={() => setSuccess("All notifications successfully marked as read!")} className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline">Mark all as read</button>
+                <button
+                  onClick={() => {
+                    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+                    setSuccess("All notifications successfully marked as read!");
+                  }}
+                  className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline"
+                >
+                  Mark all as read
+                </button>
               </div>
 
               <div className="card p-6 space-y-4">
-                {[
-                  { time: "1 hour ago", icon: <MessageSquare className="w-4 h-4 text-indigo-400" />, title: "Live GD Room Available", desc: "Administrator hosted session 'Speech Modulation & Delivery Practice'. Join using the active room code." },
-                  { time: "12 hours ago", icon: <Target className="w-4 h-4 text-cyan-400" />, title: "Daily Practice Goal Reminder", desc: "Build consistency by completing a 2-minute solo AI speaking session on public speech fundamentals." },
-                  { time: "1 day ago", icon: <Sparkles className="w-4 h-4 text-purple-400" />, title: "AI Skill Analysis Complete", desc: "A new skill analysis radar matrix is available based on your latest solo practice performance topic." },
-                ].map((noti, idx) => (
-                  <div key={idx} className="flex gap-4 p-4 rounded-2xl bg-slate-100/50 dark:bg-slate-950/40 border border-slate-200/40 dark:border-slate-800/40 hover:border-indigo-500/20 transition-all duration-200">
-                    <div className="w-8 h-8 rounded-xl bg-slate-200/50 dark:bg-slate-900 flex items-center justify-center shrink-0">{noti.icon}</div>
+                {notifications.map((noti) => (
+                  <div
+                    key={noti.id}
+                    className={`flex gap-4 p-4 rounded-2xl border transition-all duration-200 ${noti.read
+                        ? "bg-slate-100/50 dark:bg-slate-950/40 border-slate-200/40 dark:border-slate-800/40 hover:border-indigo-500/10"
+                        : "bg-indigo-500/5 dark:bg-indigo-950/20 border-indigo-500/20 dark:border-indigo-500/30 hover:border-indigo-500/30"
+                      }`}
+                  >
+                    <div className="w-8 h-8 rounded-xl bg-slate-200/50 dark:bg-slate-900 flex items-center justify-center shrink-0">
+                      {noti.icon === "MessageSquare" ? (
+                        <MessageSquare className="w-4 h-4 text-indigo-400" />
+                      ) : noti.icon === "Target" ? (
+                        <Target className="w-4 h-4 text-cyan-400" />
+                      ) : (
+                        <Sparkles className="w-4 h-4 text-purple-400" />
+                      )}
+                    </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex justify-between items-center text-xs">
-                        <span className="font-bold text-heading">{noti.title}</span>
+                        <span className="font-bold text-heading flex items-center gap-2">
+                          {noti.title}
+                          {!noti.read && (
+                            <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
+                          )}
+                        </span>
                         <span className="text-[10px] text-muted-soft font-mono">{noti.time}</span>
                       </div>
                       <p className="text-xs text-muted-soft mt-1.5 leading-relaxed">{noti.desc}</p>
