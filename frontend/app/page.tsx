@@ -185,8 +185,10 @@ export default function Home() {
   const [adminPassword, setAdminPassword] = useState("");
   const [loginTab, setLoginTab] = useState<"student" | "admin">("student");
   const [theme, setTheme] = useState<"light" | "dark">("dark");
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
     const saved = localStorage.getItem("mzgd_theme") as "light" | "dark" | null;
     if (saved) setTheme(saved);
   }, []);
@@ -775,6 +777,14 @@ export default function Home() {
   }
 
   const scoreColors = ["#f59e0b", "#10b981", "#8b5cf6", "#06b6d4"];
+
+  if (!mounted) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-950">
+        <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
+      </div>
+    );
+  }
 
   // ─── Full-screen GD Live Admin Monitor ───
   if (view === "gd-live-monitor" && gdLiveAdminViewCode && user) {
