@@ -457,29 +457,34 @@ def get_comprehensive_leaderboard(
     end_date: str | None = None,
 ) -> list[dict[str, Any]]:
     query = """
-        SELECT
+        WITH all_scores AS (
+            SELECT user_id, overall_score, grammar_score, fluency_score, accent_score AS accent, relevance_score AS relevance, content_quality AS content_quality, credential_points, session_code AS ref_id, evaluated_at AS created_at FROM gd_live_evaluations
+            UNION ALL
+            SELECT user_id, overall_score, grammar_score, fluency_score, accent_score AS accent, 80.0 AS relevance, delivery_score AS content_quality, ROUND(overall_score * 0.5, 2) AS credential_points, CAST(id AS CHAR) AS ref_id, created_at FROM solo_practice_sessions
+            UNION ALL
+            SELECT user_id, overall_score, grammar_score, fluency_score, accent_score AS accent, relevance_score AS relevance, content_quality_score AS content_quality, credential_points, session_code AS ref_id, created_at FROM gd_evaluation
+        )
+        SELECT 
             u.id, u.name, u.register_number,
             COALESCE(sp.department, 'N/A') AS department,
             COALESCE(sp.year, 'N/A') AS year,
-            COALESCE(AVG(ge.overall_score), 0) AS overall_score,
-            COALESCE(AVG(ge.grammar_score), 0) AS grammar,
-            COALESCE(AVG(ge.fluency_score), 0) AS fluency,
-            COALESCE(AVG(ge.accent_score), 0) AS accent,
-            COALESCE(AVG(ge.relevance_score), 0) AS relevance,
-            COALESCE(AVG(ge.content_quality_score), 0) AS content_quality,
-            COALESCE(SUM(ge.credential_points), 0) AS total_credits,
-            COUNT(DISTINCT ge.session_code) AS sessions_completed
-        FROM gd_evaluation ge
-        JOIN users u ON u.id = ge.user_id
+            ROUND(COALESCE(AVG(s.overall_score), 0), 1) AS overall_score,
+            ROUND(COALESCE(AVG(s.grammar_score), 0), 1) AS grammar,
+            ROUND(COALESCE(AVG(s.fluency_score), 0), 1) AS fluency,
+            ROUND(COALESCE(AVG(s.accent), 0), 1) AS accent,
+            ROUND(COALESCE(AVG(s.relevance), 0), 1) AS relevance,
+            ROUND(COALESCE(AVG(s.content_quality), 0), 1) AS content_quality,
+            ROUND(COALESCE(SUM(s.credential_points), 0), 1) AS total_credits,
+            COUNT(s.ref_id) AS sessions_completed
+        FROM users u
         LEFT JOIN student_profile sp ON sp.user_id = u.id
-        JOIN gd_sessions gs ON gs.session_code = ge.session_code
-        WHERE gs.status = 'completed'
-          AND (sp.department = %s OR %s = 'ALL')
+        JOIN all_scores s ON s.user_id = u.id
+        WHERE (sp.department = %s OR %s = 'ALL')
           AND (sp.year = %s OR %s = 'ALL')
-          AND (gs.completed_at >= %s OR %s IS NULL)
-          AND (gs.completed_at < %s OR %s IS NULL)
+          AND (s.created_at >= %s OR %s IS NULL)
+          AND (s.created_at < %s OR %s IS NULL)
         GROUP BY u.id, u.name, u.register_number, sp.department, sp.year
-        ORDER BY total_credits DESC
+        ORDER BY total_credits DESC, overall_score DESC
     """
     return fetch_all(connection, query,
         (department, department, year, year, start_date, start_date, end_date, end_date))
@@ -492,31 +497,34 @@ def get_leaderboard_stats(
     start_date: str | None = None,
     end_date: str | None = None,
 ) -> dict[str, Any]:
-    base = """
-        FROM gd_evaluation ge
-        JOIN gd_sessions gs ON gs.session_code = ge.session_code
-        LEFT JOIN student_profile sp ON sp.user_id = ge.user_id
-        WHERE gs.status = 'completed'
-          AND (sp.department = %s OR %s = 'ALL')
+    query = """
+        WITH all_scores AS (
+            SELECT user_id, overall_score, session_code AS ref_id, evaluated_at AS created_at FROM gd_live_evaluations
+            UNION ALL
+            SELECT user_id, overall_score, CAST(id AS CHAR) AS ref_id, created_at FROM solo_practice_sessions
+            UNION ALL
+            SELECT user_id, overall_score, session_code AS ref_id, created_at FROM gd_evaluation
+        )
+        SELECT
+            ROUND(COALESCE(MAX(s.overall_score), 0), 1) AS top_score,
+            COUNT(DISTINCT s.user_id) AS active_participants,
+            ROUND(COALESCE(AVG(s.overall_score), 0), 1) AS average_score,
+            COUNT(s.ref_id) AS total_interviews
+        FROM all_scores s
+        LEFT JOIN student_profile sp ON sp.user_id = s.user_id
+        WHERE (sp.department = %s OR %s = 'ALL')
           AND (sp.year = %s OR %s = 'ALL')
-          AND (gs.completed_at >= %s OR %s IS NULL)
-          AND (gs.completed_at < %s OR %s IS NULL)
+          AND (s.created_at >= %s OR %s IS NULL)
+          AND (s.created_at < %s OR %s IS NULL)
     """
     params = (department, department, year, year, start_date, start_date, end_date, end_date)
-
-    top = fetch_one(connection, "SELECT COALESCE(MAX(ge.overall_score), 0) AS top_score" + base, params)
-    active = fetch_one(connection, "SELECT COUNT(DISTINCT ge.user_id) AS active_participants" + base, params)
-    avg = fetch_one(connection, "SELECT COALESCE(AVG(ge.overall_score), 0) AS avg_score" + base, params)
-
-    # Total interviews today
-    today = fetch_one(connection,
-        "SELECT COUNT(*) AS total FROM gd_sessions WHERE status='completed' AND DATE(completed_at) = CURDATE()")
+    stats = fetch_one(connection, query, params)
 
     return {
-        "top_score": round(float(top["top_score"]), 2) if top else 0,
-        "active_participants": active["active_participants"] if active else 0,
-        "average_score": round(float(avg["avg_score"]), 2) if avg else 0,
-        "total_interviews": today["total"] if today else 0,
+        "top_score": round(float(stats["top_score"]), 1) if stats and stats.get("top_score") else 0,
+        "active_participants": stats["active_participants"] if stats and stats.get("active_participants") else 0,
+        "average_score": round(float(stats["average_score"]), 1) if stats and stats.get("average_score") else 0,
+        "total_interviews": stats["total_interviews"] if stats and stats.get("total_interviews") else 0,
     }
 
 

@@ -216,6 +216,7 @@ export default function Home() {
   const [lbDepartment, setLbDepartment] = useState("ALL");
   const [lbYear, setLbYear] = useState("ALL");
   const [lbTimeframe, setLbTimeframe] = useState("all");
+  const [lbLastUpdated, setLbLastUpdated] = useState<string>("");
 
   // Solo Practice state
   const [soloSession, setSoloSession] = useState<SoloStartResponse | null>(null);
@@ -589,8 +590,8 @@ export default function Home() {
     setTimeout(() => { setCopied(false); setCopiedCopyCode(""); }, 2000);
   }
 
-  async function loadLeaderboard(department = "ALL", year = "ALL", timeframe = "all") {
-    setPageLoading(true);
+  async function loadLeaderboard(department = "ALL", year = "ALL", timeframe = "all", silent = false) {
+    if (!silent) setPageLoading(true);
     try {
       const params = new URLSearchParams({ department, year, timeframe });
       const data = await apiRequest<ComprehensiveLeaderboard>(`/gd/leaderboard/comprehensive?${params}`, {}, token);
@@ -598,10 +599,24 @@ export default function Home() {
       setLbDepartment(department);
       setLbYear(year);
       setLbTimeframe(timeframe);
-      setView("gd-leaderboard");
-    } catch (err: any) { setMessage(err.message); }
-    finally { setPageLoading(false); }
+      setLbLastUpdated(new Date().toLocaleTimeString());
+      if (!silent) setView("gd-leaderboard");
+    } catch (err: any) {
+      if (!silent) setMessage(err.message);
+    } finally {
+      if (!silent) setPageLoading(false);
+    }
   }
+
+  // Real-time automatic leaderboard polling (every 4 seconds)
+  useEffect(() => {
+    if (view !== "gd-leaderboard" || !token) return;
+    loadLeaderboard(lbDepartment, lbYear, lbTimeframe, true);
+    const interval = setInterval(() => {
+      loadLeaderboard(lbDepartment, lbYear, lbTimeframe, true);
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [view, lbDepartment, lbYear, lbTimeframe, token]);
 
   // ─── GD Live Functions ───
 
@@ -2353,8 +2368,19 @@ export default function Home() {
               {/* Header */}
               <div className="card p-6">
                 <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
-                  <h2 className="text-base font-bold text-heading flex items-center gap-2"><Trophy className="w-5 h-5 text-amber-500" /> Leaderboard</h2>
-                  <Button onClick={() => setView("dashboard")} variant="secondary" className="text-xs h-8">Back</Button>
+                  <div className="flex items-center gap-3">
+                    <h2 className="text-base font-bold text-heading flex items-center gap-2"><Trophy className="w-5 h-5 text-amber-500" /> Leaderboard</h2>
+                    <span className="flex items-center gap-1.5 text-[10px] font-bold text-emerald-500 bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20 shadow-sm">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+                      LIVE REAL-TIME {lbLastUpdated ? `• ${lbLastUpdated}` : ""}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button onClick={() => loadLeaderboard(lbDepartment, lbYear, lbTimeframe, true)} variant="secondary" className="text-xs h-8 flex items-center gap-1.5">
+                      <RefreshCw className="w-3.5 h-3.5" /> Refresh
+                    </Button>
+                    <Button onClick={() => setView("dashboard")} variant="secondary" className="text-xs h-8">Back</Button>
+                  </div>
                 </div>
                 {/* Filter Pills */}
                 <div className="space-y-3">
