@@ -4,6 +4,7 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Callable, Coroutine
 
 from backend.ai.confidence import analyze_confidence
+from backend.ai.content_analyzer import analyze_content_and_repetition
 from backend.ai.emotion import detect_emotion
 from backend.ai.fluency import analyze_fluency
 from backend.ai.grammar import analyze_grammar
@@ -27,15 +28,10 @@ def _run_module(fn, transcript, audio_path=None):
 async def evaluate_transcript_parallel(
     transcript: str,
     audio_path: str | None = None,
+    topic: str = "",
     on_progress: ProgressCallback | None = None,
 ) -> AnalysisResult:
-    """Run all 6 AI evaluation modules in parallel using a thread pool.
-
-    Args:
-        transcript: The transcribed text to evaluate.
-        audio_path: Optional path to audio file (passed to pronunciation module).
-        on_progress: Optional async callback called with module name as each completes.
-    """
+    """Run AI evaluation modules in parallel and enforce content quality & repetition detection."""
     loop = asyncio.get_running_loop()
     modules = [
         (analyze_grammar, (transcript,), {}, "grammar"),
@@ -60,22 +56,35 @@ async def evaluate_transcript_parallel(
     results = await asyncio.gather(*tasks)
     grammar, pronunciation, fluency, confidence, vocabulary, emotion = results
 
-    overall = round(
-        (
-            grammar["score"]
-            + pronunciation["score"]
-            + fluency["score"]
-            + confidence["score"]
-            + vocabulary["score"]
-        )
-        / 5,
-        2,
-    )
+    # Perform Content Quality & Question Repetition Analysis
+    content_info = analyze_content_and_repetition(transcript, topic)
 
-    feedback = (
-        f"{grammar['message']}. {fluency['message']}. "
-        f"{confidence['message']}. {vocabulary['message']}."
-    )
+    if content_info["is_question_repetition"]:
+        overall = min(25.0, round(
+            0.40 * content_info["content_quality_score"]
+            + 0.30 * content_info["topic_relevance_score"]
+            + 0.10 * grammar["score"]
+            + 0.10 * fluency["score"]
+            + 0.10 * confidence["score"],
+            1,
+        ))
+        feedback = f"CRITICAL NOTICE: Question Repetition / No Meaningful Content. {content_info['repetition_reason']}"
+    else:
+        # Weighted overall score prioritizing Content Quality & Topic Relevance over pure grammar/pronunciation
+        overall = round(
+            0.25 * content_info["content_quality_score"]
+            + 0.20 * content_info["topic_understanding_score"]
+            + 0.15 * content_info["topic_relevance_score"]
+            + 0.10 * grammar["score"]
+            + 0.10 * fluency["score"]
+            + 0.10 * confidence["score"]
+            + 0.10 * vocabulary["score"],
+            1,
+        )
+        feedback = (
+            f"{grammar['message']}. {fluency['message']}. "
+            f"{confidence['message']}. {vocabulary['message']}."
+        )
 
     return AnalysisResult(
         grammar_score=grammar["score"],
@@ -83,17 +92,28 @@ async def evaluate_transcript_parallel(
         fluency_score=fluency["score"],
         confidence_score=confidence["score"],
         vocabulary_score=vocabulary["score"],
+        topic_understanding_score=content_info["topic_understanding_score"],
+        content_quality_score=content_info["content_quality_score"],
+        originality_score=content_info["originality_score"],
+        critical_thinking_score=content_info["critical_thinking_score"],
+        topic_relevance_score=content_info["topic_relevance_score"],
+        is_question_repetition=content_info["is_question_repetition"],
+        repetition_reason=content_info["repetition_reason"],
         emotion=emotion["emotion"],
         overall_score=overall,
         feedback=feedback,
+        strengths=content_info["strengths"],
+        weaknesses=content_info["weaknesses"],
+        grammar_corrections=content_info["grammar_corrections"],
+        pronunciation_suggestions=content_info["pronunciation_suggestions"],
+        vocabulary_improvements=content_info["vocabulary_improvements"],
+        missing_discussion_points=content_info["missing_discussion_points"],
+        recommendations=content_info["recommendations"],
     )
 
 
-def evaluate_transcript(transcript: str, audio_path: str | None = None) -> AnalysisResult:
-    """Synchronous wrapper — needed for endpoints that don't use async (classic GD, Solo).
-
-    Internally uses the same parallel execution as evaluate_transcript_parallel.
-    """
+def evaluate_transcript(transcript: str, audio_path: str | None = None, topic: str = "") -> AnalysisResult:
+    """Synchronous evaluation wrapper."""
     grammar = analyze_grammar(transcript)
     pronunciation = analyze_pronunciation(transcript, audio_path)
     fluency = analyze_fluency(transcript)
@@ -101,22 +121,33 @@ def evaluate_transcript(transcript: str, audio_path: str | None = None) -> Analy
     vocabulary = analyze_vocabulary(transcript)
     emotion = detect_emotion(transcript)
 
-    overall = round(
-        (
-            grammar["score"]
-            + pronunciation["score"]
-            + fluency["score"]
-            + confidence["score"]
-            + vocabulary["score"]
-        )
-        / 5,
-        2,
-    )
+    content_info = analyze_content_and_repetition(transcript, topic)
 
-    feedback = (
-        f"{grammar['message']}. {fluency['message']}. "
-        f"{confidence['message']}. {vocabulary['message']}."
-    )
+    if content_info["is_question_repetition"]:
+        overall = min(25.0, round(
+            0.40 * content_info["content_quality_score"]
+            + 0.30 * content_info["topic_relevance_score"]
+            + 0.10 * grammar["score"]
+            + 0.10 * fluency["score"]
+            + 0.10 * confidence["score"],
+            1,
+        ))
+        feedback = f"CRITICAL NOTICE: Question Repetition / No Meaningful Content. {content_info['repetition_reason']}"
+    else:
+        overall = round(
+            0.25 * content_info["content_quality_score"]
+            + 0.20 * content_info["topic_understanding_score"]
+            + 0.15 * content_info["topic_relevance_score"]
+            + 0.10 * grammar["score"]
+            + 0.10 * fluency["score"]
+            + 0.10 * confidence["score"]
+            + 0.10 * vocabulary["score"],
+            1,
+        )
+        feedback = (
+            f"{grammar['message']}. {fluency['message']}. "
+            f"{confidence['message']}. {vocabulary['message']}."
+        )
 
     return AnalysisResult(
         grammar_score=grammar["score"],
@@ -124,7 +155,21 @@ def evaluate_transcript(transcript: str, audio_path: str | None = None) -> Analy
         fluency_score=fluency["score"],
         confidence_score=confidence["score"],
         vocabulary_score=vocabulary["score"],
+        topic_understanding_score=content_info["topic_understanding_score"],
+        content_quality_score=content_info["content_quality_score"],
+        originality_score=content_info["originality_score"],
+        critical_thinking_score=content_info["critical_thinking_score"],
+        topic_relevance_score=content_info["topic_relevance_score"],
+        is_question_repetition=content_info["is_question_repetition"],
+        repetition_reason=content_info["repetition_reason"],
         emotion=emotion["emotion"],
         overall_score=overall,
         feedback=feedback,
+        strengths=content_info["strengths"],
+        weaknesses=content_info["weaknesses"],
+        grammar_corrections=content_info["grammar_corrections"],
+        pronunciation_suggestions=content_info["pronunciation_suggestions"],
+        vocabulary_improvements=content_info["vocabulary_improvements"],
+        missing_discussion_points=content_info["missing_discussion_points"],
+        recommendations=content_info["recommendations"],
     )

@@ -70,9 +70,23 @@ class AnalysisResult(BaseModel):
     fluency_score: float
     confidence_score: float
     vocabulary_score: float
+    topic_understanding_score: float = 85.0
+    content_quality_score: float = 85.0
+    originality_score: float = 85.0
+    critical_thinking_score: float = 85.0
+    topic_relevance_score: float = 85.0
+    is_question_repetition: bool = False
+    repetition_reason: str = ""
     emotion: str
     overall_score: float
     feedback: str
+    strengths: list[str] = []
+    weaknesses: list[str] = []
+    grammar_corrections: list[str] = []
+    pronunciation_suggestions: list[str] = []
+    vocabulary_improvements: list[str] = []
+    missing_discussion_points: list[str] = []
+    recommendations: list[str] = []
 
 
 class GDSessionCreate(BaseModel):

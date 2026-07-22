@@ -476,7 +476,9 @@ async def upload_gd_live_audio(
     # Step 2: Parallel AI evaluation with per-module progress
     try:
         from backend.ai.evaluation import evaluate_transcript_parallel
-        evaluation = await evaluate_transcript_parallel(transcript, on_progress=_progress)
+        state = manager.get_state(session_code)
+        topic_text = state.get("topic", "") if state else ""
+        evaluation = await evaluate_transcript_parallel(transcript, topic=topic_text, on_progress=_progress)
         await _send_progress("generating_scores")
     except Exception as exc:
         logger.warning("AI evaluation failed for gd-live: %s", exc)

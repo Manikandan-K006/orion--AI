@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { CheckCircle2, Loader2, Clock, Users, Mic, MicOff, Volume2, Brain, AlertTriangle, Maximize2, Medal, BarChart3, Zap, Play, User, Sparkles, FileText, Download, Lightbulb, MessageSquare, ShieldCheck } from "lucide-react";
+import { CheckCircle2, Loader2, Clock, Users, Mic, MicOff, Volume2, Brain, AlertTriangle, AlertCircle, Target, Maximize2, Medal, BarChart3, Zap, Play, User, Sparkles, FileText, Download, Lightbulb, MessageSquare, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, Radar } from "recharts";
 import { useGdLiveWs, GDLiveWsMessage } from "@/lib/useGdLiveWs";
@@ -408,13 +408,29 @@ export default function GdLiveRoom({
     const sorted = [...results].sort((a: any, b: any) => (b.overall_score || 0) - (a.overall_score || 0));
     const totalCount = sorted.length > 0 ? sorted.length : 1;
 
+    const contentQualityVal = Math.round(Number(activeResult.content_quality_score ?? activeResult.content_quality ?? 85));
+    const topicUnderstandingVal = Math.round(Number(activeResult.topic_understanding_score ?? 85));
+    const originalityVal = Math.round(Number(activeResult.originality_score ?? 85));
+    const criticalThinkingVal = Math.round(Number(activeResult.critical_thinking_score ?? 85));
+    const relevanceVal = Math.round(Number(activeResult.topic_relevance_score ?? activeResult.relevance_score ?? 88));
+
     return (
       <div className="min-h-screen flex items-center justify-center p-6" style={{ background: "var(--bg)" }}>
-        <div className="w-full max-w-4xl space-y-6 animate-fade-up">
+        <div className="w-full max-w-5xl space-y-6 animate-fade-up">
           <div className="text-center">
-            <h1 className="text-3xl font-black text-heading bg-gradient-to-r from-indigo-500 via-purple-500 to-indigo-600 bg-clip-text text-transparent">Discussion Results</h1>
-            <p className="text-xs text-muted-soft mt-1">Evaluation overview for Team {teamNumber || 1}</p>
+            <h1 className="text-3xl font-black text-heading bg-gradient-to-r from-indigo-500 via-purple-500 to-indigo-600 bg-clip-text text-transparent">Discussion Evaluation Report</h1>
+            <p className="text-xs text-muted-soft mt-1">Comprehensive AI Analysis for Team {teamNumber || 1}</p>
           </div>
+
+          {activeResult.is_question_repetition && (
+            <div className="card p-4 border-l-4 border-l-rose-500 bg-rose-500/10 text-rose-700 dark:text-rose-300 space-y-1">
+              <div className="flex items-center gap-2 font-bold text-sm">
+                <AlertCircle className="w-5 h-5 text-rose-500 shrink-0" />
+                <span>Question Repetition / No Meaningful Content Detected</span>
+              </div>
+              <p className="text-xs">{activeResult.repetition_reason || "The AI detected that the speech mainly repeated the assigned topic prompt without providing original reasoning or examples."}</p>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
             {/* Left column - score summary */}
@@ -432,10 +448,12 @@ export default function GdLiveRoom({
                 <div className="h-56 relative flex items-center justify-center">
                   <ResponsiveContainer width="100%" height="100%">
                     <RadarChart data={[
+                      { metric: "Content", value: contentQualityVal },
+                      { metric: "Understanding", value: topicUnderstandingVal },
+                      { metric: "Originality", value: originalityVal },
                       { metric: "Grammar", value: grammarVal },
                       { metric: "Fluency", value: fluencyVal },
                       { metric: "Confidence", value: confidenceVal },
-                      { metric: "Vocabulary", value: vocabVal },
                       { metric: "Clarity", value: pronunciationVal },
                     ]}>
                       <PolarGrid stroke="var(--border)" />
@@ -450,28 +468,72 @@ export default function GdLiveRoom({
             {/* Right column - detailed scores progress indicators */}
             <div className="md:col-span-8 space-y-6">
               <div className="card p-6 space-y-5">
-                <h3 className="text-sm font-bold text-heading flex items-center gap-1.5"><Zap className="w-4 h-4 text-indigo-400" /> AI Skill Assessment Score</h3>
+                <h3 className="text-sm font-bold text-heading flex items-center gap-1.5"><Zap className="w-4 h-4 text-indigo-400" /> Comprehensive Skill Assessment</h3>
                 <div className="text-center mb-3">
                   <p className="text-4xl font-extrabold text-indigo-500">{overallVal}%</p>
-                  <p className="text-[10px] text-muted-soft uppercase font-bold tracking-wider mt-1">Overall score index</p>
+                  <p className="text-[10px] text-muted-soft uppercase font-bold tracking-wider mt-1">Overall Evaluation Index</p>
                 </div>
                 
-                <div className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {[
-                    { label: "Grammar & Structure", value: grammarVal, color: "bg-indigo-500", text: "text-indigo-400" },
-                    { label: "Fluency & Tempo", value: fluencyVal, color: "bg-purple-500", text: "text-purple-400" },
-                    { label: "Confidence & Authority", value: confidenceVal, color: "bg-cyan-500", text: "text-cyan-400" },
-                    { label: "Vocabulary Range", value: vocabVal, color: "bg-emerald-500", text: "text-emerald-400" },
-                    { label: "Pronunciation Clarity", value: pronunciationVal, color: "bg-rose-500", text: "text-rose-400" },
+                    { label: "Content Quality & Reasoning", value: contentQualityVal, color: "bg-indigo-500", text: "text-indigo-400" },
+                    { label: "Topic Understanding", value: topicUnderstandingVal, color: "bg-purple-500", text: "text-purple-400" },
+                    { label: "Originality of Ideas", value: originalityVal, color: "bg-emerald-500", text: "text-emerald-400" },
+                    { label: "Critical Thinking", value: criticalThinkingVal, color: "bg-cyan-500", text: "text-cyan-400" },
+                    { label: "Topic Relevance", value: relevanceVal, color: "bg-amber-500", text: "text-amber-400" },
+                    { label: "Grammar & Structure", value: grammarVal, color: "bg-indigo-400", text: "text-indigo-300" },
+                    { label: "Fluency & Tempo", value: fluencyVal, color: "bg-purple-400", text: "text-purple-300" },
+                    { label: "Confidence & Delivery", value: confidenceVal, color: "bg-rose-500", text: "text-rose-400" },
                   ].map((m) => (
-                    <div key={m.label} className="space-y-1.5">
+                    <div key={m.label} className="space-y-1">
                       <div className="flex items-center justify-between text-xs">
-                        <span className="text-heading font-semibold">{m.label}</span>
+                        <span className="text-heading font-medium truncate max-w-[170px]">{m.label}</span>
                         <span className={`font-bold ${m.text}`}>{m.value}%</span>
                       </div>
                       <div className="w-full bg-slate-200 dark:bg-slate-800 rounded-full h-2 overflow-hidden">
                         <div className={`h-full rounded-full ${m.color} transition-all duration-700`} style={{ width: m.value + "%" }} />
                       </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Detailed AI Feedback Grids */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="card p-4 space-y-2 border-l-4 border-l-emerald-500">
+                  <h4 className="text-xs font-bold text-heading uppercase tracking-wider flex items-center gap-1.5"><CheckCircle2 className="w-4 h-4 text-emerald-500" /> Key Strengths</h4>
+                  <ul className="space-y-1 text-xs text-body">
+                    {(activeResult.strengths && activeResult.strengths.length > 0 ? activeResult.strengths : ["Presents original thoughts relevant to topic", "Clear voice delivery"]).map((s: string, idx: number) => (
+                      <li key={idx} className="flex items-start gap-1.5">
+                        <span className="text-emerald-500 font-bold">•</span> <span>{s}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                <div className="card p-4 space-y-2 border-l-4 border-l-amber-500">
+                  <h4 className="text-xs font-bold text-heading uppercase tracking-wider flex items-center gap-1.5"><AlertCircle className="w-4 h-4 text-amber-500" /> Areas of Improvement</h4>
+                  <ul className="space-y-1 text-xs text-body">
+                    {(activeResult.weaknesses && activeResult.weaknesses.length > 0 ? activeResult.weaknesses : ["Reduce filler words like 'umm' and 'like'", "Elaborate with concrete examples"]).map((w: string, idx: number) => (
+                      <li key={idx} className="flex items-start gap-1.5">
+                        <span className="text-amber-500 font-bold">•</span> <span>{w}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+
+              {/* Missing Discussion Points & Recommendations */}
+              <div className="card p-5 space-y-3">
+                <h4 className="text-xs font-bold text-heading uppercase tracking-wider flex items-center gap-1.5"><Target className="w-4 h-4 text-indigo-500" /> Actionable AI Recommendations</h4>
+                <div className="space-y-2 text-xs text-body">
+                  {(activeResult.recommendations && activeResult.recommendations.length > 0 ? activeResult.recommendations : [
+                    "Express original thoughts instead of repeating the topic title.",
+                    "Support your main thesis with a real-life case study or statistics."
+                  ]).map((rec: string, idx: number) => (
+                    <div key={idx} className="p-2.5 rounded-lg bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 flex items-start gap-2">
+                      <Zap className="w-3.5 h-3.5 text-indigo-500 shrink-0 mt-0.5" />
+                      <span>{rec}</span>
                     </div>
                   ))}
                 </div>
