@@ -185,8 +185,10 @@ export default function Home() {
   const [adminPassword, setAdminPassword] = useState("");
   const [loginTab, setLoginTab] = useState<"student" | "admin">("student");
   const [theme, setTheme] = useState<"light" | "dark">("dark");
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
     const saved = localStorage.getItem("mzgd_theme") as "light" | "dark" | null;
     if (saved) setTheme(saved);
   }, []);
@@ -776,6 +778,14 @@ export default function Home() {
 
   const scoreColors = ["#f59e0b", "#10b981", "#8b5cf6", "#06b6d4"];
 
+  if (!mounted) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-950">
+        <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
+      </div>
+    );
+  }
+
   // ─── Full-screen GD Live Admin Monitor ───
   if (view === "gd-live-monitor" && gdLiveAdminViewCode && user) {
     return (
@@ -827,7 +837,7 @@ export default function Home() {
         </div>
 
         {/* Theme toggle */}
-        <button onClick={toggleTheme} className="fixed top-4 right-4 z-20 p-2.5 rounded-xl btn-secondary">
+        <button onClick={toggleTheme} className="fixed top-4 right-4 z-20 p-2.5 rounded-xl btn-secondary" suppressHydrationWarning>
           {theme === "dark" ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
         </button>
         <div className="relative z-10 w-full max-w-sm md:max-w-md mx-3 md:mx-4 animate-fade-up">
@@ -1020,7 +1030,7 @@ export default function Home() {
         {/* Glowing background meshes */}
         <div className="absolute inset-0 bg-gradient-to-tr from-slate-950 via-slate-900 to-indigo-950/40 opacity-90 dark:block hidden" />
         <div className="absolute inset-0 bg-gradient-to-tr from-slate-50 via-indigo-50/20 to-purple-50/30 dark:hidden block" />
-        
+
         {/* Soft floating dynamic gradient orbs */}
         <div className="absolute top-1/4 left-1/4 w-[450px] h-[450px] rounded-full bg-indigo-500/10 dark:bg-indigo-600/5 blur-[120px] pointer-events-none animate-pulse" style={{ animationDuration: "12s" }} />
         <div className="absolute bottom-1/4 right-1/4 w-[400px] h-[400px] rounded-full bg-purple-500/10 dark:bg-purple-600/5 blur-[120px] pointer-events-none animate-pulse" style={{ animationDuration: "8s" }} />
@@ -1079,6 +1089,7 @@ export default function Home() {
               onClick={toggleTheme}
               className="p-2 rounded-xl border border-slate-200/50 dark:border-slate-800/50 bg-white/40 dark:bg-slate-900/40 hover:bg-indigo-500/5 text-heading hover:scale-105 active:scale-95 transition-all duration-200"
               aria-label="Toggle Theme"
+              suppressHydrationWarning
             >
               {theme === "dark" ? <Sun className="w-4 h-4 text-amber-500" /> : <Moon className="w-4 h-4 text-indigo-500" />}
             </button>
@@ -1127,7 +1138,7 @@ export default function Home() {
                 {/* Decorative gradients */}
                 <div className="absolute -top-12 -left-12 w-32 h-32 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none" />
                 <div className="absolute -bottom-12 -right-12 w-32 h-32 bg-purple-500/10 rounded-full blur-2xl pointer-events-none" />
-                
+
                 {/* Avatar Initial Bubble */}
                 <div className="relative w-24 h-24 rounded-full flex items-center justify-center bg-gradient-to-tr from-indigo-500 via-purple-500 to-pink-500 p-0.5 mb-4 group shadow-md hover:scale-105 transition-transform duration-300">
                   <div className="w-full h-full bg-[var(--surface)] rounded-full flex items-center justify-center text-heading font-black text-2xl tracking-tight select-none">
@@ -1137,7 +1148,7 @@ export default function Home() {
                 </div>
 
                 <h3 className="text-xl font-bold text-heading tracking-tight mb-1">{user.name}</h3>
-                
+
                 {user.role === "admin" ? (
                   <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-500/10 text-red-500 border border-red-500/20 shadow-sm flex items-center gap-1 mb-6 select-none">
                     <Shield className="w-3 h-3" />
@@ -1201,7 +1212,7 @@ export default function Home() {
               {/* Right Column - Security & Password Form */}
               <div className="lg:col-span-2 bg-[var(--surface)] border border-[var(--border)] rounded-3xl p-8 shadow-sm relative overflow-hidden flex flex-col justify-between">
                 <div className="absolute -top-12 -right-12 w-48 h-48 bg-indigo-500/5 rounded-full blur-3xl pointer-events-none" />
-                
+
                 <div>
                   <div className="mb-6 border-b border-[var(--border)] pb-5">
                     <h3 className="text-xl font-bold text-heading tracking-tight mb-1 flex items-center gap-2">
@@ -1394,7 +1405,7 @@ export default function Home() {
                   {soloHistory && soloHistory.length > 0 ? (
                     <div className="h-64 flex items-center justify-center">
                       <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={soloHistory.slice().reverse().map((h, i) => ({ name: `P${i+1}`, score: h?.overall_score || 0 }))}>
+                        <BarChart data={soloHistory.slice().reverse().map((h, i) => ({ name: `P${i + 1}`, score: h?.overall_score || 0 }))}>
                           <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                           <XAxis dataKey="name" stroke="var(--muted)" fontSize={10} />
                           <YAxis stroke="var(--muted)" fontSize={10} domain={[0, 100]} />
@@ -1625,7 +1636,7 @@ export default function Home() {
                         <p className="font-semibold text-heading">Theme Mode</p>
                         <p className="text-[10px] text-muted-soft mt-0.5">Toggle between dark and light themes.</p>
                       </div>
-                      <button onClick={toggleTheme} className="btn-secondary px-4 py-2 text-xs flex items-center gap-1.5">
+                      <button onClick={toggleTheme} className="btn-secondary px-4 py-2 text-xs flex items-center gap-1.5" suppressHydrationWarning>
                         {theme === "dark" ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
                         <span>{theme === "dark" ? "Light Mode" : "Dark Mode"}</span>
                       </button>
@@ -2420,7 +2431,7 @@ export default function Home() {
                     <h4 className="text-base font-extrabold text-heading mb-3 leading-snug">{soloSession.topic}</h4>
                     <p className="text-xs text-muted-soft leading-relaxed">Prepare your thoughts. You have 4 minutes of prep time, followed by 10 minutes of active recording. Speak clearly into your microphone.</p>
                   </div>
-                  
+
                   <div className="flex items-center gap-4 mt-6 pt-4 border-t border-slate-200/50 dark:border-slate-800/50 text-xs text-muted-soft">
                     <span className="flex items-center gap-1.5"><Clock className="w-4 h-4 text-indigo-400" /> 4m prep time</span>
                     <span className="flex items-center gap-1.5"><Mic className="w-4 h-4 text-indigo-400" /> 10m speak time</span>
