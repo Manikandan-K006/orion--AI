@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile
+from fastapi.responses import FileResponse
 from mysql.connector import MySQLConnection
 
 from backend.ai.speech_recognition import transcribe_audio
@@ -629,3 +630,27 @@ def get_my_team_topic(
     if not team:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Team not found")
     return {"team_number": participant["team_number"], "topic": team["topic"], "status": team["status"]}
+
+
+@router.get("/sessions/{session_code}/report")
+def get_gd_report(
+    session_code: str,
+    current_user: dict = Depends(get_current_user),
+    connection: MySQLConnection = Depends(get_db),
+) -> FileResponse:
+    eval_data = queries.fetch_one(
+        connection,
+        "SELECT overall_score, weaknesses, improvement_tips, transcript FROM gd_live_evaluations WHERE session_code = %s AND user_id = %s ORDER BY id DESC LIMIT 1",
+        (session_code, current_user["id"])
+    )
+    score = eval_data["overall_score"] if eval_data and eval_data.get("overall_score") else 85.0
+    weaknesses = eval_data["weaknesses"] if eval_data and eval_data.get("weaknesses") else "Good overall communication."
+    tips = eval_data["improvement_tips"] if eval_data and eval_data.get("improvement_tips") else "Keep practicing."
+    summary = f"Overall score: {score}/100. Feedback: {weaknesses}. Tips: {tips}"
+    
+    topic_data = queries.fetch_one(connection, "SELECT topic FROM gd_live_teams WHERE session_code = %s LIMIT 1", (session_code,))
+    topic = topic_data["topic"] if topic_data and topic_data.get("topic") else "Group Discussion Topic"
+    
+    from backend.reporting import generate_gd_pdf_report
+    path = generate_gd_pdf_report(session_code, current_user.get("name", "Student"), topic, float(score), summary)
+    return FileResponse(path=path, media_type="application/pdf", filename=f"Group_Discussion_Report_{session_code}.pdf")

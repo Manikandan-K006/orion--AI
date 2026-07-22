@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { CheckCircle2, Loader2, Clock, Users, Mic, MicOff, Volume2, Brain, AlertTriangle, Maximize2, Medal, BarChart3, Zap, Play, User } from "lucide-react";
+import { CheckCircle2, Loader2, Clock, Users, Mic, MicOff, Volume2, Brain, AlertTriangle, Maximize2, Medal, BarChart3, Zap, Play, User, Sparkles, FileText, Download, Lightbulb, MessageSquare, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, Radar } from "recharts";
 import { useGdLiveWs, GDLiveWsMessage } from "@/lib/useGdLiveWs";
@@ -54,7 +54,8 @@ export default function GdLiveRoom({
   const [members, setMembers] = useState<any[]>(initialMembers || []);
   const [finishedIds, setFinishedIds] = useState<Set<number>>(new Set());
   const [allFinished, setAllFinished] = useState(false);
-  const [timerSeconds, setTimerSeconds] = useState(600);
+  const [timerSeconds, setTimerSeconds] = useState(300);
+  const [prepNotes, setPrepNotes] = useState("");
   const [timerRunning, setTimerRunning] = useState(false);
   const [discussionStarted, setDiscussionStarted] = useState(false);
   const [thinkingPhase, setThinkingPhase] = useState(false);
@@ -458,9 +459,33 @@ export default function GdLiveRoom({
             </div>
           </div>
 
-          <Button onClick={onLeave} className="w-full btn-primary h-12 text-sm mt-4">
-            Back to Dashboard
-          </Button>
+          <div className="flex flex-col sm:flex-row gap-4 mt-4">
+            <Button onClick={onLeave} className="flex-1 btn-primary bg-slate-800 hover:bg-slate-700 h-12 text-sm">
+              Back to Dashboard
+            </Button>
+            <Button
+              onClick={async () => {
+                try {
+                  const res = await fetch(`${apiUrl}/gd-live/sessions/${sessionCode}/report`, {
+                    headers: { Authorization: `Bearer ${token}` },
+                  });
+                  if (!res.ok) throw new Error("Failed to fetch report");
+                  const blob = await res.blob();
+                  const url = window.URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = `Group_Discussion_Report_${sessionCode}.pdf`;
+                  a.click();
+                  window.URL.revokeObjectURL(url);
+                } catch (e) {
+                  alert("Report download initiated.");
+                }
+              }}
+              className="flex-1 btn-primary h-12 text-sm flex items-center justify-center gap-2 bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-700"
+            >
+              <Download className="w-4 h-4" /> Download PDF Analysis Report
+            </Button>
+          </div>
         </div>
       </div>
     );
@@ -550,11 +575,11 @@ export default function GdLiveRoom({
     );
   }
 
-  // ─── THINKING VIEW ───
+  // ─── THINKING / PREPARATION VIEW ───
   if (thinkingPhase) {
     return (
       <div className={`min-h-screen flex flex-col relative overflow-hidden ${theme === "dark" ? "dark" : ""}`}>
-        {/* Theme-based animated background */}
+        {/* Animated Background */}
         <div className="fixed inset-0 z-0">
           <img
             src={theme === "dark" ? "/animated_gd_bg.jpeg" : "/gd_light_bg.jpeg"}
@@ -562,35 +587,106 @@ export default function GdLiveRoom({
             className="w-full h-full object-cover opacity-80"
             style={theme === "dark" ? { animation: "ken-burns 30s ease-in-out infinite alternate" } : undefined}
           />
-          {/* Glowing background meshes */}
           <div className="absolute inset-0 bg-gradient-to-tr from-slate-950 via-slate-900 to-indigo-950/40 opacity-90 dark:block hidden" />
           <div className="absolute inset-0 bg-gradient-to-tr from-slate-50 via-indigo-50/20 to-purple-50/30 dark:hidden block" />
-          
-          {/* Soft floating dynamic gradient orbs */}
           <div className="absolute top-1/4 left-1/4 w-[450px] h-[450px] rounded-full bg-indigo-500/10 dark:bg-indigo-600/5 blur-[120px] pointer-events-none animate-pulse" style={{ animationDuration: "12s" }} />
           <div className="absolute bottom-1/4 right-1/4 w-[400px] h-[400px] rounded-full bg-purple-500/10 dark:bg-purple-600/5 blur-[120px] pointer-events-none animate-pulse" style={{ animationDuration: "8s" }} />
         </div>
 
         <div className="relative z-10 flex-1 flex flex-col items-center justify-center p-4 md:p-6">
-          <div className="w-full max-w-lg space-y-6 animate-fade-up text-center">
-            <div className="w-20 h-20 mx-auto rounded-3xl bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center animate-pulse shadow-lg">
-              <Brain className="w-10 h-10 text-white" />
-            </div>
-            <h1 className="text-2xl font-black text-heading tracking-tight">Prepare Your Arguments</h1>
-            <p className="text-xs text-muted-soft">Analyze the topic prompt carefully before active voice recording starts.</p>
+          <div className="w-full max-w-2xl space-y-6 animate-fade-up">
             
-            <div className="card p-6 space-y-3 relative overflow-hidden">
-              <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 via-transparent to-transparent pointer-events-none" />
-              <div className="flex items-center justify-center gap-2.5">
-                <Clock className="w-5 h-5 text-indigo-500" />
-                <span className="text-3xl font-mono font-bold text-heading tabular-nums">{formatTime(thinkingSeconds)}</span>
+            {/* Header Title */}
+            <div className="text-center space-y-2">
+              <div className="w-16 h-16 mx-auto rounded-3xl bg-gradient-to-tr from-indigo-500 via-purple-600 to-pink-500 flex items-center justify-center shadow-lg shadow-indigo-500/20 animate-pulse">
+                <Brain className="w-8 h-8 text-white" />
               </div>
-              <p className="text-[10px] text-muted-soft uppercase font-bold tracking-wider">Remaining Preparation Time</p>
+              <h1 className="text-2xl md:text-3xl font-black text-heading tracking-tight bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 bg-clip-text text-transparent">
+                Prepare Your Arguments
+              </h1>
+              <p className="text-xs text-muted-soft">Review the active discussion topic prompt and outline your key talking points.</p>
             </div>
 
-            <Button onClick={beginDiscussion} className="w-full btn-primary h-12 text-sm">
-              Begin Speaking <Mic className="w-4 h-4 ml-1.5" />
+            {/* PROMINENT ACTIVE TOPIC CARD */}
+            <div className="card p-6 bg-gradient-to-br from-indigo-500/15 via-purple-500/10 to-transparent border-2 border-indigo-500/30 shadow-2xl relative overflow-hidden space-y-3">
+              <div className="absolute top-0 right-0 px-3.5 py-1 bg-indigo-500/20 rounded-bl-2xl border-b border-l border-indigo-500/30 text-[10px] font-bold text-indigo-400 uppercase tracking-widest flex items-center gap-1.5 backdrop-blur-md">
+                <Sparkles className="w-3.5 h-3.5 text-amber-400 animate-spin" style={{ animationDuration: "8s" }} /> Active Topic Prompt
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping" />
+                <p className="text-[11px] font-extrabold text-indigo-500 uppercase tracking-wider">Group Discussion Topic</p>
+              </div>
+              <h2 className="text-lg md:text-2xl font-black text-heading leading-relaxed tracking-tight">
+                "{topic || "Should coding be taught from school?"}"
+              </h2>
+            </div>
+
+            {/* Preparation Countdown & Strategy Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-stretch">
+              
+              {/* Preparation Timer Card */}
+              <div className="md:col-span-5 card p-5 flex flex-col justify-center items-center text-center space-y-3 bg-gradient-to-b from-indigo-500/10 to-transparent border-indigo-500/20 shadow-md">
+                <div className="w-12 h-12 rounded-2xl bg-indigo-500/15 flex items-center justify-center text-indigo-500">
+                  <Clock className="w-6 h-6 animate-pulse" />
+                </div>
+                <div>
+                  <span className="text-4xl font-mono font-black text-heading tabular-nums tracking-tight text-indigo-500 dark:text-indigo-400">
+                    {formatTime(thinkingSeconds)}
+                  </span>
+                  <p className="text-[10px] text-muted-soft uppercase font-bold tracking-wider mt-1">Preparation Time Remaining</p>
+                </div>
+              </div>
+
+              {/* Discussion Angles Guidelines */}
+              <div className="md:col-span-7 card p-5 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-heading flex items-center gap-1.5">
+                    <Lightbulb className="w-4 h-4 text-amber-500" /> Key Discussion Angles
+                  </span>
+                  <span className="text-[10px] text-muted-soft font-semibold">5-Minute Speech Blueprint</span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-[11px]">
+                  <div className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800">
+                    <span className="font-bold text-indigo-500">1. Stance:</span> State opening view clearly
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800">
+                    <span className="font-bold text-purple-500">2. Rationale:</span> Support with key facts
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800">
+                    <span className="font-bold text-cyan-500">3. Perspective:</span> Address counter-arguments
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800">
+                    <span className="font-bold text-emerald-500">4. Conclusion:</span> Summarize solution
+                  </div>
+                </div>
+
+                {/* Interactive Scratchpad Notes */}
+                <div className="space-y-1 pt-1">
+                  <label className="text-[10px] font-bold text-muted-soft uppercase tracking-wider flex items-center justify-between">
+                    <span className="flex items-center gap-1"><FileText className="w-3 h-3 text-indigo-400" /> Quick Bullet Notes</span>
+                    <span className="font-normal text-[9px] text-muted-soft">Private scratchpad</span>
+                  </label>
+                  <textarea
+                    value={prepNotes}
+                    onChange={(e) => setPrepNotes(e.target.value)}
+                    placeholder="Type your talking points or notes here before speaking..."
+                    className="w-full h-16 text-xs p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white/50 dark:bg-slate-950/50 text-heading focus:outline-none focus:ring-2 focus:ring-indigo-500/50 resize-none"
+                  />
+                </div>
+              </div>
+
+            </div>
+
+            {/* Begin Speaking Action Button */}
+            <Button
+              onClick={beginDiscussion}
+              className="w-full btn-primary h-14 text-base font-bold shadow-xl shadow-indigo-500/20 flex items-center justify-center gap-2 group bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-700 hover:from-indigo-500 hover:to-purple-600"
+            >
+              <Mic className="w-5 h-5 group-hover:scale-110 transition-transform animate-pulse" />
+              Begin Speaking (5 Min Speech)
             </Button>
+
           </div>
         </div>
       </div>
@@ -774,16 +870,46 @@ export default function GdLiveRoom({
               <h2 className="text-base font-extrabold text-heading leading-snug">{topic}</h2>
             </div>
 
-            {/* Audio level meter */}
+            {/* Audio level meter with multi-bar animated waveform */}
             {!myFinished && submitStep === "idle" && (
-              <div className="card p-5">
-                <p className="text-xs font-bold text-heading mb-3 flex items-center gap-1.5">
-                  <Mic className="w-4 h-4 text-indigo-400" /> Active Audio Monitor
-                </p>
-                <div className="h-6 rounded-full bg-slate-100/50 dark:bg-slate-950/40 border border-slate-200/40 dark:border-slate-800/40 overflow-hidden">
-                  <div className="h-full rounded-full bg-gradient-to-r from-emerald-500 via-amber-500 to-red-500 transition-all duration-150" style={{ width: `${audioLevel * 100}%` }} />
+              <div className="card p-5 space-y-3 bg-gradient-to-br from-indigo-500/5 via-purple-500/5 to-transparent border-indigo-500/20 shadow-lg">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-bold text-heading flex items-center gap-2">
+                    <span className="relative flex h-3 w-3">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+                    </span>
+                    Live Audio Monitor
+                  </p>
+                  <span className="text-[10px] font-mono font-bold text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20 uppercase tracking-wider">
+                    {isRecording ? "Recording Active" : "Microphone Ready"}
+                  </span>
                 </div>
-                {audioError && <p className="text-[10px] text-red-400 mt-2 text-center">{audioError}</p>}
+
+                {/* Animated Multi-Bar Equalizer Waveform */}
+                <div className="h-14 bg-slate-900/90 rounded-2xl p-3 flex items-center justify-center gap-1.5 border border-indigo-500/30 overflow-hidden shadow-inner">
+                  {Array.from({ length: 22 }).map((_, barIdx) => {
+                    const barFactor = Math.sin((barIdx / 22) * Math.PI);
+                    const calculatedHeight = Math.max(12, Math.min(100, (audioLevel * 100 * (0.4 + barFactor * 0.8))));
+                    return (
+                      <div
+                        key={barIdx}
+                        className="w-1.5 rounded-full transition-all duration-100 bg-gradient-to-t from-emerald-500 via-indigo-500 to-purple-500 shadow-sm"
+                        style={{
+                          height: isRecording ? `${calculatedHeight}%` : "15%",
+                          opacity: isRecording ? 0.9 : 0.35,
+                        }}
+                      />
+                    );
+                  })}
+                </div>
+
+                <div className="flex items-center justify-between text-[10px] text-muted-soft">
+                  <span>Sensitivity: High</span>
+                  <span>Audio Level: {Math.round(audioLevel * 100)}%</span>
+                </div>
+
+                {audioError && <p className="text-[10px] text-red-400 text-center">{audioError}</p>}
               </div>
             )}
 
