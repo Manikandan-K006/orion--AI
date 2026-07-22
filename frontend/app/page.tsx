@@ -924,7 +924,7 @@ export default function Home() {
             <div className="icon-badge icon-purple mx-auto mb-3 md:mb-5" style={{ width: "72px", height: "72px" }}>
               <img src="/MZ_logo_DB.webp" alt="Mount Zion Logo" className="w-12 h-12 rounded-xl object-cover" />
             </div>
-            <h1 className="text-2xl md:text-4xl font-bold mb-1 md:mb-2 text-heading">MZ Orator</h1>
+            <h1 className="text-2xl md:text-4xl font-bold mb-1 md:mb-2 text-heading">MZ ThinkCircle</h1>
             <p className="text-xs md:text-base text-muted-soft">AI Group Discussion Platform</p>
           </div>
           <div className="card">
@@ -1027,7 +1027,7 @@ export default function Home() {
             <img src="/MZ_logo_DB.webp" alt="Mount Zion Logo" className="w-10 h-10 rounded-xl object-cover shadow-md shrink-0 hover:rotate-6 transition-transform duration-300" />
             <div className="truncate">
               <p className="text-sm font-bold text-heading flex items-center gap-1.5">
-                MZ Orator
+                MZ ThinkCircle
                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_#10b981]" />
               </p>
               <p className="text-[11px] text-muted-soft truncate max-w-[140px]">{user.name}</p>
@@ -3111,7 +3111,7 @@ export default function Home() {
               <div className="bg-slate-900 border border-red-500/40 rounded-2xl p-6 max-w-sm mx-4 shadow-2xl text-center">
                 <AlertCircle className="w-12 h-12 text-red-400 mx-auto mb-3" />
                 <h3 className="text-lg font-bold text-heading mb-2">Stay Focused!</h3>
-                <p className="text-sm text-body mb-4">You left the session tab. Please return to the MZ Orator tab immediately to continue your assessment.</p>
+                <p className="text-sm text-body mb-4">You left the session tab. Please return to the MZ ThinkCircle tab immediately to continue your assessment.</p>
                 <Button onClick={() => setTabSwitchWarning(false)} className="w-full bg-gradient-to-r from-amber-500 to-orange-600 border-0">
                   I'm back, continue
                 </Button>
