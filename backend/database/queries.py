@@ -802,74 +802,9 @@ def assign_live_single_team(connection: MySQLConnection, session_code: str) -> l
     }]
 
 
-def assign_live_teams(
-    connection: MySQLConnection,
-    session_code: str,
-    max_team_size: int = 3,
-    seed: int | None = None,
-) -> list[dict[str, Any]]:
-    """Randomly shuffle all participants and pack them into teams of at most
-    ``max_team_size``. Persists ``team_number`` + ``anonymous_label`` on each
-    participant and (re)creates one ``gd_live_teams`` row per team. Returns the
-    team structure (team_number, topic, members) for the host/WebSocket.
-
-    Guarantees: every participant is assigned to exactly one team; no team is
-    larger than ``max_team_size``; the number of teams is minimised.
-    """
-    participants = fetch_all(connection,
-        "SELECT lp.*, u.name, u.register_number, sp.department, sp.year FROM gd_live_participants lp "
-        "JOIN users u ON lp.user_id = u.id "
-        "LEFT JOIN student_profile sp ON sp.user_id = u.id "
-        "WHERE lp.session_code = %s ORDER BY lp.id",
-        (session_code,))
-    if not participants:
-        return []
-
-    # Wipe any previous assignment so re-hosting reshuffles cleanly.
-    execute(connection, "DELETE FROM gd_live_teams WHERE session_code = %s", (session_code,))
-    execute(connection,
-        "UPDATE gd_live_participants SET team_number = NULL, status = 'joined' WHERE session_code = %s",
-        (session_code,))
-
-    rng = random.Random(seed)
-    user_ids = [p["user_id"] for p in participants]
-    rng.shuffle(user_ids)
-
-    # Pack into teams of at most max_team_size.
-    teams: list[list[int]] = []
-    i = 0
-    n = len(user_ids)
-    while i < n:
-        size = min(max_team_size, n - i)
-        teams.append(user_ids[i : i + size])
-        i += size
-
-    by_id = {p["user_id"]: p for p in participants}
-    result: list[dict[str, Any]] = []
-    for team_number, members in enumerate(teams, start=1):
-        topic_row = fetch_one(connection, "SELECT topic FROM gd_easy_topics ORDER BY RAND() LIMIT 1")
-        topic = topic_row["topic"] if topic_row else "Introduce yourself and share your thoughts"
-        execute(connection,
-            "INSERT INTO gd_live_teams (session_code, team_number, topic) VALUES (%s, %s, %s)",
-            (session_code, team_number, topic))
-        team_members = []
-        for j, uid in enumerate(members):
-            label = f"Member {j + 1}"
-            execute(connection,
-                "UPDATE gd_live_participants SET team_number = %s, anonymous_label = %s, status = 'assigned' WHERE session_code = %s AND user_id = %s",
-                (team_number, label, session_code, uid))
-            p = by_id[uid]
-            team_members.append({
-                "user_id": uid,
-                "label": label,
-                "name": p["name"],
-                "register_number": p["register_number"],
-                "department": p.get("department"),
-                "year": p.get("year"),
-            })
-            result.append({"team_number": team_number, "topic": topic, "members": team_members})
-
-    return result
+# NOTE: assign_live_teams is defined above at the canonical location (line ~686).
+# The duplicate definition that was here has been removed to prevent the Python
+# interpreter from silently overriding the correct implementation with a buggy one.
 
 
 def get_live_teams(connection: MySQLConnection, session_code: str) -> list[dict[str, Any]]:

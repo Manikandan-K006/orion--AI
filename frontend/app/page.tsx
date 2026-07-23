@@ -674,7 +674,7 @@ export default function Home() {
 
   async function loadAdminDetails() {
     try {
-      const topics = await apiRequest<any[]>("/gd-live/topics", {}, token).catch(() => []);
+      const topics = await apiRequest<any[]>("/gd-live/easy-topics", {}, token).catch(() => []);
       setEasyTopicsList(topics);
 
       const depts = await apiRequest<string[]>("/gd-live/departments", {}, token).catch(() => []);
