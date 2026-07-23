@@ -1180,7 +1180,7 @@ export default function Home() {
   function renderSidebarContent(isMobile = false) {
     if (!user) return null;
     return (
-      <div className="flex flex-col h-full bg-slate-900/5 dark:bg-slate-950/20 backdrop-blur-xl">
+      <div className="flex flex-col h-full [background:var(--surface)] dark:bg-slate-950/20 backdrop-blur-xl">
         {/* Logo and online status */}
         <div className="flex items-center justify-between p-5 border-b border-slate-200/50 dark:border-slate-800/50 shrink-0 bg-gradient-to-b from-indigo-500/5 via-transparent to-transparent">
           <div className="flex items-center gap-3">
@@ -1739,7 +1739,7 @@ export default function Home() {
                     { title: "Streak Master", desc: "Speak daily for 5 sessions", unlocked: soloHistory.length >= 5, color: "icon-green", icon: <Sparkles className="w-5 h-5" /> },
                     { title: "GD Grandmaster", desc: "Reach Level 4 Rank", unlocked: progress && progress.total_credits != null && progress.total_credits >= 500, color: "icon-cyan", icon: <Zap className="w-5 h-5" /> },
                   ].map((badge, idx) => (
-                    <div key={idx} className={`p-5 rounded-3xl border ${badge.unlocked ? "border-slate-200/50 dark:border-slate-800 bg-white/40 dark:bg-slate-900/40" : "border-dashed border-slate-200/30 dark:border-slate-800/20 bg-slate-100/10 dark:bg-slate-900/5 opacity-55"} flex flex-col items-center text-center transition-all duration-300`}>
+                    <div key={idx} className={`p-5 rounded-3xl border ${badge.unlocked ? "border-slate-200/50 dark:border-slate-800 bg-white/40 dark:bg-slate-900/40" : "border-dashed border-slate-200/30 dark:border-slate-800/20 bg-slate-100/10 dark:[background:var(--surface)] opacity-55"} flex flex-col items-center text-center transition-all duration-300`}>
                       <div className={`icon-badge ${badge.color} mb-3`}>{badge.icon}</div>
                       <p className="text-xs font-bold text-heading leading-tight">{badge.title}</p>
                       <p className="text-[10px] text-muted-soft mt-1 leading-snug">{badge.desc}</p>
@@ -3020,7 +3020,7 @@ export default function Home() {
                         <select
                           value={selectedTopicId}
                           onChange={(e) => setSelectedTopicId(Number(e.target.value))}
-                          className="w-full h-11 px-4 rounded-xl bg-slate-900 border border-[var(--border)] text-heading text-sm focus:border-amber-500/50"
+                          className="w-full h-11 px-4 rounded-xl border border-[var(--border)] text-heading text-sm focus:outline-none focus:border-amber-500/60 focus:ring-2 focus:ring-amber-400/20 transition-all inp"
                         >
                           {easyTopicsList.map((t: any) => (
                             <option key={t.id} value={t.id}>{t.topic}</option>
@@ -3035,7 +3035,7 @@ export default function Home() {
                         <select
                           value={teamSize}
                           onChange={(e) => setTeamSize(Number(e.target.value))}
-                          className="w-full h-11 px-4 rounded-xl bg-slate-900 border border-[var(--border)] text-heading text-sm focus:border-amber-500/50"
+                          className="w-full h-11 px-4 rounded-xl border border-[var(--border)] text-heading text-sm focus:outline-none focus:border-amber-500/60 focus:ring-2 focus:ring-amber-400/20 transition-all inp"
                         >
                           {[2, 3, 4, 5, 6, 7, 8].map((size) => (
                             <option key={size} value={size}>{size} students per team</option>
@@ -3047,7 +3047,7 @@ export default function Home() {
                         <select
                           value={selectedYear}
                           onChange={(e) => setSelectedYear(e.target.value)}
-                          className="w-full h-11 px-4 rounded-xl bg-slate-900 border border-[var(--border)] text-heading text-sm focus:border-amber-500/50"
+                          className="w-full h-11 px-4 rounded-xl border border-[var(--border)] text-heading text-sm focus:outline-none focus:border-amber-500/60 focus:ring-2 focus:ring-amber-400/20 transition-all inp"
                         >
                           <option value="ALL">All Years</option>
                           <option value="First Year">First Year</option>
@@ -3061,7 +3061,7 @@ export default function Home() {
                         <select
                           value={selectedDept}
                           onChange={(e) => setSelectedDept(e.target.value)}
-                          className="w-full h-11 px-4 rounded-xl bg-slate-900 border border-[var(--border)] text-heading text-sm focus:border-amber-500/50"
+                          className="w-full h-11 px-4 rounded-xl border border-[var(--border)] text-heading text-sm focus:outline-none focus:border-amber-500/60 focus:ring-2 focus:ring-amber-400/20 transition-all inp"
                         >
                           <option value="ALL">All Departments</option>
                           <option value="IT">IT</option>
@@ -3075,7 +3075,7 @@ export default function Home() {
                         <select
                           value={selectedSection}
                           onChange={(e) => setSelectedSection(e.target.value)}
-                          className="w-full h-11 px-4 rounded-xl bg-slate-900 border border-[var(--border)] text-heading text-sm focus:border-amber-500/50"
+                          className="w-full h-11 px-4 rounded-xl border border-[var(--border)] text-heading text-sm focus:outline-none focus:border-amber-500/60 focus:ring-2 focus:ring-amber-400/20 transition-all inp"
                         >
                           <option value="ALL">All Sections</option>
                           <option value="A">Section A</option>
@@ -3307,7 +3307,7 @@ export default function Home() {
                           type="text"
                           value={studentForm.name}
                           onChange={(e) => setStudentForm({ ...studentForm, name: e.target.value })}
-                          className="w-full h-10 px-3 rounded-lg bg-slate-900 border border-[var(--border)] text-heading text-sm"
+                          className="w-full h-10 px-3 rounded-lg border border-[var(--border)] text-heading text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400/30 transition-all inp"
                         />
                       </div>
                       <div className="space-y-1">
@@ -3316,7 +3316,7 @@ export default function Home() {
                           type="email"
                           value={studentForm.email}
                           onChange={(e) => setStudentForm({ ...studentForm, email: e.target.value })}
-                          className="w-full h-10 px-3 rounded-lg bg-slate-900 border border-[var(--border)] text-heading text-sm"
+                          className="w-full h-10 px-3 rounded-lg border border-[var(--border)] text-heading text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400/30 transition-all inp"
                         />
                       </div>
                       {!editingStudent && (
@@ -3327,7 +3327,7 @@ export default function Home() {
                             placeholder="Password123"
                             value={studentForm.password}
                             onChange={(e) => setStudentForm({ ...studentForm, password: e.target.value })}
-                            className="w-full h-10 px-3 rounded-lg bg-slate-900 border border-[var(--border)] text-heading text-sm"
+                            className="w-full h-10 px-3 rounded-lg border border-[var(--border)] text-heading text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400/30 transition-all inp"
                           />
                         </div>
                       )}
@@ -3337,7 +3337,7 @@ export default function Home() {
                           type="text"
                           value={studentForm.register_number}
                           onChange={(e) => setStudentForm({ ...studentForm, register_number: e.target.value })}
-                          className="w-full h-10 px-3 rounded-lg bg-slate-900 border border-[var(--border)] text-heading text-sm font-mono"
+                          className="w-full h-10 px-3 rounded-lg border border-[var(--border)] text-heading text-sm font-mono focus:outline-none focus:ring-2 focus:ring-indigo-400/30 transition-all inp"
                         />
                       </div>
                       <div className="grid grid-cols-3 gap-3">
@@ -3346,7 +3346,7 @@ export default function Home() {
                           <select
                             value={studentForm.department}
                             onChange={(e) => setStudentForm({ ...studentForm, department: e.target.value })}
-                            className="w-full h-10 px-2 rounded-lg bg-slate-900 border border-[var(--border)] text-heading text-xs"
+                            className="w-full h-10 px-2 rounded-lg border border-[var(--border)] text-heading text-xs focus:outline-none transition-all inp"
                           >
                             <option value="IT">IT</option>
                             <option value="CSE">CSE</option>
@@ -3359,7 +3359,7 @@ export default function Home() {
                           <select
                             value={studentForm.year}
                             onChange={(e) => setStudentForm({ ...studentForm, year: e.target.value })}
-                            className="w-full h-10 px-2 rounded-lg bg-slate-900 border border-[var(--border)] text-heading text-xs"
+                            className="w-full h-10 px-2 rounded-lg border border-[var(--border)] text-heading text-xs focus:outline-none transition-all inp"
                           >
                             <option value="First Year">First Year</option>
                             <option value="Second Year">Second Year</option>
@@ -3372,7 +3372,7 @@ export default function Home() {
                           <select
                             value={studentForm.section}
                             onChange={(e) => setStudentForm({ ...studentForm, section: e.target.value })}
-                            className="w-full h-10 px-2 rounded-lg bg-slate-900 border border-[var(--border)] text-heading text-xs"
+                            className="w-full h-10 px-2 rounded-lg border border-[var(--border)] text-heading text-xs focus:outline-none transition-all inp"
                           >
                             <option value="A">Sec A</option>
                             <option value="B">Sec B</option>
@@ -3541,7 +3541,7 @@ export default function Home() {
 
           {tabSwitchWarning && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 ">
-              <div className="bg-slate-900 border border-red-500/40 rounded-2xl p-6 max-w-sm mx-4 shadow-2xl text-center">
+              <div className="[background:var(--input-bg)] border border-red-500/40 rounded-2xl p-6 max-w-sm mx-4 shadow-2xl text-center">
                 <AlertCircle className="w-12 h-12 text-red-400 mx-auto mb-3" />
                 <h3 className="text-lg font-bold text-heading mb-2">Stay Focused!</h3>
                 <p className="text-sm text-body mb-4">You left the session tab. Please return to the MZ ThinkCircle tab immediately to continue your assessment.</p>
