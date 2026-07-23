@@ -57,10 +57,13 @@ type Listener = (msg: GDLiveWsMessage) => void;
 
 export function useGdLiveWs(sessionCode: string | null, token: string | null) {
   const [connected, setConnected] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
   const wsRef = useRef<WebSocket | null>(null);
   const listenersRef = useRef<Set<Listener>>(new Set());
   const reconnectRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const closedByUs = useRef(false);
+  const retriesRef = useRef(0);
 
   const send = useCallback((event: string, payload?: any) => {
     const ws = wsRef.current;
@@ -76,26 +79,57 @@ export function useGdLiveWs(sessionCode: string | null, token: string | null) {
     };
   }, []);
 
+  const reset = useCallback(() => {
+    closedByUs.current = true;
+    if (reconnectRef.current) clearTimeout(reconnectRef.current);
+    const ws = wsRef.current;
+    if (ws) {
+      ws.onclose = null;
+      ws.close();
+    }
+    wsRef.current = null;
+    setConnected(false);
+    setError(null);
+    setRetryCount(0);
+    retriesRef.current = 0;
+  }, []);
+
   useEffect(() => {
     if (!sessionCode || !token) return;
     closedByUs.current = false;
+    retriesRef.current = 0;
+    setError(null);
 
     const connect = () => {
       const url = `${WS_BASE}/ws/gd-live/${sessionCode}?token=${encodeURIComponent(token)}`;
       const ws = new WebSocket(url);
       wsRef.current = ws;
 
-      ws.onopen = () => setConnected(true);
-      ws.onclose = () => {
+      ws.onopen = () => {
+        setConnected(true);
+        setError(null);
+        retriesRef.current = 0;
+        setRetryCount(0);
+      };
+      ws.onclose = (event) => {
         setConnected(false);
         if (!closedByUs.current) {
-          reconnectRef.current = setTimeout(connect, 2000);
+          retriesRef.current += 1;
+          setRetryCount(retriesRef.current);
+          const delay = Math.min(2000 * Math.pow(1.5, retriesRef.current - 1), 15000);
+          reconnectRef.current = setTimeout(connect, delay);
         }
       };
-      ws.onerror = () => setConnected(false);
+      ws.onerror = () => {
+        setConnected(false);
+        setError("WebSocket connection error");
+      };
       ws.onmessage = (e) => {
         try {
           const msg = JSON.parse(e.data) as GDLiveWsMessage;
+          if (msg.event === "ERROR") {
+            setError(msg.payload?.detail || "Server error");
+          }
           listenersRef.current.forEach((fn) => fn(msg));
         } catch {
           /* ignore malformed */
@@ -118,5 +152,5 @@ export function useGdLiveWs(sessionCode: string | null, token: string | null) {
     };
   }, [sessionCode, token]);
 
-  return { connected, send, subscribe };
+  return { connected, error, retryCount, send, subscribe, reset };
 }
