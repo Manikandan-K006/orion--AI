@@ -159,6 +159,10 @@ export function announceSpeakerTurn(speakerName: string) {
   sayImmediate(`${speakerName}, it is now your turn to speak. You have 2 minutes.`);
 }
 
+export function announceYourTurn() {
+  sayImmediate("It is now your turn to speak. You have two minutes.");
+}
+
 export function announceLogout() {
   say("Thank you for using MZ Orator. Have a great day.");
 }

@@ -29,7 +29,10 @@ export type GDLiveWsEvent =
   | "SESSION_RESULTS"
   | "AUDIO_CHUNK"
   | "SPEAKER_FINISHED"
-  | "EVALUATION_PROGRESS";
+  | "EVALUATION_PROGRESS"
+  | "LIVE_SPEECH_BROADCAST"
+  | "LIVE_EVALUATION_UPDATE"
+  | "AI_ALERT";
 
 export type GDLiveWsMessage = {
   event: GDLiveWsEvent;
