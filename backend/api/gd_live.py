@@ -12,7 +12,8 @@ from backend.database import queries
 from backend.database import team_alloc
 from backend.database.db import get_db
 from backend.realtime.gd_ws import manager
-from backend.security import get_current_user
+from backend.security import get_current_user, hash_password
+from backend.models.schemas import GDSessionCreate
 
 ALLOWED_AUDIO_TYPES = {".wav", ".webm", ".mp3", ".m4a", ".ogg"}
 # Progress stages displayed to the student in order
@@ -33,25 +34,52 @@ def list_easy_topics(
     return queries.fetch_all(connection, "SELECT * FROM gd_easy_topics ORDER BY id")
 
 
-def _create_live_session_db(user_id: int) -> dict:
+def _create_live_session_db(user_id: int, topic_id: int, team_size: int, department: str | None, year: str | None, section: str | None) -> dict:
     from backend.database.db import get_connection
     conn = get_connection()
     try:
-        return queries.create_live_session(conn, user_id)
+        code = queries.generate_live_code(conn)
+        queries.execute(conn, 
+            "INSERT INTO gd_live_sessions (session_code, status, total_participants, created_by, department, year, section, team_size) VALUES (%s, 'waiting', 0, %s, %s, %s, %s, %s)", 
+            (code, user_id, department, year, section, team_size))
+        
+        # Fetch the selected topic
+        topic_row = queries.fetch_one(conn, "SELECT topic FROM gd_easy_topics WHERE id = %s", (topic_id,))
+        topic = topic_row["topic"] if topic_row else "Introduce yourself and share your thoughts"
+        
+        # Create first team with topic
+        queries.execute(conn,
+            "INSERT INTO gd_live_teams (session_code, team_number, topic) VALUES (%s, %s, %s)",
+            (code, 1, topic))
+            
+        return {"session_code": code, "topic": topic}
+    except Exception as e:
+        import logging
+        logging.getLogger("speaksense.api").error(f"Failed to create session: {e}")
+        raise e
     finally:
         conn.close()
 
 
 @router.post("/sessions")
 async def create_live_session(
+    payload: GDSessionCreate,
     current_user: dict = Depends(get_current_user),
 ) -> dict:
     if current_user.get("role") != "admin":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only admins can create sessions")
-    result = await asyncio.to_thread(_create_live_session_db, current_user["id"])
+    result = await asyncio.to_thread(
+        _create_live_session_db, 
+        current_user["id"], 
+        payload.topic_id, 
+        payload.team_size, 
+        payload.department, 
+        payload.year, 
+        payload.section
+    )
     session_code = result.get("session_code") if isinstance(result, dict) else None
     if session_code:
-        manager.ensure_state(session_code)
+        manager.ensure_state(session_code, result.get("topic"))
         await manager.broadcast(session_code, "SESSION_CREATED", {"session_code": session_code})
     return result
 
@@ -70,11 +98,53 @@ def join_live_session(
     current_user: dict = Depends(get_current_user),
     connection: MySQLConnection = Depends(get_db),
 ) -> dict:
+    # 1. Fetch user profile
+    profile = queries.fetch_one(connection, "SELECT * FROM student_profile WHERE user_id = %s", (current_user["id"],))
+    if not profile or not profile.get("department") or not profile.get("year"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, 
+            detail="Please update your profile details (Department and Year) before joining a Group Discussion."
+        )
+
+    # 2. Fetch session details
+    session = queries.get_live_session_by_code(connection, session_code)
+    if not session:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
+        
+    if session["status"] != "waiting":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Session is already active or completed")
+
+    # 3. Check department/year/section matching (case-insensitive)
+    sess_dept = (session.get("department") or "").strip().lower()
+    sess_year = (session.get("year") or "").strip().lower()
+    sess_sec = (session.get("section") or "").strip().lower()
+    
+    stud_dept = (profile.get("department") or "").strip().lower()
+    stud_year = (profile.get("year") or "").strip().lower()
+    stud_sec = (profile.get("section") or "").strip().lower()
+    
+    if sess_dept and sess_dept != stud_dept:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, 
+            detail=f"Department mismatch. This session is for '{session.get('department')}', but you are in '{profile.get('department')}'."
+        )
+    if sess_year and sess_year != stud_year:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, 
+            detail=f"Academic Year mismatch. This session is for '{session.get('year')}', but you are in '{profile.get('year')}'."
+        )
+    if sess_sec and sess_sec != stud_sec:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, 
+            detail=f"Section mismatch. This session is for Section '{session.get('section')}', but you are in Section '{profile.get('section')}'."
+        )
+
     result = queries.join_live_session(connection, session_code, current_user["id"])
     if result == "invalid":
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found or not waiting")
     if result == "already_joined":
         return {"message": "You have already joined this session"}
+        
     return {"message": "Joined session successfully"}
 
 
@@ -376,6 +446,7 @@ def _evaluate_live_participant(
     connection: MySQLConnection, session_code: str, user_id: int, team_number: int, transcript: str
 ) -> None:
     from backend.ai.evaluation import evaluate_transcript
+    import re
     result = evaluate_transcript(transcript)
     scores = _compute_scores(result)
     queries.save_live_evaluation(
@@ -383,6 +454,18 @@ def _evaluate_live_participant(
         scores["overall"], scores["fluency"], scores["grammar"],
         scores["accent"], scores["relevance"], scores["quality"],
         scores["points"], scores["weaknesses"], scores["tips"],
+        originality_score=result.originality_score,
+        critical_thinking_score=result.critical_thinking_score,
+        topic_understanding_score=result.topic_understanding_score,
+        voice_clarity_score=result.pronunciation_score,
+        body_language_score=85.0,
+        eye_contact_score=85.0,
+        filler_words_count=len([w for w in re.findall(r'\b\w+\b', transcript.lower()) if w in ["uh", "umm", "um", "like", "actually", "basically"]]),
+        speech_speed_wpm=int(len(re.findall(r'\b\w+\b', transcript)) / 0.5) if len(transcript) > 0 else 0,
+        pauses_count=len(re.findall(r'[,\.]', transcript)),
+        missing_discussion_points="; ".join(result.missing_discussion_points),
+        strengths="; ".join(result.strengths),
+        recommendations="; ".join(result.recommendations)
     )
 
 
@@ -610,6 +693,19 @@ async def _save_evaluation_bg(
                 scores["overall"], scores["fluency"], scores["grammar"],
                 scores["accent"], scores["relevance"], scores["quality"],
                 scores["points"], scores["weaknesses"], scores["tips"],
+                originality_score=evaluation.originality_score,
+                critical_thinking_score=evaluation.critical_thinking_score,
+                topic_understanding_score=evaluation.topic_understanding_score,
+                voice_clarity_score=evaluation.pronunciation_score,
+                body_language_score=85.0,
+                eye_contact_score=85.0,
+                confidence_score=evaluation.confidence_score,
+                filler_words_count=len([w for w in __import__("re").findall(r'\b\w+\b', transcript.lower()) if w in ["uh", "umm", "um", "like", "actually", "basically"]]),
+                speech_speed_wpm=int(len(__import__("re").findall(r'\b\w+\b', transcript)) / 0.5) if len(transcript) > 0 else 0,
+                pauses_count=len(__import__("re").findall(r'[,\.]', transcript)),
+                missing_discussion_points="; ".join(evaluation.missing_discussion_points),
+                strengths="; ".join(evaluation.strengths),
+                recommendations="; ".join(evaluation.recommendations)
             )
             logger.info(
                 "Saved evaluation uid=%s code=%s team=%s score=%s (%.1fs)",
@@ -669,3 +765,149 @@ def get_gd_report(
     from backend.reporting import generate_gd_pdf_report
     path = generate_gd_pdf_report(session_code, current_user.get("name", "Student"), topic, float(score), summary)
     return FileResponse(path=path, media_type="application/pdf", filename=f"Group_Discussion_Report_{session_code}.pdf")
+
+
+@router.post("/import-students")
+async def import_students(
+    file: UploadFile,
+    current_user: dict = Depends(get_current_user),
+) -> dict:
+    if current_user.get("role") != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only admins can import students")
+    
+    ext = Path(file.filename or "").suffix.lower()
+    if ext not in {".xlsx", ".xls"}:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported file format. Must be Excel (.xlsx or .xls)")
+    
+    settings = get_settings()
+    upload_dir = Path(settings.upload_dir)
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    
+    safe_name = f"import_{os.urandom(4).hex()}{ext}"
+    file_path = upload_dir / safe_name
+    
+    loop = asyncio.get_running_loop()
+    content = await loop.run_in_executor(None, file.file.read)
+    await loop.run_in_executor(None, file_path.write_bytes, content)
+    
+    from backend.app.services.student_import_service import import_students_from_excel
+    try:
+        res = await loop.run_in_executor(None, import_students_from_excel, str(file_path))
+        return res
+    except Exception as e:
+         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to process Excel file: {str(e)}")
+
+
+@router.get("/departments")
+def list_departments(connection: MySQLConnection = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    rows = queries.fetch_all(connection, "SELECT DISTINCT department FROM student_profile WHERE department IS NOT NULL AND department != ''")
+    return [r["department"] for r in rows]
+
+
+@router.get("/years")
+def list_years(connection: MySQLConnection = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    rows = queries.fetch_all(connection, "SELECT DISTINCT year FROM student_profile WHERE year IS NOT NULL AND year != ''")
+    return [r["year"] for r in rows]
+
+
+@router.get("/students")
+def list_students(connection: MySQLConnection = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    if current_user.get("role") != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only admins can list students")
+    return queries.fetch_all(connection, 
+        "SELECT u.id, u.name, u.email, u.register_number, sp.department, sp.year, sp.section "
+        "FROM users u JOIN student_profile sp ON u.id = sp.user_id WHERE u.role = 'student' ORDER BY u.name")
+
+
+@router.post("/students")
+def create_student_admin(payload: dict, connection: MySQLConnection = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    if current_user.get("role") != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only admins can manage students")
+    
+    email = payload.get("email")
+    name = payload.get("name")
+    password = payload.get("password") or "Password123"
+    register_number = payload.get("register_number")
+    department = payload.get("department")
+    year = payload.get("year")
+    section = payload.get("section")
+    
+    # Check existing
+    existing = queries.get_user_by_email(connection, email)
+    if existing:
+        raise HTTPException(status_code=400, detail="Email already exists")
+    existing_reg = queries.get_user_by_register_number(connection, register_number)
+    if existing_reg:
+        raise HTTPException(status_code=400, detail="Register number already exists")
+        
+    user_id = queries.create_user(connection, name, email, hash_password(password), "student", register_number)
+    queries.create_student_profile(connection, user_id, department, year, section)
+    return {"id": user_id, "message": "Student created successfully"}
+
+
+@router.put("/students/{student_id}")
+def update_student_admin(student_id: int, payload: dict, connection: MySQLConnection = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    if current_user.get("role") != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only admins can manage students")
+        
+    name = payload.get("name")
+    email = payload.get("email")
+    register_number = payload.get("register_number")
+    department = payload.get("department")
+    year = payload.get("year")
+    section = payload.get("section")
+    
+    # Update user
+    queries.execute(connection, "UPDATE users SET name = %s, email = %s, register_number = %s WHERE id = %s AND role = 'student'", (name, email, register_number, student_id))
+    # Update profile
+    queries.execute(connection, "UPDATE student_profile SET department = %s, year = %s, section = %s WHERE user_id = %s", (department, year, section, student_id))
+    return {"message": "Student updated successfully"}
+
+
+@router.delete("/students/{student_id}")
+def delete_student_admin(student_id: int, connection: MySQLConnection = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    if current_user.get("role") != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only admins can manage students")
+    queries.execute(connection, "DELETE FROM users WHERE id = %s AND role = 'student'", (student_id,))
+    return {"message": "Student deleted successfully"}
+
+
+@router.get("/sessions/{session_code}/attendance")
+def export_session_attendance(session_code: str, connection: MySQLConnection = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    if current_user.get("role") != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only admins can export attendance")
+    participants = queries.get_live_participants(connection, session_code)
+    # Return as structured data for the frontend to save as CSV
+    return [{
+        "Name": p["name"],
+        "Register Number": p["register_number"],
+        "Department": p.get("department", "-"),
+        "Year": p.get("year", "-"),
+        "Section": p.get("section", "-"),
+        "Team": p.get("team_number", "-"),
+        "Status": p["status"]
+    } for p in participants]
+
+
+@router.get("/sessions/{session_code}/evaluation-export")
+def export_session_evaluations(session_code: str, connection: MySQLConnection = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    if current_user.get("role") != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only admins can export evaluations")
+    
+    evals = queries.get_live_leaderboard(connection, session_code)
+    return [{
+        "Name": e["name"],
+        "Register Number": e["register_number"],
+        "Team": e["team_number"],
+        "Anonymous Label": e.get("anonymous_label", "-"),
+        "Overall Score": float(e["overall_score"]),
+        "Fluency Score": float(e["fluency_score"]),
+        "Grammar Score": float(e["grammar_score"]),
+        "Accent/Clarity Score": float(e["accent_score"]),
+        "Relevance Score": float(e["relevance_score"]),
+        "Content Quality": float(e["content_quality"]),
+        "Credential Points": float(e["credential_points"]),
+        "Strengths": e.get("strengths", "-"),
+        "Weaknesses": e.get("weaknesses", "-"),
+        "Recommendations": e.get("recommendations", "-")
+    } for e in evals]

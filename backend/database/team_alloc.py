@@ -53,11 +53,13 @@ def assign_live_teams(
     max_team_size: int = MAX_TEAM_SIZE,
     seed: int | None = None,
 ) -> list[dict[str, Any]]:
-    """Shuffle participants, pack into teams of <= max_team_size, assign a unique
-    easy topic to each team, persist ``team_number`` + ``anonymous_label`` and
-    return the team structure for the host / WebSocket broadcast."""
+    # Retrieve the session to find its team_size
+    session_row = queries.fetch_one(connection, "SELECT team_size FROM gd_live_sessions WHERE session_code = %s", (session_code,))
+    if session_row and session_row.get("team_size"):
+        max_team_size = session_row["team_size"]
+        
     participants = queries.fetch_all(connection,
-        "SELECT lp.*, u.name, u.register_number, sp.department, sp.year FROM gd_live_participants lp "
+        "SELECT lp.*, u.name, u.register_number, sp.department, sp.year, sp.section FROM gd_live_participants lp "
         "JOIN users u ON lp.user_id = u.id "
         "LEFT JOIN student_profile sp ON sp.user_id = u.id "
         "WHERE lp.session_code = %s ORDER BY lp.id",
@@ -65,33 +67,88 @@ def assign_live_teams(
     if not participants:
         return []
 
-    # Wipe any previous assignment so re-hosting reshuffles cleanly.
+    # Wipe any previous assignment
     queries.execute(connection, "DELETE FROM gd_live_teams WHERE session_code = %s", (session_code,))
     queries.execute(connection,
         "UPDATE gd_live_participants SET team_number = NULL, status = 'joined' WHERE session_code = %s",
         (session_code,))
 
-    rng = random.Random(seed)
     user_ids = [p["user_id"] for p in participants]
-    rng.shuffle(user_ids)
+    n = len(user_ids)
 
-    # Pack into teams of at most max_team_size.
+    # Teammate pairing optimization (avoid repeated teammates)
+    pair_history = {}
+    if n > 1:
+        placeholders = ", ".join(["%s"] * n)
+        history_rows = queries.fetch_all(connection,
+            f"SELECT p1.user_id AS u1, p2.user_id AS u2, COUNT(*) AS joint_count "
+            f"FROM gd_live_participants p1 "
+            f"JOIN gd_live_participants p2 ON p1.session_code = p2.session_code AND p1.team_number = p2.team_number "
+            f"JOIN gd_live_sessions s ON p1.session_code = s.session_code "
+            f"WHERE s.status = 'completed' AND p1.user_id < p2.user_id "
+            f"AND p1.user_id IN ({placeholders}) AND p2.user_id IN ({placeholders}) "
+            f"GROUP BY p1.user_id, p2.user_id",
+            tuple(user_ids) + tuple(user_ids))
+        for r in history_rows:
+            pair_history[(r["u1"], r["u2"])] = r["joint_count"]
+
+    # Generate balanced partitions & find one that minimizes overlap penalty
+    rng = random.Random(seed)
+    best_shuffle = list(user_ids)
+    best_penalty = float("inf")
+
+    # Balanced team size determination helper
+    def get_balanced_sizes(total_n, target_s):
+        if total_n <= 5:
+            return [total_n]
+        num_teams = total_n // target_s
+        base_size = total_n // num_teams
+        if base_size > 5:
+            num_teams += 1
+            base_size = total_n // num_teams
+        remainder = total_n % num_teams
+        sizes = [base_size + 1] * remainder + [base_size] * (num_teams - remainder)
+        return sizes
+
+    sizes = get_balanced_sizes(n, max_team_size)
+
+    # Try 100 random shuffles to find the optimal teammates partition
+    for _ in range(100):
+        current_shuffle = list(user_ids)
+        rng.shuffle(current_shuffle)
+        
+        # Calculate penalty for this partition
+        penalty = 0
+        idx = 0
+        for sz in sizes:
+            team_uids = current_shuffle[idx : idx + sz]
+            idx += sz
+            for a in range(len(team_uids)):
+                for b in range(a + 1, len(team_uids)):
+                    u1, u2 = min(team_uids[a], team_uids[b]), max(team_uids[a], team_uids[b])
+                    penalty += pair_history.get((u1, u2), 0)
+        
+        if penalty < best_penalty:
+            best_penalty = penalty
+            best_shuffle = current_shuffle
+            if penalty == 0:
+                break # Found absolute minimum overlap
+
+    # Split best_shuffle into teams according to sizes
     teams: list[list[int]] = []
-    i, n = 0, len(user_ids)
-    while i < n:
-        size = min(max_team_size, n - i)
-        teams.append(user_ids[i:i + size])
-        i += size
+    idx = 0
+    for sz in sizes:
+        teams.append(best_shuffle[idx : idx + sz])
+        idx += sz
 
-    # Unique topics: shuffle the pool, hand one to each team (wrap only if more
-    # teams than topics).
+    # Shuffled topic list from pool
     topic_rows = queries.fetch_all(connection, "SELECT topic FROM gd_easy_topics ORDER BY RAND()")
     topic_pool = [t["topic"] for t in topic_rows] or ["Introduce yourself and share your thoughts"]
 
     by_id = {p["user_id"]: p for p in participants}
     result: list[dict[str, Any]] = []
 
-    # Batch INSERT all teams in a single multi-row query
+    # Batch INSERT all teams
     team_rows = [
         (session_code, tn, topic_pool[(tn - 1) % len(topic_pool)])
         for tn in range(1, len(teams) + 1)
@@ -106,7 +163,7 @@ def assign_live_teams(
         )
         cursor.close()
 
-    # Batch UPDATE all participants in a single executemany call
+    # Batch UPDATE all participants
     update_params = []
     for team_number, members in enumerate(teams, start=1):
         for j, uid in enumerate(members):
@@ -120,7 +177,7 @@ def assign_live_teams(
         )
         cursor.close()
 
-    # Build result dict (no DB calls needed)
+    # Build response format
     for team_number, members in enumerate(teams, start=1):
         topic = topic_pool[(team_number - 1) % len(topic_pool)]
         team_members = []
@@ -133,6 +190,7 @@ def assign_live_teams(
                 "register_number": p["register_number"],
                 "department": p.get("department"),
                 "year": p.get("year"),
+                "section": p.get("section"),
             })
         result.append({"team_number": team_number, "topic": topic, "members": team_members})
 

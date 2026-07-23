@@ -8,6 +8,7 @@ class RegisterRequest(BaseModel):
     role: str = Field(default="student", pattern="^(student|admin)$")
     department: str | None = Field(default=None, max_length=100)
     year: str | None = Field(default=None, max_length=30)
+    section: str | None = Field(default=None, max_length=10)
 
 
 class LoginRequest(BaseModel):
@@ -39,6 +40,7 @@ class UserResponse(BaseModel):
     register_number: str | None = None
     department: str | None = None
     year: str | None = None
+    section: str | None = None
 
 
 
@@ -91,7 +93,10 @@ class AnalysisResult(BaseModel):
 
 class GDSessionCreate(BaseModel):
     topic_id: int
-    team_size: int = Field(default=2, ge=1, le=4)
+    team_size: int = Field(default=4, ge=1, le=8)
+    year: str | None = None
+    department: str | None = None
+    section: str | None = None
 
 
 class GDTranscriptSubmit(BaseModel):

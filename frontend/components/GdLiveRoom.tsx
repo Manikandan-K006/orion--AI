@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { CheckCircle2, Loader2, Clock, Users, Mic, MicOff, Volume2, Brain, AlertTriangle, AlertCircle, Target, Maximize2, Medal, BarChart3, Zap, Play, User, Sparkles, FileText, Download, Lightbulb, MessageSquare, ShieldCheck } from "lucide-react";
+import { CheckCircle2, Loader2, Clock, Users, Mic, MicOff, Volume2, Brain, AlertTriangle, AlertCircle, Target, Maximize2, Medal, BarChart3, Zap, Play, User, Sparkles, FileText, Download, Lightbulb, MessageSquare, ShieldCheck, Activity, Trophy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, Radar } from "recharts";
 import { useGdLiveWs, GDLiveWsMessage } from "@/lib/useGdLiveWs";
@@ -69,9 +69,19 @@ export default function GdLiveRoom({
   const [myRank, setMyRank] = useState(0);
   const [showResults, setShowResults] = useState(false);
   const [submitStep, setSubmitStep] = useState<SubmitStep>("idle");
-  const [audioError, setAudioError] = useState("");
   const [evalStage, setEvalStage] = useState("");
   const [generatingStep, setGeneratingStep] = useState<string>("");
+
+  // Turn, round, speech streaming and alerts state variables
+  const [currentSpeakerId, setCurrentSpeakerId] = useState<number | null>(null);
+  const [nextSpeakerId, setNextSpeakerId] = useState<number | null>(null);
+  const [discussionRound, setDiscussionRound] = useState<number>(1);
+  const [liveSpeechText, setLiveSpeechText] = useState("");
+  const [liveTranscripts, setLiveTranscripts] = useState<Record<number, string>>({});
+  const [liveScores, setLiveScores] = useState({ grammar: 85, fluency: 85, confidence: 85, vocabulary: 85, overall: 85 });
+  const [aiAlertsList, setAiAlertsList] = useState<any[]>([]);
+  const [chatMessages, setChatMessages] = useState<any[]>([]);
+  const recognitionRef = useRef<any>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioStreamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -164,6 +174,48 @@ export default function GdLiveRoom({
     }, 7000);
     return () => { clearTimeout(s1); clearTimeout(s2); clearTimeout(s3); clearTimeout(s4); };
   }, [allDone, submitStep]);
+
+  const [audioError, setAudioError] = useState("");
+
+  function startSpeechRecognition() {
+    if (typeof window === "undefined") return;
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) return;
+
+    if (recognitionRef.current) {
+      try { recognitionRef.current.stop(); } catch(e){}
+    }
+
+    const rec = new SpeechRecognition();
+    rec.continuous = true;
+    rec.interimResults = true;
+    rec.lang = "en-US";
+
+    rec.onresult = (event: any) => {
+      let currentResult = "";
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        currentResult += event.results[i][0].transcript;
+      }
+      setLiveSpeechText(currentResult);
+      send("LIVE_SPEECH", { text: currentResult });
+    };
+
+    rec.onerror = (event: any) => {
+      console.error("Speech recognition error:", event.error);
+    };
+
+    recognitionRef.current = rec;
+    rec.start();
+  }
+
+  function stopSpeechRecognition() {
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch (e) {}
+      recognitionRef.current = null;
+    }
+  }
 
   async function startRecording() {
     try {
@@ -290,13 +342,20 @@ export default function GdLiveRoom({
           if (msg.payload?.topic) setTopic(msg.payload.topic);
           const myTeam = st?.teams
             ? Object.values(st.teams).find((t: any) => t.members?.some((m: any) => m.user_id === userId)) as any
-            : null;
+            : (st?.team_states ? Object.values(st.team_states).find((t: any) => t.members?.some((m: any) => m.user_id === userId)) : null) as any;
           if (myTeam) {
             setTeamNumber(myTeam.team_number);
             setMembers(myTeam.members || []);
             if (myTeam.timer_seconds) setTimerSeconds(myTeam.timer_seconds);
             setFinishedIds(new Set(myTeam.finished_user_ids || []));
             setAllFinished(myTeam.all_finished || false);
+            
+            if (myTeam.speaking_order) {
+              setCurrentSpeakerId(myTeam.speaking_order[myTeam.current_speaker_idx] || null);
+              setNextSpeakerId(myTeam.speaking_order[myTeam.current_speaker_idx + 1] || null);
+              setDiscussionRound(myTeam.round || 1);
+            }
+
             if (!announcedMarkers.current.has("welcome")) {
               announcedMarkers.current.add("welcome");
               voice.announceDiscussionStart();
@@ -334,11 +393,58 @@ export default function GdLiveRoom({
           setTimerSeconds(ts.timer_seconds);
           setFinishedIds(new Set(ts.finished_user_ids || []));
           setAllFinished(ts.all_finished || false);
+          if (ts.speaking_order) {
+            setCurrentSpeakerId(ts.speaking_order[ts.current_speaker_idx] || null);
+            setNextSpeakerId(ts.speaking_order[ts.current_speaker_idx + 1] || null);
+            setDiscussionRound(ts.round || 1);
+          }
+          break;
+        }
+        case "SPEAKER_CHANGED": {
+          const { current_speaker_id, next_speaker_id, round, topic } = msg.payload;
+          setCurrentSpeakerId(current_speaker_id);
+          setNextSpeakerId(next_speaker_id);
+          setDiscussionRound(round || 1);
+          if (topic) setTopic(topic);
+          setLiveSpeechText("");
+          
+          if (current_speaker_id === userId) {
+            voice.announceYourTurn();
+            startSpeechRecognition();
+          } else {
+            stopSpeechRecognition();
+          }
+          break;
+        }
+        case "LIVE_SPEECH_BROADCAST": {
+          const { user_id, text } = msg.payload;
+          setLiveTranscripts(prev => ({
+            ...prev,
+            [user_id]: text
+          }));
+          break;
+        }
+        case "LIVE_EVALUATION_UPDATE": {
+          const { user_id, grammar, fluency, confidence, vocabulary, quality, overall } = msg.payload;
+          if (user_id === userId) {
+            setLiveScores({ grammar, fluency, confidence, vocabulary: vocabulary || quality, overall });
+          }
+          break;
+        }
+        case "AI_ALERT": {
+          const alert = msg.payload;
+          setAiAlertsList(prev => [alert, ...prev].slice(0, 5));
+          break;
+        }
+        case "CHAT_MESSAGE": {
+          const chat = msg.payload;
+          setChatMessages(prev => [...prev, chat]);
           break;
         }
         case "ALL_FINISHED": {
           setAllFinished(true);
           setTimerRunning(false);
+          stopSpeechRecognition();
           voice.announceAllFinished();
           break;
         }
@@ -365,12 +471,13 @@ export default function GdLiveRoom({
           setMembers((prev) => prev.filter((m: any) => m.user_id !== msg.payload?.user_id));
           break;
         case "SESSION_ENDED":
+          stopSpeechRecognition();
           onLeave();
           break;
       }
     });
     return unsub;
-  }, [subscribe, userId]);
+  }, [subscribe, userId, topic, teamNumber]);
 
   useEffect(() => {
     if (!connected && announcedMarkers.current.has("connected")) {
@@ -440,6 +547,31 @@ export default function GdLiveRoom({
                 <Medal className={"w-12 h-12 mb-3 " + (rankNumber === 1 ? "text-amber-500 animate-bounce" : rankNumber === 2 ? "text-slate-400" : "text-orange-500")} />
                 <p className="text-[10px] text-muted-soft uppercase font-bold tracking-wider">Your Team Rank</p>
                 <h2 className="text-3xl font-black text-heading mt-1">#{rankNumber} <span className="text-base text-muted-soft font-normal">of {totalCount}</span></h2>
+              </div>
+
+              {/* Team Leaderboard Card */}
+              <div className="card p-6 space-y-4">
+                <h4 className="text-xs font-bold text-heading uppercase tracking-wider flex items-center gap-1.5">
+                  <Trophy className="w-4 h-4 text-amber-400 animate-pulse" /> Team Standings
+                </h4>
+                <div className="space-y-3">
+                  {sorted.map((item: any, idx: number) => (
+                    <div key={item.user_id} className={`flex items-center justify-between p-3 rounded-xl border ${item.user_id === userId ? "border-amber-500/40 bg-amber-500/5" : "border-[var(--border)] surface-2"}`}>
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <span className="text-base shrink-0">
+                          {idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : `${idx + 1}`}
+                        </span>
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-heading truncate">{item.name}</p>
+                          <p className="text-[10px] text-muted-soft font-mono truncate">{item.label || "Member"}</p>
+                        </div>
+                      </div>
+                      <span className="text-xs font-extrabold text-emerald-400 shrink-0">
+                        {Number(item.overall_score || item.overall).toFixed(1)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
               </div>
 
               {/* Radar metric skills chart */}
@@ -895,58 +1027,53 @@ export default function GdLiveRoom({
   // ─── LIVE DISCUSSION VIEW ───
   return (
     <div className={`min-h-screen flex flex-col relative overflow-hidden ${theme === "dark" ? "dark" : ""}`}>
-      {/* Theme-based animated background */}
       <div className="fixed inset-0 z-0">
         <img
           src={theme === "dark" ? "/animated_gd_bg.jpeg" : "/gd_light_bg.jpeg"}
           alt=""
           className="w-full h-full object-cover opacity-80"
-          style={theme === "dark" ? { animation: "ken-burns 30s ease-in-out infinite alternate" } : undefined}
         />
-        {/* Glowing background meshes */}
         <div className="absolute inset-0 bg-gradient-to-tr from-slate-950 via-slate-900 to-indigo-950/40 opacity-90 dark:block hidden" />
         <div className="absolute inset-0 bg-gradient-to-tr from-slate-50 via-indigo-50/20 to-purple-50/30 dark:hidden block" />
-        
-        {/* Soft floating dynamic gradient orbs */}
-        <div className="absolute top-1/4 left-1/4 w-[450px] h-[450px] rounded-full bg-indigo-500/10 dark:bg-indigo-600/5 blur-[120px] pointer-events-none animate-pulse" style={{ animationDuration: "12s" }} />
-        <div className="absolute bottom-1/4 right-1/4 w-[400px] h-[400px] rounded-full bg-purple-500/10 dark:bg-purple-600/5 blur-[120px] pointer-events-none animate-pulse" style={{ animationDuration: "8s" }} />
       </div>
 
       <div className="relative z-10 flex-1 flex flex-col p-4 md:p-6">
         {warnModal}
         <div className="max-w-6xl mx-auto w-full space-y-6 flex-1 flex flex-col justify-center animate-fade-up">
-        {/* Header: Topic banner and general settings */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          {/* Left Panel: Participants list (cols=4) */}
+          {/* Left Panel: Active Speakers Sidebar */}
           <div className="lg:col-span-4 space-y-4">
             <div className="card p-4">
               <h3 className="text-xs font-bold text-heading uppercase tracking-wider mb-4 flex items-center gap-1.5">
-                <Users className="w-4 h-4 text-indigo-400" /> Group Members
+                <Users className="w-4 h-4 text-indigo-400" /> Active Speakers Sidebar
               </h3>
               <div className="space-y-3">
                 {members.map((m: any, i: number) => {
-                  const label = anonLabel(m, i, userId);
-                  const status = anonStatus(m, userId);
-                  const done = finishedIds.has(m.user_id);
+                  const label = m.label || m.anonymous_label || `Member ${i + 1}`;
                   const isMe = m.user_id === userId;
+                  const isCurrent = m.user_id === currentSpeakerId;
+                  const done = finishedIds.has(m.user_id);
                   return (
-                    <div key={m.user_id} className={`p-3.5 rounded-2xl border transition-all duration-300 flex items-center justify-between gap-3 ${done ? "border-emerald-500/25 bg-emerald-500/5" : isMe ? "border-indigo-500/40 bg-indigo-500/5 shadow-sm" : "border-slate-200/40 dark:border-slate-800/40 bg-white/40 dark:bg-slate-900/40"}`}>
+                    <div key={m.user_id} className={`p-3.5 rounded-2xl border transition-all duration-300 flex items-center justify-between gap-3 ${isCurrent ? "border-red-500/40 bg-red-500/5 shadow-md shadow-red-500/5 animate-pulse" : done ? "border-emerald-500/25 bg-emerald-500/5" : "border-slate-200/40 dark:border-slate-800/40 bg-white/40 dark:bg-slate-900/40"}`}>
                       <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center text-white text-xs font-bold shadow-sm shrink-0">
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-white text-xs font-bold shadow-sm shrink-0 ${isCurrent ? "bg-red-500" : "bg-gradient-to-tr from-indigo-500 to-purple-600"}`}>
                           {label[0].toUpperCase()}
                         </div>
                         <div className="min-w-0">
-                          <p className="text-xs font-bold text-heading truncate">{label}</p>
-                          <p className={`text-[10px] ${done ? "text-emerald-500 font-semibold" : "text-muted-soft"}`}>{done ? "Finished" : status}</p>
+                          <p className="text-xs font-bold text-heading truncate">{label} {isMe && "(You)"}</p>
+                          <p className={`text-[10px] ${isCurrent ? "text-red-500 font-bold" : done ? "text-emerald-500 font-semibold" : "text-muted-soft"}`}>
+                            {isCurrent ? "Speaking Turn" : done ? "Turn Complete" : "Waiting Turn"}
+                          </p>
                         </div>
                       </div>
 
-                      {/* Live audio feedback levels if isMe */}
-                      {isMe && isRecording && (
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
-                          <div className="w-12 h-1 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
-                            <div className="bg-red-500 h-full transition-all duration-150" style={{ width: `${audioLevel * 100}%` }} />
+                      {isCurrent && (
+                        <div className="flex items-center gap-1 shrink-0">
+                          <span className="w-2 h-2 rounded-full bg-red-500 animate-ping" />
+                          <div className="flex gap-0.5 items-end h-3">
+                            <span className="w-0.5 bg-red-500 rounded-full animate-bounce" style={{ height: "40%", animationDelay: "0.1s" }} />
+                            <span className="w-0.5 bg-red-500 rounded-full animate-bounce" style={{ height: "80%", animationDelay: "0.3s" }} />
+                            <span className="w-0.5 bg-red-500 rounded-full animate-bounce" style={{ height: "50%", animationDelay: "0.5s" }} />
                           </div>
                         </div>
                       )}
@@ -955,86 +1082,129 @@ export default function GdLiveRoom({
                 })}
               </div>
             </div>
+
+            {/* Real-time scorecards and dials */}
+            <div className="card p-5 space-y-4">
+              <h3 className="text-xs font-bold text-heading uppercase tracking-wider flex items-center gap-1.5">
+                <Activity className="w-4 h-4 text-emerald-400" /> Real-time Speech Metrics
+              </h3>
+              
+              <div className="grid grid-cols-2 gap-3 text-center">
+                <div className="p-3 rounded-xl bg-slate-900/50 border border-[var(--border)]">
+                  <p className="text-[10px] text-muted-soft uppercase font-bold">Grammar</p>
+                  <p className="text-xl font-extrabold text-heading mt-1">{liveScores.grammar}%</p>
+                </div>
+                <div className="p-3 rounded-xl bg-slate-900/50 border border-[var(--border)]">
+                  <p className="text-[10px] text-muted-soft uppercase font-bold">Fluency</p>
+                  <p className="text-xl font-extrabold text-heading mt-1">{liveScores.fluency}%</p>
+                </div>
+                <div className="p-3 rounded-xl bg-slate-900/50 border border-[var(--border)]">
+                  <p className="text-[10px] text-muted-soft uppercase font-bold">Confidence</p>
+                  <p className="text-xl font-extrabold text-heading mt-1">{liveScores.confidence}%</p>
+                </div>
+                <div className="p-3 rounded-xl bg-slate-900/50 border border-[var(--border)]">
+                  <p className="text-[10px] text-muted-soft uppercase font-bold">Vocabulary</p>
+                  <p className="text-xl font-extrabold text-heading mt-1">{liveScores.vocabulary}%</p>
+                </div>
+              </div>
+
+              <div className="border-t border-[var(--border)] pt-3 text-center">
+                <p className="text-[10px] text-muted-soft uppercase font-bold">Overall Performance Index</p>
+                <p className="text-2xl font-black text-emerald-400 mt-1">{liveScores.overall}%</p>
+              </div>
+            </div>
+
+            {/* AI Alerts Sidebar Panel */}
+            {aiAlertsList.length > 0 && (
+              <div className="card p-4 space-y-2 border-l-4 border-l-amber-500 bg-amber-500/5 animate-pulse">
+                <h4 className="text-xs font-bold text-heading uppercase tracking-wider flex items-center gap-1.5">
+                  <AlertTriangle className="w-4 h-4 text-amber-500" /> AI Coach Alerts
+                </h4>
+                <div className="space-y-2">
+                  {aiAlertsList.map((alert: any, idx: number) => (
+                    <p key={idx} className="text-[10px] text-body leading-normal">{alert.message}</p>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* Middle & Right Column (cols=8) */}
+          {/* Middle & Right Column: Active Room and Log */}
           <div className="lg:col-span-8 space-y-6">
-            {/* Active Topic Card */}
+            {/* Active Topic Banner */}
             <div className="card p-6 bg-gradient-to-r from-indigo-500/5 to-purple-500/5 border-l-4 border-l-indigo-500 relative overflow-hidden">
               <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none" />
               <div className="flex justify-between items-start gap-4 mb-3">
                 <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/10 text-indigo-500 border border-indigo-500/20 uppercase tracking-wider">
-                  Active Topic
+                  MZ ThinkCircle Discussion · Round {discussionRound}
                 </span>
-                <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-bold ${timerSeconds <= 30 ? "bg-red-500/15 text-red-500 border border-red-500/25" : "bg-slate-100/50 dark:bg-slate-950/40 border border-slate-200/40 dark:border-slate-800/40 text-heading"}`}>
-                  <Clock className="w-3.5 h-3.5" />
-                  {formatTime(timerSeconds)}
+                <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-bold bg-slate-900 border border-indigo-500/30 text-heading`}>
+                  <Clock className="w-3.5 h-3.5 text-indigo-400" />
+                  Remaining: {formatTime(timerSeconds)}
                 </div>
               </div>
               <h2 className="text-base font-extrabold text-heading leading-snug">{topic}</h2>
             </div>
 
-            {/* Audio level meter with multi-bar animated waveform */}
-            {!myFinished && submitStep === "idle" && (
-              <div className="card p-5 space-y-3 bg-gradient-to-br from-indigo-500/5 via-purple-500/5 to-transparent border-indigo-500/20 shadow-lg">
-                <div className="flex items-center justify-between">
-                  <p className="text-xs font-bold text-heading flex items-center gap-2">
-                    <span className="relative flex h-3 w-3">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
-                    </span>
-                    Live Audio Monitor
-                  </p>
-                  <span className="text-[10px] font-mono font-bold text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20 uppercase tracking-wider">
-                    {isRecording ? "Recording Active" : "Microphone Ready"}
-                  </span>
-                </div>
-
-                {/* Animated Multi-Bar Equalizer Waveform */}
-                <div className="h-14 bg-slate-900/90 rounded-2xl p-3 flex items-center justify-center gap-1.5 border border-indigo-500/30 overflow-hidden shadow-inner">
-                  {Array.from({ length: 22 }).map((_, barIdx) => {
-                    const barFactor = Math.sin((barIdx / 22) * Math.PI);
-                    const calculatedHeight = Math.max(12, Math.min(100, (audioLevel * 100 * (0.4 + barFactor * 0.8))));
-                    return (
-                      <div
-                        key={barIdx}
-                        className="w-1.5 rounded-full transition-all duration-100 bg-gradient-to-t from-emerald-500 via-indigo-500 to-purple-500 shadow-sm"
-                        style={{
-                          height: isRecording ? `${calculatedHeight}%` : "15%",
-                          opacity: isRecording ? 0.9 : 0.35,
-                        }}
-                      />
-                    );
-                  })}
-                </div>
-
-                <div className="flex items-center justify-between text-[10px] text-muted-soft">
-                  <span>Sensitivity: High</span>
-                  <span>Audio Level: {Math.round(audioLevel * 100)}%</span>
-                </div>
-
-                {audioError && <p className="text-[10px] text-red-400 text-center">{audioError}</p>}
+            {/* Live speech transcription display */}
+            <div className="card p-6 space-y-4">
+              <div className="flex justify-between items-center">
+                <h3 className="text-xs font-bold text-heading uppercase tracking-wider flex items-center gap-1.5">
+                  <Mic className="w-4 h-4 text-indigo-400" /> Live Transcript Monitor
+                </h3>
+                <span className="text-[10px] font-mono font-bold text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded-full">
+                  Real-time WebSpeech API
+                </span>
               </div>
-            )}
 
-            {/* AI Moderator Chat-style log */}
+              {currentSpeakerId === userId ? (
+                <div className="p-4 rounded-2xl bg-indigo-500/5 border border-indigo-500/30 min-h-24">
+                  <p className="text-xs text-indigo-400 font-bold mb-1">Your Speaking Turn (Present Opinion):</p>
+                  <p className="text-sm text-heading italic whitespace-pre-wrap leading-relaxed">{liveSpeechText || "Start speaking into your mic..."}</p>
+                </div>
+              ) : (
+                <div className="p-4 rounded-2xl bg-slate-900/50 border border-[var(--border)] min-h-24">
+                  <p className="text-xs text-muted-soft font-bold mb-1">
+                    Active Speaker Transcript ({members.find(m => m.user_id === currentSpeakerId)?.label || "Teammate Speaking"}):
+                  </p>
+                  <p className="text-sm text-heading whitespace-pre-wrap leading-relaxed">
+                    {liveTranscripts[currentSpeakerId || 0] || "Waiting for teammate to start speaking..."}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* AI Moderator Chat Log */}
             <div className="card p-6 flex flex-col justify-between">
               <div>
                 <h3 className="text-xs font-bold text-heading uppercase tracking-wider mb-4 flex items-center gap-1.5">
-                  <Brain className="w-4 h-4 text-indigo-400" /> AI Moderator Log
+                  <Brain className="w-4 h-4 text-indigo-400" /> AI Moderator Panel
                 </h3>
-                <div className="space-y-4 max-h-60 overflow-y-auto pr-2 text-xs">
-                  <div className="p-3.5 rounded-2xl bg-indigo-500/5 border border-indigo-500/10">
+                <div className="space-y-3 max-h-60 overflow-y-auto pr-2 text-xs flex flex-col">
+                  {/* Base Welcome Msg */}
+                  <div className="p-3.5 rounded-2xl bg-indigo-500/5 border border-indigo-500/10 self-start w-full">
                     <p className="font-bold text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5">🤖 AI Moderator</p>
                     <p className="text-muted-soft mt-1 leading-relaxed">Welcome everyone. Today's discussion topic is <strong>{topic}</strong>. Please structure your arguments carefully and await turn allocation prompts.</p>
                   </div>
+                  {/* Dynamic Chat Messages */}
+                  {chatMessages.map((msg: any, idx: number) => {
+                    const isSystem = msg.user_id === 0;
+                    return (
+                      <div key={idx} className={`p-3.5 rounded-2xl self-start w-full transition-all ${isSystem ? "bg-indigo-500/5 border border-indigo-500/10" : "bg-slate-900/40 border border-[var(--border)]"}`}>
+                        <p className={`font-bold flex items-center gap-1.5 ${isSystem ? "text-indigo-400" : "text-heading"}`}>
+                          {isSystem ? (msg.label || "🤖 AI Moderator") : (msg.label || msg.name)}
+                        </p>
+                        <p className="text-muted-soft mt-1 leading-relaxed">{msg.text}</p>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 
-              {/* Finish button at the bottom */}
-              {!myFinished && submitStep === "idle" && (
-                <Button onClick={() => executeFinish()} className="w-full btn-primary h-12 text-sm mt-6">
-                  Finish Discussion
+              {/* Speaker action buttons */}
+              {!myFinished && submitStep === "idle" && currentSpeakerId === userId && (
+                <Button onClick={() => executeFinish()} className="w-full btn-primary h-12 text-sm mt-6 bg-gradient-to-r from-red-500 to-orange-600 hover:from-red-400 hover:to-orange-500 border-0 font-bold">
+                  Conclude Turn & Save
                 </Button>
               )}
             </div>

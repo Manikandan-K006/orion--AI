@@ -298,6 +298,21 @@ export default function Home() {
   const [gdLiveIsLiveMeeting, setGdLiveIsLiveMeeting] = useState(false);
   const [gdLiveShowCountdown, setGdLiveShowCountdown] = useState(false);
   const [gdLivePerf, setGdLivePerf] = useState<Record<string, number>>({});
+  
+  // Group Discussion system extension states
+  const [selectedTopicId, setSelectedTopicId] = useState<number>(1);
+  const [teamSize, setTeamSize] = useState<number>(4);
+  const [selectedDept, setSelectedDept] = useState<string>("ALL");
+  const [selectedYear, setSelectedYear] = useState<string>("ALL");
+  const [selectedSection, setSelectedSection] = useState<string>("ALL");
+  const [easyTopicsList, setEasyTopicsList] = useState<any[]>([]);
+  const [studentList, setStudentList] = useState<any[]>([]);
+  const [departmentList, setDepartmentList] = useState<string[]>([]);
+  const [yearList, setYearList] = useState<string[]>([]);
+  const [adminSubTab, setAdminSubTab] = useState<"sessions" | "students" | "analytics">("sessions");
+  const [studentModalOpen, setStudentModalOpen] = useState(false);
+  const [editingStudent, setEditingStudent] = useState<any | null>(null);
+  const [studentForm, setStudentForm] = useState({ name: "", email: "", password: "", register_number: "", department: "IT", year: "First Year", section: "A" });
   const [roomMicOn, setRoomMicOn] = useState(true);
   const [roomCamOn, setRoomCamOn] = useState(false);
   const [roomHandRaised, setRoomHandRaised] = useState(false);
@@ -627,10 +642,124 @@ export default function Home() {
     } catch { }
   }
 
+  async function loadAdminDetails() {
+    try {
+      const topics = await apiRequest<any[]>("/gd-live/topics", {}, token).catch(() => []);
+      setEasyTopicsList(topics);
+      
+      const depts = await apiRequest<string[]>("/gd-live/departments", {}, token).catch(() => []);
+      setDepartmentList(depts);
+      
+      const yrs = await apiRequest<string[]>("/gd-live/years", {}, token).catch(() => []);
+      setYearList(yrs);
+      
+      const studs = await apiRequest<any[]>("/gd-live/students", {}, token).catch(() => []);
+      setStudentList(studs);
+    } catch { }
+  }
+
+  useEffect(() => {
+    if (token && user?.role === "admin" && (view === "gd-live-admin" || view === "gd-live-admin-view")) {
+      loadAdminDetails();
+    }
+  }, [view, token, user]);
+
+  async function deleteStudent(studentId: number) {
+    if (!confirm("Are you sure you want to delete this student?")) return;
+    try {
+      await apiRequest(`/gd-live/students/${studentId}`, { method: "DELETE" }, token);
+      setSuccess("Student deleted successfully");
+      await loadAdminDetails();
+    } catch (err: any) { setMessage(err.message); }
+  }
+
+  async function saveStudent() {
+    try {
+      if (editingStudent) {
+        await apiRequest(`/gd-live/students/${editingStudent.id}`, {
+          method: "PUT",
+          body: JSON.stringify(studentForm)
+        }, token);
+        setSuccess("Student updated successfully");
+      } else {
+        await apiRequest("/gd-live/students", {
+          method: "POST",
+          body: JSON.stringify(studentForm)
+        }, token);
+        setSuccess("Student created successfully");
+      }
+      setStudentModalOpen(false);
+      setEditingStudent(null);
+      await loadAdminDetails();
+    } catch (err: any) { setMessage(err.message); }
+  }
+
+  async function handleExcelUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const formData = new FormData();
+    formData.append("file", file);
+    setLoading(true);
+    try {
+      const apiHost = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      const res = await fetch(`${apiHost}/gd-live/import-students`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Failed to import excel");
+      setSuccess(`Excel import complete! Created: ${data.created_count}, Skipped: ${data.skipped_count}`);
+      await loadAdminDetails();
+    } catch (err: any) { setMessage(err.message); }
+    finally { setLoading(false); }
+  }
+
+  async function exportAttendance(sessionCode: string) {
+    try {
+      const data = await apiRequest<any[]>(`/gd-live/sessions/${sessionCode}/attendance`, {}, token);
+      if (!data || data.length === 0) return;
+      const headers = Object.keys(data[0]).join(",");
+      const rows = data.map(r => Object.values(r).map(val => `"${val}"`).join(","));
+      const csv = [headers, ...rows].join("\n");
+      const blob = new Blob([csv], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `Attendance_${sessionCode}.csv`;
+      a.click();
+    } catch (err: any) { setMessage(err.message); }
+  }
+
+  async function exportEvaluations(sessionCode: string) {
+    try {
+      const data = await apiRequest<any[]>(`/gd-live/sessions/${sessionCode}/evaluation-export`, {}, token);
+      if (!data || data.length === 0) return;
+      const headers = Object.keys(data[0]).join(",");
+      const rows = data.map(r => Object.values(r).map(val => `"${val}"`).join(","));
+      const csv = [headers, ...rows].join("\n");
+      const blob = new Blob([csv], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `Evaluations_${sessionCode}.csv`;
+      a.click();
+    } catch (err: any) { setMessage(err.message); }
+  }
+
   async function createGdLiveSession() {
     setLoading(true);
     try {
-      const res = await apiRequest<{ session_code: string }>("/gd-live/sessions", { method: "POST" }, token);
+      const res = await apiRequest<{ session_code: string }>("/gd-live/sessions", {
+        method: "POST",
+        body: JSON.stringify({
+          topic_id: selectedTopicId || 1,
+          team_size: teamSize || 4,
+          department: selectedDept === "ALL" ? null : selectedDept,
+          year: selectedYear === "ALL" ? null : selectedYear,
+          section: selectedSection === "ALL" || !selectedSection ? null : selectedSection
+        })
+      }, token);
       setGdLiveCreatedCode(res.session_code);
       setSuccess(`GD Live session created! Code: ${res.session_code}`);
       voice.announceSessionCreated();
@@ -2844,142 +2973,409 @@ export default function Home() {
           {/* ─── GD Live Admin ─── */}
           {view === "gd-live-admin" && user?.role === "admin" && (
             <div className="space-y-6">
-              <div className="card p-6">
-                <h2 className="text-lg font-semibold text-heading mb-4 flex items-center gap-2"><Shield className="w-5 h-5 text-amber-400" /> Admin Portal — GD Live Sessions</h2>
-                <div className="flex items-center gap-3 mb-4">
-                  <Button onClick={createGdLiveSession} disabled={loading} className="bg-gradient-to-r from-emerald-500 to-green-600 border-0">
-                    {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />} Create New Session (4-digit code)
-                  </Button>
-                </div>
-                {gdLiveCreatedCode && (
-                  <div className="mb-4 p-4 rounded-lg bg-emerald-500/10 border border-emerald-500/30 inline-block">
-                    <p className="text-xs text-emerald-300 mb-1">Session Code</p>
-                    <div className="flex items-center gap-2">
-                      <code className="text-3xl font-mono font-bold text-heading tracking-[0.3em]">{gdLiveCreatedCode}</code>
-                      <button onClick={() => copyCode(gdLiveCreatedCode)} className="p-1.5 rounded-md hover:surface-2 text-emerald-300">
-                        {copied ? <Check className="h-5 w-5" /> : <Copy className="h-5 w-5" />}
-                      </button>
-                    </div>
-                    <p className="text-xs text-muted-soft mt-1">Share this code with students to join</p>
-                  </div>
-                )}
+              {/* Sub Navigation */}
+              <div className="flex gap-4 border-b border-[var(--border)] pb-3">
+                <button
+                  onClick={() => setAdminSubTab("sessions")}
+                  className={`text-sm font-bold pb-2 transition border-b-2 px-1 ${adminSubTab === "sessions" ? "border-amber-500 text-amber-400" : "border-transparent text-muted hover:text-heading"}`}
+                >
+                  Active Sessions
+                </button>
+                <button
+                  onClick={() => setAdminSubTab("students")}
+                  className={`text-sm font-bold pb-2 transition border-b-2 px-1 ${adminSubTab === "students" ? "border-amber-500 text-amber-400" : "border-transparent text-muted hover:text-heading"}`}
+                >
+                  Student Directory
+                </button>
+                <button
+                  onClick={() => setAdminSubTab("analytics")}
+                  className={`text-sm font-bold pb-2 transition border-b-2 px-1 ${adminSubTab === "analytics" ? "border-amber-500 text-amber-400" : "border-transparent text-muted hover:text-heading"}`}
+                >
+                  Analytics & AI Usage
+                </button>
               </div>
 
-              {gdLiveSessions.map((sess: any) => (
-                <div key={sess.session_code} className="card p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <div>
-                      <h3 className="text-lg font-semibold text-heading">Session <code className="font-mono text-amber-300">{sess.session_code}</code></h3>
-                      <p className="text-xs text-muted-soft">Status: {sess.status} · {sess.participant_count || 0} participants · {sess.team_count || 0} teams</p>
+              {adminSubTab === "sessions" && (
+                <div className="space-y-6">
+                  <div className="card p-6">
+                    <h2 className="text-lg font-semibold text-heading mb-4 flex items-center gap-2"><Shield className="w-5 h-5 text-amber-400" /> Host a Group Discussion Session</h2>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5 border-b border-[var(--border)] pb-5">
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-semibold text-muted-soft">Discussion Topic</label>
+                        <select
+                          value={selectedTopicId}
+                          onChange={(e) => setSelectedTopicId(Number(e.target.value))}
+                          className="w-full h-11 px-4 rounded-xl bg-slate-900 border border-[var(--border)] text-heading text-sm focus:border-amber-500/50"
+                        >
+                          {easyTopicsList.map((t: any) => (
+                            <option key={t.id} value={t.id}>{t.topic}</option>
+                          ))}
+                          {easyTopicsList.length === 0 && (
+                            <option value={1}>Introduce yourself and share your thoughts</option>
+                          )}
+                        </select>
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-semibold text-muted-soft">Team Size (Target)</label>
+                        <select
+                          value={teamSize}
+                          onChange={(e) => setTeamSize(Number(e.target.value))}
+                          className="w-full h-11 px-4 rounded-xl bg-slate-900 border border-[var(--border)] text-heading text-sm focus:border-amber-500/50"
+                        >
+                          {[2, 3, 4, 5, 6, 7, 8].map((size) => (
+                            <option key={size} value={size}>{size} students per team</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-semibold text-muted-soft">Academic Year Filter</label>
+                        <select
+                          value={selectedYear}
+                          onChange={(e) => setSelectedYear(e.target.value)}
+                          className="w-full h-11 px-4 rounded-xl bg-slate-900 border border-[var(--border)] text-heading text-sm focus:border-amber-500/50"
+                        >
+                          <option value="ALL">All Years</option>
+                          <option value="First Year">First Year</option>
+                          <option value="Second Year">Second Year</option>
+                          <option value="Third Year">Third Year</option>
+                          <option value="Final Year">Final Year</option>
+                        </select>
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-semibold text-muted-soft">Department Filter</label>
+                        <select
+                          value={selectedDept}
+                          onChange={(e) => setSelectedDept(e.target.value)}
+                          className="w-full h-11 px-4 rounded-xl bg-slate-900 border border-[var(--border)] text-heading text-sm focus:border-amber-500/50"
+                        >
+                          <option value="ALL">All Departments</option>
+                          <option value="IT">IT</option>
+                          <option value="CSE">CSE</option>
+                          <option value="AIDS">AIDS</option>
+                          <option value="ECE">ECE</option>
+                        </select>
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-semibold text-muted-soft">Section Filter (Optional)</label>
+                        <select
+                          value={selectedSection}
+                          onChange={(e) => setSelectedSection(e.target.value)}
+                          className="w-full h-11 px-4 rounded-xl bg-slate-900 border border-[var(--border)] text-heading text-sm focus:border-amber-500/50"
+                        >
+                          <option value="ALL">All Sections</option>
+                          <option value="A">Section A</option>
+                          <option value="B">Section B</option>
+                          <option value="C">Section C</option>
+                        </select>
+                      </div>
                     </div>
-                    <div className="flex gap-2">
-                      <Button onClick={() => { setGdLiveAdminViewCode(sess.session_code); loadGdLiveParticipants(sess.session_code); setView("gd-live-admin-view"); }} disabled={loading} variant="secondary" className="text-xs">
-                        View
+
+                    <div className="flex items-center gap-3 mb-4">
+                      <Button onClick={createGdLiveSession} disabled={loading} className="bg-gradient-to-r from-emerald-500 to-green-600 border-0">
+                        {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />} Create New Session (4-digit code)
                       </Button>
-                      {sess.status !== "waiting" && (
-                        <Button onClick={() => loadGdLiveLeaderboard(sess.session_code)} disabled={loading} variant="secondary" className="bg-amber-500/20 text-amber-300 border-amber-500/30 text-xs">
-                          <Trophy className="w-3 h-3 mr-1" /> Leaderboard
-                        </Button>
+                    </div>
+                    {gdLiveCreatedCode && (
+                      <div className="mb-4 p-4 rounded-lg bg-emerald-500/10 border border-emerald-500/30 inline-block">
+                        <p className="text-xs text-emerald-300 mb-1">Session Code</p>
+                        <div className="flex items-center gap-2">
+                          <code className="text-3xl font-mono font-bold text-heading tracking-[0.3em]">{gdLiveCreatedCode}</code>
+                          <button onClick={() => copyCode(gdLiveCreatedCode)} className="p-1.5 rounded-md hover:surface-2 text-emerald-300">
+                            {copied ? <Check className="h-5 w-5" /> : <Copy className="h-5 w-5" />}
+                          </button>
+                        </div>
+                        <p className="text-xs text-muted-soft mt-1">Share this code with students to join</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {gdLiveSessions.map((sess: any) => (
+                    <div key={sess.session_code} className="card p-6">
+                      <div className="flex items-center justify-between mb-4">
+                        <div>
+                          <h3 className="text-lg font-semibold text-heading">Session <code className="font-mono text-amber-300">{sess.session_code}</code></h3>
+                          <p className="text-xs text-muted-soft">Status: {sess.status} · {sess.participant_count || 0} participants · {sess.team_count || 0} teams</p>
+                          {(sess.department || sess.year) && (
+                            <p className="text-xs text-amber-400 mt-1">Filters: {sess.year || "All Years"} · {sess.department || "All Depts"} {sess.section ? `· Sec ${sess.section}` : ""}</p>
+                          )}
+                        </div>
+                        <div className="flex gap-2">
+                          <Button onClick={() => { setGdLiveAdminViewCode(sess.session_code); loadGdLiveParticipants(sess.session_code); setView("gd-live-admin-view"); }} disabled={loading} variant="secondary" className="text-xs">
+                            View Room
+                          </Button>
+                          <Button onClick={() => exportAttendance(sess.session_code)} variant="secondary" className="text-xs">
+                            Export Attendance
+                          </Button>
+                          {sess.status !== "waiting" && (
+                            <>
+                              <Button onClick={() => loadGdLiveLeaderboard(sess.session_code)} disabled={loading} variant="secondary" className="bg-amber-500/20 text-amber-300 border-amber-500/30 text-xs">
+                                <Trophy className="w-3 h-3 mr-1" /> Leaderboard
+                              </Button>
+                              <Button onClick={() => exportEvaluations(sess.session_code)} variant="secondary" className="text-xs bg-purple-500/20 text-purple-300 border-purple-500/30">
+                                Export Evaluation
+                              </Button>
+                            </>
+                          )}
+                          {sess.status === "active" && (
+                            <Button onClick={() => completeGdLiveSession(sess.session_code)} disabled={loading} variant="secondary" className="bg-red-500/20 text-red-300 border-red-500/30 text-xs">
+                              End
+                            </Button>
+                          )}
+                          <Button onClick={() => deleteGdLiveSession(sess.session_code)} disabled={loading} variant="secondary" className="bg-red-500/10 text-red-400 border-red-500/20 text-xs">
+                            Delete
+                          </Button>
+                        </div>
+                      </div>
+
+                      {/* Leaderboard for this session */}
+                      {gdLiveLeaderboard.length > 0 && gdLiveLeaderboardViewCode === sess.session_code && (
+                        <div className="mt-6">
+                          <h4 className="text-sm font-semibold text-heading mb-3 flex items-center gap-2">
+                            <Trophy className="w-4 h-4 text-amber-400" /> Leaderboard — Session {sess.session_code}
+                          </h4>
+                          <table className="ent-table">
+                            <thead>
+                              <tr>
+                                <th className="pb-2 pr-2">Rank</th>
+                                <th className="pb-2 pr-2">Name</th>
+                                <th className="pb-2 pr-2 hidden md:table-cell">Register</th>
+                                <th className="pb-2 pr-2">Team</th>
+                                <th className="pb-2 pr-2">Label</th>
+                                <th className="pb-2 pr-2">Score</th>
+                                <th className="pb-2 pr-2">Credits</th>
+                                <th className="pb-2 pr-2">Transcript</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {gdLiveLeaderboard.map((entry, idx) => (
+                                <tr key={entry.user_id} className={`hover:surface-2 ${idx === 0 ? "bg-amber-500/10" : ""}`}>
+                                  <td className="py-2 pr-2">
+                                    <span className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-xs font-bold ${idx === 0 ? "bg-amber-500 text-heading" : idx === 1 ? "bg-slate-400 text-heading" : idx === 2 ? "bg-orange-500 text-heading" : "surface-2 text-body"}`}>{idx + 1}</span>
+                                  </td>
+                                  <td className="py-2 pr-2 text-heading font-medium">{entry.name}</td>
+                                  <td className="py-2 pr-2 text-body hidden md:table-cell">{entry.register_number}</td>
+                                  <td className="py-2 pr-2 text-amber-300 font-mono">{entry.team_number}</td>
+                                  <td className="py-2 pr-2 text-purple-300">{entry.anonymous_label || "-"}</td>
+                                  <td className="py-2 pr-2 text-emerald-300 font-semibold">{(entry.overall_score != null ? Number(entry.overall_score) : 0).toFixed(1)}</td>
+                                  <td className="py-2 pr-2 text-amber-300">{(entry.credential_points != null ? Number(entry.credential_points) : 0).toFixed(1)}</td>
+                                  <td className="py-2 pr-2">
+                                    <details className="cursor-pointer">
+                                      <summary className="text-amber-300 hover:text-amber-200 text-xs">View</summary>
+                                      <p className="mt-1 text-muted-soft whitespace-pre-wrap max-w-xs">{entry.transcript || "N/A"}</p>
+                                    </details>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
                       )}
-                      {sess.status === "active" && (
-                        <Button onClick={() => completeGdLiveSession(sess.session_code)} disabled={loading} variant="secondary" className="bg-red-500/20 text-red-300 border-red-500/30 text-xs">
-                          End
-                        </Button>
-                      )}
-                      <Button onClick={() => deleteGdLiveSession(sess.session_code)} disabled={loading} variant="secondary" className="bg-red-500/10 text-red-400 border-red-500/20 text-xs">
-                        Delete
+                    </div>
+                  ))}
+
+                  {gdLiveSessions.length === 0 && (
+                    <div className="card p-6 text-center">
+                      <p className="text-muted-soft text-sm">No sessions created yet. Create one above!</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {adminSubTab === "students" && (
+                <div className="space-y-6">
+                  {/* Excel Import Card */}
+                  <div className="card p-6">
+                    <h3 className="text-base font-semibold text-heading mb-3 flex items-center gap-2"><Upload className="w-5 h-5 text-indigo-400" /> Excel Student Import</h3>
+                    <p className="text-xs text-muted-soft mb-4">
+                      Upload an Excel spreadsheet containing students details. The Excel sheet should contain columns for: <code className="text-indigo-300">Student_Name</code>, <code className="text-indigo-300">Register_No</code>, <code className="text-indigo-300">Email</code>, <code className="text-indigo-300">Year</code>, <code className="text-indigo-300">Dept</code>, and optional <code className="text-indigo-300">Sec</code>.
+                    </p>
+                    <div className="flex items-center gap-3">
+                      <label className="btn-primary px-4 py-2 cursor-pointer rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-semibold text-sm">
+                        Select Excel File
+                        <input type="file" accept=".xlsx, .xls" onChange={handleExcelUpload} className="hidden" />
+                      </label>
+                      <Button onClick={() => {
+                        setEditingStudent(null);
+                        setStudentForm({ name: "", email: "", password: "Password123", register_number: "", department: "IT", year: "First Year", section: "A" });
+                        setStudentModalOpen(true);
+                      }} variant="secondary" className="text-sm">
+                        Add Single Student
                       </Button>
                     </div>
                   </div>
 
-                  {/* Participant list (admin sees real names) */}
-                  {gdLiveParticipants.length > 0 && gdLiveParticipants[0]?.session_code === sess.session_code && (
-                    <div className="mt-4">
+                  {/* Student Directory Table */}
+                  <div className="card p-6">
+                    <h3 className="text-base font-semibold text-heading mb-4">Student Directory</h3>
+                    <div className="overflow-x-auto">
                       <table className="ent-table">
                         <thead>
                           <tr>
-                            <th className="pb-2 pr-2">Team</th>
-                            <th className="pb-2 pr-2">Label</th>
-                            <th className="pb-2 pr-2">Name</th>
-                            <th className="pb-2 pr-2 hidden md:table-cell">Register</th>
-                            <th className="pb-2 pr-2 hidden md:table-cell">Department</th>
-                            <th className="pb-2 pr-2 hidden md:table-cell">Year</th>
-                            <th className="pb-2 pr-2">Status</th>
+                            <th className="pb-2 pr-2 text-left">Name</th>
+                            <th className="pb-2 pr-2 text-left font-mono">Register No</th>
+                            <th className="pb-2 pr-2 text-left">Department</th>
+                            <th className="pb-2 pr-2 text-left">Year</th>
+                            <th className="pb-2 pr-2 text-left">Section</th>
+                            <th className="pb-2 pr-2 text-left">Actions</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {gdLiveParticipants.map((p: any) => (
-                            <tr key={p.id} className="hover:surface-2">
-                              <td className="py-2 pr-2 text-heading font-mono">{p.team_number || "-"}</td>
-                              <td className="py-2 pr-2 text-amber-300">{p.anonymous_label || "-"}</td>
-                              <td className="py-2 pr-2 text-heading">{p.name}</td>
-                              <td className="py-2 pr-2 text-body hidden md:table-cell">{p.register_number}</td>
-                              <td className="py-2 pr-2 text-body hidden md:table-cell">{p.department || "-"}</td>
-                              <td className="py-2 pr-2 text-body hidden md:table-cell">{p.year || "-"}</td>
-                              <td className="py-2 pr-2">
-                                <span className={`text-xs px-2 py-0.5 rounded-full ${p.status === "completed" ? "bg-emerald-500/20 text-emerald-300" : p.status === "assigned" ? "bg-blue-500/20 text-blue-300" : "bg-amber-500/20 text-amber-300"}`}>{p.status}</span>
+                          {studentList.map((stud) => (
+                            <tr key={stud.id} className="hover:surface-2 border-b border-[var(--border)]/30">
+                              <td className="py-2.5 pr-2 text-heading font-medium">{stud.name}</td>
+                              <td className="py-2.5 pr-2 text-body font-mono">{stud.register_number}</td>
+                              <td className="py-2.5 pr-2 text-body">{stud.department || "-"}</td>
+                              <td className="py-2.5 pr-2 text-body">{stud.year || "-"}</td>
+                              <td className="py-2.5 pr-2 text-body font-bold text-amber-400">{stud.section || "-"}</td>
+                              <td className="py-2.5 pr-2">
+                                <div className="flex gap-2">
+                                  <button onClick={() => {
+                                    setEditingStudent(stud);
+                                    setStudentForm({
+                                      name: stud.name,
+                                      email: stud.email || "",
+                                      password: "",
+                                      register_number: stud.register_number,
+                                      department: stud.department || "IT",
+                                      year: stud.year || "First Year",
+                                      section: stud.section || "A"
+                                    });
+                                    setStudentModalOpen(true);
+                                  }} className="text-xs text-indigo-400 hover:text-indigo-300 font-semibold">
+                                    Edit
+                                  </button>
+                                  <button onClick={() => deleteStudent(stud.id)} className="text-xs text-red-400 hover:text-red-300 font-semibold">
+                                    Delete
+                                  </button>
+                                </div>
                               </td>
                             </tr>
                           ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-
-                  {/* Leaderboard for this session */}
-                  {gdLiveLeaderboard.length > 0 && gdLiveLeaderboardViewCode === sess.session_code && (
-                    <div className="mt-6">
-                      <h4 className="text-sm font-semibold text-heading mb-3 flex items-center gap-2">
-                        <Trophy className="w-4 h-4 text-amber-400" /> Leaderboard — Session {sess.session_code}
-                      </h4>
-                      <table className="ent-table">
-                        <thead>
-                          <tr>
-                            <th className="pb-2 pr-2">Rank</th>
-                            <th className="pb-2 pr-2">Name</th>
-                            <th className="pb-2 pr-2 hidden md:table-cell">Register</th>
-                            <th className="pb-2 pr-2">Team</th>
-                            <th className="pb-2 pr-2">Label</th>
-                            <th className="pb-2 pr-2">Score</th>
-                            <th className="pb-2 pr-2">Credits</th>
-                            <th className="pb-2 pr-2">Transcript</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {gdLiveLeaderboard.map((entry, idx) => (
-                            <tr key={entry.id} className={`hover:surface-2 ${idx === 0 ? "bg-amber-500/10" : ""}`}>
-                              <td className="py-2 pr-2">
-                                <span className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-xs font-bold ${idx === 0 ? "bg-amber-500 text-heading" : idx === 1 ? "bg-slate-400 text-heading" : idx === 2 ? "bg-orange-500 text-heading" : "surface-2 text-body"}`}>{idx + 1}</span>
-                              </td>
-                              <td className="py-2 pr-2 text-heading font-medium">{entry.name}</td>
-                              <td className="py-2 pr-2 text-body hidden md:table-cell">{entry.register_number}</td>
-                              <td className="py-2 pr-2 text-amber-300 font-mono">{entry.team_number}</td>
-                              <td className="py-2 pr-2 text-purple-300">{entry.anonymous_label || "-"}</td>
-                              <td className="py-2 pr-2 text-emerald-300 font-semibold">{(entry.overall_score != null ? Number(entry.overall_score) : 0).toFixed(1)}</td>
-                              <td className="py-2 pr-2 text-amber-300">{(entry.credential_points != null ? Number(entry.credential_points) : 0).toFixed(1)}</td>
-                              <td className="py-2 pr-2">
-                                <details className="cursor-pointer">
-                                  <summary className="text-amber-300 hover:text-amber-200 text-xs">View</summary>
-                                  <p className="mt-1 text-muted-soft whitespace-pre-wrap max-w-xs">{entry.transcript || "N/A"}</p>
-                                </details>
-                              </td>
+                          {studentList.length === 0 && (
+                            <tr>
+                              <td colSpan={6} className="py-8 text-center text-muted-soft text-sm">No students registered yet. Import or add one above!</td>
                             </tr>
-                          ))}
+                          )}
                         </tbody>
                       </table>
                     </div>
-                  )}
+                  </div>
                 </div>
-              ))}
+              )}
 
-              {gdLiveSessions.length === 0 && (
-                <div className="card p-6 text-center">
-                  <p className="text-muted-soft text-sm">No sessions created yet. Create one above!</p>
+              {adminSubTab === "analytics" && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="card p-5 surface-2">
+                    <h3 className="text-xs text-muted-soft uppercase font-bold tracking-wider mb-1">Total Registered Students</h3>
+                    <p className="text-3xl font-extrabold text-heading">{studentList.length}</p>
+                  </div>
+                  <div className="card p-5 surface-2">
+                    <h3 className="text-xs text-muted-soft uppercase font-bold tracking-wider mb-1">Active Departments</h3>
+                    <p className="text-3xl font-extrabold text-heading">{departmentList.length || 4}</p>
+                  </div>
+                  <div className="card p-5 surface-2">
+                    <h3 className="text-xs text-muted-soft uppercase font-bold tracking-wider mb-1">Total Live Sessions</h3>
+                    <p className="text-3xl font-extrabold text-heading">{gdLiveSessions.length}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Student Form Modal */}
+              {studentModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+                  <div className="card w-full max-w-md p-6 animate-scaleUp">
+                    <h3 className="text-lg font-bold text-heading mb-4">{editingStudent ? "Edit Student Details" : "Add New Student"}</h3>
+                    <div className="space-y-4">
+                      <div className="space-y-1">
+                        <label className="text-xs font-semibold text-muted-soft">Name</label>
+                        <input
+                          type="text"
+                          value={studentForm.name}
+                          onChange={(e) => setStudentForm({ ...studentForm, name: e.target.value })}
+                          className="w-full h-10 px-3 rounded-lg bg-slate-900 border border-[var(--border)] text-heading text-sm"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs font-semibold text-muted-soft">Email</label>
+                        <input
+                          type="email"
+                          value={studentForm.email}
+                          onChange={(e) => setStudentForm({ ...studentForm, email: e.target.value })}
+                          className="w-full h-10 px-3 rounded-lg bg-slate-900 border border-[var(--border)] text-heading text-sm"
+                        />
+                      </div>
+                      {!editingStudent && (
+                        <div className="space-y-1">
+                          <label className="text-xs font-semibold text-muted-soft">Password</label>
+                          <input
+                            type="password"
+                            placeholder="Password123"
+                            value={studentForm.password}
+                            onChange={(e) => setStudentForm({ ...studentForm, password: e.target.value })}
+                            className="w-full h-10 px-3 rounded-lg bg-slate-900 border border-[var(--border)] text-heading text-sm"
+                          />
+                        </div>
+                      )}
+                      <div className="space-y-1">
+                        <label className="text-xs font-semibold text-muted-soft">Register Number</label>
+                        <input
+                          type="text"
+                          value={studentForm.register_number}
+                          onChange={(e) => setStudentForm({ ...studentForm, register_number: e.target.value })}
+                          className="w-full h-10 px-3 rounded-lg bg-slate-900 border border-[var(--border)] text-heading text-sm font-mono"
+                        />
+                      </div>
+                      <div className="grid grid-cols-3 gap-3">
+                        <div className="space-y-1">
+                          <label className="text-xs font-semibold text-muted-soft">Dept</label>
+                          <select
+                            value={studentForm.department}
+                            onChange={(e) => setStudentForm({ ...studentForm, department: e.target.value })}
+                            className="w-full h-10 px-2 rounded-lg bg-slate-900 border border-[var(--border)] text-heading text-xs"
+                          >
+                            <option value="IT">IT</option>
+                            <option value="CSE">CSE</option>
+                            <option value="AIDS">AIDS</option>
+                            <option value="ECE">ECE</option>
+                          </select>
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-xs font-semibold text-muted-soft">Year</label>
+                          <select
+                            value={studentForm.year}
+                            onChange={(e) => setStudentForm({ ...studentForm, year: e.target.value })}
+                            className="w-full h-10 px-2 rounded-lg bg-slate-900 border border-[var(--border)] text-heading text-xs"
+                          >
+                            <option value="First Year">First Year</option>
+                            <option value="Second Year">Second Year</option>
+                            <option value="Third Year">Third Year</option>
+                            <option value="Final Year">Final Year</option>
+                          </select>
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-xs font-semibold text-muted-soft">Section</label>
+                          <select
+                            value={studentForm.section}
+                            onChange={(e) => setStudentForm({ ...studentForm, section: e.target.value })}
+                            className="w-full h-10 px-2 rounded-lg bg-slate-900 border border-[var(--border)] text-heading text-xs"
+                          >
+                            <option value="A">Sec A</option>
+                            <option value="B">Sec B</option>
+                            <option value="C">Sec C</option>
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex justify-end gap-3 mt-6">
+                      <Button onClick={() => { setStudentModalOpen(false); setEditingStudent(null); }} variant="secondary" className="text-sm">Cancel</Button>
+                      <Button onClick={saveStudent} className="bg-gradient-to-r from-indigo-500 to-purple-600 border-0 text-sm">Save</Button>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
           )}
-
           {/* ─── GD Live Admin — Full Page Participant View ─── */}
           {view === "gd-live-admin-view" && user?.role === "admin" && (
             <div className="space-y-6">

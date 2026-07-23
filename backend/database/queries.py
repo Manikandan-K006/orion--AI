@@ -56,7 +56,7 @@ def get_user_by_register_number(connection: MySQLConnection, register_number: st
 def get_user_by_id(connection: MySQLConnection, user_id: int) -> dict[str, Any] | None:
     return fetch_one(
         connection,
-        "SELECT u.id, u.name, u.email, u.register_number, u.role, u.created_at, sp.department, sp.year "
+        "SELECT u.id, u.name, u.email, u.register_number, u.role, u.created_at, sp.department, sp.year, sp.section "
         "FROM users u LEFT JOIN student_profile sp ON u.id = sp.user_id WHERE u.id = %s",
         (user_id,),
     )
@@ -87,11 +87,11 @@ def update_password(connection: MySQLConnection, user_id: int, password_hash: st
     )
 
 
-def create_student_profile(connection: MySQLConnection, user_id: int, department: str | None, year: str | None) -> int:
+def create_student_profile(connection: MySQLConnection, user_id: int, department: str | None, year: str | None, section: str | None = None) -> int:
     return execute(
         connection,
-        "INSERT INTO student_profile (user_id, department, year) VALUES (%s, %s, %s)",
-        (user_id, department, year),
+        "INSERT INTO student_profile (user_id, department, year, section) VALUES (%s, %s, %s, %s)",
+        (user_id, department, year, section),
     )
 
 
@@ -901,7 +901,7 @@ def get_live_my_team(connection: MySQLConnection, session_code: str, user_id: in
 
 def get_live_participants(connection: MySQLConnection, session_code: str) -> list[dict[str, Any]]:
     return fetch_all(connection,
-        "SELECT lp.*, u.name, u.register_number, sp.department, sp.year FROM gd_live_participants lp "
+        "SELECT lp.*, u.name, u.register_number, sp.department, sp.year, sp.section FROM gd_live_participants lp "
         "JOIN users u ON lp.user_id = u.id "
         "LEFT JOIN student_profile sp ON sp.user_id = u.id "
         "WHERE lp.session_code = %s ORDER BY lp.team_number, lp.id",
@@ -979,21 +979,49 @@ def save_live_evaluation(connection: MySQLConnection, session_code: str, user_id
                          grammar_score: float, accent_score: float,
                          relevance_score: float, content_quality: float,
                          credential_points: float,
-                         weaknesses: str, improvement_tips: str) -> int:
+                         weaknesses: str, improvement_tips: str,
+                         originality_score: float = 85.0,
+                         critical_thinking_score: float = 85.0,
+                         topic_understanding_score: float = 85.0,
+                         voice_clarity_score: float = 85.0,
+                         body_language_score: float = 85.0,
+                         eye_contact_score: float = 85.0,
+                         confidence_score: float = 85.0,
+                         filler_words_count: int = 0,
+                         speech_speed_wpm: int = 0,
+                         pauses_count: int = 0,
+                         missing_discussion_points: str | None = None,
+                         strengths: str | None = None,
+                         recommendations: str | None = None) -> int:
     return execute(connection,
         "INSERT INTO gd_live_evaluations (session_code, user_id, team_number, transcript, "
         "overall_score, fluency_score, grammar_score, accent_score, "
-        "relevance_score, content_quality, credential_points, weaknesses, improvement_tips) "
-        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
+        "relevance_score, content_quality, credential_points, weaknesses, improvement_tips, "
+        "originality_score, critical_thinking_score, topic_understanding_score, "
+        "voice_clarity_score, body_language_score, eye_contact_score, confidence_score, "
+        "filler_words_count, speech_speed_wpm, pauses_count, "
+        "missing_discussion_points, strengths, recommendations) "
+        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
         "ON DUPLICATE KEY UPDATE "
         "overall_score=VALUES(overall_score), fluency_score=VALUES(fluency_score), "
         "grammar_score=VALUES(grammar_score), accent_score=VALUES(accent_score), "
         "relevance_score=VALUES(relevance_score), content_quality=VALUES(content_quality), "
         "credential_points=VALUES(credential_points), weaknesses=VALUES(weaknesses), "
-        "improvement_tips=VALUES(improvement_tips), transcript=VALUES(transcript), evaluated_at=CURRENT_TIMESTAMP",
+        "improvement_tips=VALUES(improvement_tips), transcript=VALUES(transcript), "
+        "originality_score=VALUES(originality_score), critical_thinking_score=VALUES(critical_thinking_score), "
+        "topic_understanding_score=VALUES(topic_understanding_score), voice_clarity_score=VALUES(voice_clarity_score), "
+        "body_language_score=VALUES(body_language_score), eye_contact_score=VALUES(eye_contact_score), "
+        "confidence_score=VALUES(confidence_score), "
+        "filler_words_count=VALUES(filler_words_count), speech_speed_wpm=VALUES(speech_speed_wpm), "
+        "pauses_count=VALUES(pauses_count), missing_discussion_points=VALUES(missing_discussion_points), "
+        "strengths=VALUES(strengths), recommendations=VALUES(recommendations), evaluated_at=CURRENT_TIMESTAMP",
         (session_code, user_id, team_number, transcript,
          overall_score, fluency_score, grammar_score, accent_score,
-         relevance_score, content_quality, credential_points, weaknesses, improvement_tips))
+         relevance_score, content_quality, credential_points, weaknesses, improvement_tips,
+         originality_score, critical_thinking_score, topic_understanding_score,
+         voice_clarity_score, body_language_score, eye_contact_score, confidence_score,
+         filler_words_count, speech_speed_wpm, pauses_count,
+         missing_discussion_points, strengths, recommendations))
 
 
 def get_live_evaluation_for_user(connection: MySQLConnection, session_code: str, user_id: int) -> dict[str, Any] | None:
