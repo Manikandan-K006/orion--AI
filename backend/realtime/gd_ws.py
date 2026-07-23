@@ -40,9 +40,16 @@ def _auth_user(token: str | None) -> dict | None:
         user_id = int(payload.get("sub"))
     except Exception:
         return None
-    connection = get_connection()
+    try:
+        connection = get_connection()
+    except Exception as exc:
+        logger.warning("WS auth DB connection failed: %s", exc)
+        return None
     try:
         return queries.get_user_by_id(connection, user_id)
+    except Exception as exc:
+        logger.warning("WS auth query failed: %s", exc)
+        return None
     finally:
         _return(connection)
 

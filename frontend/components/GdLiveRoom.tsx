@@ -941,20 +941,6 @@ export default function GdLiveRoom({
     </div>
   ) : null;
 
-  // Fullscreen guard
-  if (discussionStarted && !thinkingPhase && !myFinished && submitStep === "idle" && !proctoring.isFullscreen) {
-    return (
-      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/95 backdrop-blur-md">
-        <Maximize2 className="w-14 h-14 text-indigo-400 mb-6 animate-pulse" />
-        <h2 className="text-xl font-black text-white mb-1">Fullscreen Mode Required</h2>
-        <p className="text-slate-400 mb-6 text-xs text-center max-w-xs leading-relaxed">The AI evaluation platform tracks activity metrics. Exiting fullscreen mode compromises assessment parameters.</p>
-        <Button onClick={() => proctoring.enterFullscreen()} className="btn-primary px-8 h-12 text-sm flex items-center gap-2">
-          <Maximize2 className="w-4 h-4" /> Enter Fullscreen
-        </Button>
-      </div>
-    );
-  }
-
   // ─── SUBMITTED WAITING SCREEN ───
   if (submitStep !== "idle" && !allDone && generatingStep === "") {
     return (

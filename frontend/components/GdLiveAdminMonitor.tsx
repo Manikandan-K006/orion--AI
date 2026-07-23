@@ -50,7 +50,7 @@ export default function GdLiveAdminMonitor({
   onEnd?: (code: string) => void;
   showHostControls?: boolean;
 }) {
-  const { connected, subscribe } = useGdLiveWs(sessionCode, token);
+  const { connected, error, retryCount, subscribe } = useGdLiveWs(sessionCode, token);
   const [teams, setTeams] = useState<Map<number, MonitorTeam>>(new Map());
   const [activity, setActivity] = useState<{ id: number; text: string; ts: number }[]>([]);
   const idRef = useRef(1);
@@ -232,8 +232,28 @@ export default function GdLiveAdminMonitor({
         <div className="p-6 overflow-y-auto space-y-6">
           {sortedTeams.length === 0 && (
             <div className="text-center py-20 card flex flex-col items-center justify-center">
-              <Loader2 className="w-8 h-8 animate-spin text-indigo-500 mb-3" />
-              <p className="text-muted-soft text-xs font-medium">Waiting for session groups to connect...</p>
+              {error && !connected && (
+                <div className="mb-4 max-w-sm w-full p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-xs text-red-500 text-center">
+                  {error}
+                </div>
+              )}
+              {!connected ? (
+                <>
+                  <Loader2 className="w-8 h-8 animate-spin text-indigo-500 mb-3" />
+                  <p className="text-muted-soft text-xs font-medium">Establishing connection to session...</p>
+                  {retryCount > 0 && (
+                    <p className="text-muted-soft text-[10px] mt-2">Retry attempt {retryCount}...</p>
+                  )}
+                </>
+              ) : (
+                <>
+                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center mb-3 shadow-lg animate-pulse">
+                    <Users className="w-6 h-6 text-white" />
+                  </div>
+                  <p className="text-muted-soft text-sm font-medium">Waiting for session groups to connect...</p>
+                  <p className="text-muted-soft text-[11px] mt-1">Teams will appear here once participants join and are assigned</p>
+                </>
+              )}
             </div>
           )}
 

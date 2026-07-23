@@ -295,7 +295,7 @@ export async function getGdLiveState(sessionCode: string, token: string) {
 
 export async function apiRequest<T>(path: string, options: RequestInit = {}, token?: string): Promise<T> {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 10000); // 10-second max timeout
+  const timeoutId = setTimeout(() => controller.abort(), 30000); // 30-second max timeout
 
   try {
     const response = await fetch(`${API_URL}${path}`, {
@@ -319,7 +319,7 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}, tok
   } catch (err: any) {
     clearTimeout(timeoutId);
     if (err.name === "AbortError") {
-      throw new Error("Request timed out (Backend is unreachable). Please try again.");
+      throw new Error(`Request timed out: ${path}`);
     }
     throw err;
   }
