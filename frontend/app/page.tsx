@@ -36,10 +36,12 @@ type PageView = "login" | "dashboard" | "profile" | "gd-leaderboard" | "solo-pra
 /** Student-side waiter: opens a WebSocket to the session and auto-redirects into the
  *  live room when the admin hosts the meeting (SESSION_STARTED broadcast). */
 function StudentLiveWaiter({ code, token, onStart }: { code: string; token: string; onStart: (topic: string | null, members: any[], teams?: any[]) => void }) {
-  const { subscribe } = useGdLiveWs(code, token);
+  const { connected, error, subscribe } = useGdLiveWs(code, token);
+  const startedRef = useRef(false);
   useEffect(() => {
     const unsub = subscribe((msg: GDLiveWsMessage) => {
-      if (msg.event === "SESSION_STARTED") {
+      if (msg.event === "SESSION_STARTED" && !startedRef.current) {
+        startedRef.current = true;
         onStart(msg.payload?.topic ?? null, msg.payload?.members ?? [], msg.payload?.teams ?? []);
       }
     });
@@ -52,13 +54,15 @@ function StudentLiveWaiter({ code, token, onStart }: { code: string; token: stri
  *  missed (e.g. reconnect), poll the live-state and redirect when the session
  *  becomes "live". No manual refresh required. */
 function StudentLivePoller({ code, token, onStart }: { code: string; token: string; onStart: (topic: string | null, members: any[], teams?: any[]) => void }) {
+  const startedRef = useRef(false);
   useEffect(() => {
     let active = true;
     const tick = async () => {
       try {
         const st = await getGdLiveState(code, token);
-        if (!active) return;
+        if (!active || startedRef.current) return;
         if (st.status === "live" || st.status === "active") {
+          startedRef.current = true;
           onStart(st.topic ?? null, st.members || [], st.teams || []);
         }
       } catch {
@@ -290,6 +294,8 @@ export default function Home() {
   const [gdRulesOpen, setGdRulesOpen] = useState(false);
 
   // Live GD room state
+  const [gdLiveWsConnected, setGdLiveWsConnected] = useState(false);
+  const [gdLiveWsError, setGdLiveWsError] = useState<string | null>(null);
   const [gdLiveRoomCode, setGdLiveRoomCode] = useState("");
   const [gdLiveRoomTopic, setGdLiveRoomTopic] = useState("");
   const [gdLiveRoomMembers, setGdLiveRoomMembers] = useState<any[]>([]);
@@ -443,6 +449,16 @@ export default function Home() {
 
     return () => clearInterval(interval);
   }, [token, user, view]);
+
+  // Track WebSocket connection status for student waiting screen
+  const gdLiveWsHook = useGdLiveWs(
+    view === "gd-live-session" && gdLiveSession ? gdLiveSession.session_code : null,
+    token
+  );
+  useEffect(() => {
+    setGdLiveWsConnected(gdLiveWsHook.connected);
+    setGdLiveWsError(gdLiveWsHook.error);
+  }, [gdLiveWsHook.connected, gdLiveWsHook.error]);
 
   // Keep the admin's participant list live: as students join/leave, the backend
   // broadcasts PARTICIPANTS_UPDATED over the session WebSocket. Update the list
@@ -3529,9 +3545,17 @@ export default function Home() {
                   Session <code className="text-amber-300 font-mono">{gdLiveSession.session_code}</code>
                 </p>
                 <div className="flex items-center justify-center gap-3 text-muted-soft">
+                  <span className={`w-2 h-2 rounded-full ${gdLiveWsConnected ? "bg-emerald-500" : "bg-red-500 animate-pulse"}`} />
                   <Loader2 className="h-5 w-5 animate-spin text-amber-400" />
-                  <span className="text-base">Waiting for Host to Start Discussion...</span>
+                  <span className="text-base">
+                    {gdLiveWsConnected
+                      ? "Waiting for Host to Start Discussion..."
+                      : "Connecting to session server..."}
+                  </span>
                 </div>
+                {gdLiveWsError && (
+                  <p className="text-xs text-red-500 mt-3">{gdLiveWsError}</p>
+                )}
                 <p className="text-xs text-muted-soft mt-6">
                   The discussion room opens automatically the moment the host starts — no refresh needed.
                 </p>
