@@ -304,7 +304,7 @@ export default function Home() {
   const [gdLiveIsLiveMeeting, setGdLiveIsLiveMeeting] = useState(false);
   const [gdLiveShowCountdown, setGdLiveShowCountdown] = useState(false);
   const [gdLivePerf, setGdLivePerf] = useState<Record<string, number>>({});
-  
+
   // Group Discussion system extension states
   const [selectedTopicId, setSelectedTopicId] = useState<number>(1);
   const [teamSize, setTeamSize] = useState<number>(4);
@@ -364,6 +364,16 @@ export default function Home() {
       setToken(savedToken);
       loadProfile(savedToken);
     }
+
+    const handleAuthExpired = () => {
+      logout();
+    };
+
+    window.addEventListener("auth-expired", handleAuthExpired);
+    return () => {
+      window.removeEventListener("auth-expired", handleAuthExpired);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Poll live sessions list in background to trigger real-time notifications
@@ -517,7 +527,11 @@ export default function Home() {
       setView("dashboard");
       voice.announceLogin();
       loadDashboardData(t, profile); // Lazy load without await
-    } catch { localStorage.removeItem("mzgd_token"); setView("login"); }
+    } catch {
+      localStorage.removeItem("mzgd_token");
+      setToken("");
+      setView("login");
+    }
   }
 
 
@@ -662,13 +676,13 @@ export default function Home() {
     try {
       const topics = await apiRequest<any[]>("/gd-live/topics", {}, token).catch(() => []);
       setEasyTopicsList(topics);
-      
+
       const depts = await apiRequest<string[]>("/gd-live/departments", {}, token).catch(() => []);
       setDepartmentList(depts);
-      
+
       const yrs = await apiRequest<string[]>("/gd-live/years", {}, token).catch(() => []);
       setYearList(yrs);
-      
+
       const studs = await apiRequest<any[]>("/gd-live/students", {}, token).catch(() => []);
       setStudentList(studs);
     } catch { }
@@ -3015,7 +3029,7 @@ export default function Home() {
                 <div className="space-y-6">
                   <div className="card p-6">
                     <h2 className="text-lg font-semibold text-heading mb-4 flex items-center gap-2"><Shield className="w-5 h-5 text-amber-400" /> Host a Group Discussion Session</h2>
-                    
+
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5 border-b border-[var(--border)] pb-5">
                       <div className="space-y-1.5">
                         <label className="text-xs font-semibold text-muted-soft">Discussion Topic</label>

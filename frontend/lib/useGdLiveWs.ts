@@ -31,8 +31,8 @@ export type GDLiveWsEvent =
   | "SPEAKER_FINISHED"
   | "EVALUATION_PROGRESS"
   | "LIVE_SPEECH_BROADCAST"
-  | "AI_ALERT"
-  | "LIVE_EVALUATION_UPDATE";
+  | "LIVE_EVALUATION_UPDATE"
+  | "AI_ALERT";
 
 export type GDLiveWsMessage = {
   event: GDLiveWsEvent;
