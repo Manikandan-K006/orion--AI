@@ -7,6 +7,7 @@ import { ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, Radar } fro
 import { useGdLiveWs, GDLiveWsMessage } from "@/lib/useGdLiveWs";
 import { useVoiceAnnouncement } from "@/services/voice/useVoiceAnnouncement";
 import { useProctoring } from "@/services/proctoring/lockdown";
+import { API_URL } from "@/lib/api";
 
 function formatTime(s: number) {
   const m = Math.floor(s / 60).toString().padStart(2, "0");
@@ -90,7 +91,7 @@ export default function GdLiveRoom({
   const thinkingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const finishLockRef = useRef(false);
   const userId = user?.user_id ?? user?.id;
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+  const apiUrl = API_URL;
   const voice = useVoiceAnnouncement();
   const announcedMarkers = useRef<Set<string>>(new Set());
   const [showWarning, setShowWarning] = useState<string | null>(null);
@@ -183,7 +184,7 @@ export default function GdLiveRoom({
     if (!SpeechRecognition) return;
 
     if (recognitionRef.current) {
-      try { recognitionRef.current.stop(); } catch(e){}
+      try { recognitionRef.current.stop(); } catch (e) { }
     }
 
     const rec = new SpeechRecognition();
@@ -212,7 +213,7 @@ export default function GdLiveRoom({
     if (recognitionRef.current) {
       try {
         recognitionRef.current.stop();
-      } catch (e) {}
+      } catch (e) { }
       recognitionRef.current = null;
     }
   }
@@ -240,7 +241,7 @@ export default function GdLiveRoom({
       recorder.onstop = () => {
         stream.getTracks().forEach((t) => t.stop());
         if (ctx.state !== "closed") {
-          ctx.close().catch(() => {});
+          ctx.close().catch(() => { });
         }
         setIsRecording(false);
         setAudioLevel(0);
@@ -349,7 +350,7 @@ export default function GdLiveRoom({
             if (myTeam.timer_seconds) setTimerSeconds(myTeam.timer_seconds);
             setFinishedIds(new Set(myTeam.finished_user_ids || []));
             setAllFinished(myTeam.all_finished || false);
-            
+
             if (myTeam.speaking_order) {
               setCurrentSpeakerId(myTeam.speaking_order[myTeam.current_speaker_idx] || null);
               setNextSpeakerId(myTeam.speaking_order[myTeam.current_speaker_idx + 1] || null);
@@ -407,7 +408,7 @@ export default function GdLiveRoom({
           setDiscussionRound(round || 1);
           if (topic) setTopic(topic);
           setLiveSpeechText("");
-          
+
           if (current_speaker_id === userId) {
             voice.announceYourTurn();
             startSpeechRecognition();
@@ -508,7 +509,7 @@ export default function GdLiveRoom({
 
     const overallVal = Math.round(Number(
       (activeResult.overall_score && activeResult.overall_score > 0) ? activeResult.overall_score :
-      ((grammarVal + fluencyVal + confidenceVal + vocabVal + pronunciationVal) / 5)
+        ((grammarVal + fluencyVal + confidenceVal + vocabVal + pronunciationVal) / 5)
     ));
 
     const rankNumber = myRank || 1;
@@ -605,7 +606,7 @@ export default function GdLiveRoom({
                   <p className="text-4xl font-extrabold text-indigo-500">{overallVal}%</p>
                   <p className="text-[10px] text-muted-soft uppercase font-bold tracking-wider mt-1">Overall Evaluation Index</p>
                 </div>
-                
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {[
                     { label: "Content Quality & Reasoning", value: contentQualityVal, color: "bg-indigo-500", text: "text-indigo-400" },
@@ -727,7 +728,7 @@ export default function GdLiveRoom({
           {/* Glowing background meshes */}
           <div className="absolute inset-0 bg-gradient-to-tr from-slate-950 via-slate-900 to-indigo-950/40 opacity-90 dark:block hidden" />
           <div className="absolute inset-0 bg-gradient-to-tr from-slate-50 via-indigo-50/20 to-purple-50/30 dark:hidden block" />
-          
+
           {/* Soft floating dynamic gradient orbs */}
           <div className="absolute top-1/4 left-1/4 w-[450px] h-[450px] rounded-full bg-indigo-500/10 dark:bg-indigo-600/5 blur-[120px] pointer-events-none animate-pulse" style={{ animationDuration: "12s" }} />
           <div className="absolute bottom-1/4 right-1/4 w-[400px] h-[400px] rounded-full bg-purple-500/10 dark:bg-purple-600/5 blur-[120px] pointer-events-none animate-pulse" style={{ animationDuration: "8s" }} />
@@ -738,7 +739,7 @@ export default function GdLiveRoom({
             <div className="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center text-white shadow-md">
               <Volume2 className="w-8 h-8 animate-pulse" />
             </div>
-            
+
             <div className="space-y-1">
               <h1 className="text-2xl font-black text-heading tracking-tight bg-gradient-to-r from-indigo-500 via-purple-500 to-indigo-600 bg-clip-text text-transparent">Start Discussion</h1>
               <p className="text-xs text-muted-soft">Group Discussion · Team Group {teamNumber || "—"}</p>
@@ -831,7 +832,7 @@ export default function GdLiveRoom({
 
         <div className="relative z-10 flex-1 flex flex-col items-center justify-center p-4 md:p-6">
           <div className="w-full max-w-2xl space-y-6 animate-fade-up">
-            
+
             {/* Header Title */}
             <div className="text-center space-y-2">
               <div className="w-16 h-16 mx-auto rounded-3xl bg-gradient-to-tr from-indigo-500 via-purple-600 to-pink-500 flex items-center justify-center shadow-lg shadow-indigo-500/20 animate-pulse">
@@ -859,7 +860,7 @@ export default function GdLiveRoom({
 
             {/* Preparation Countdown & Strategy Grid */}
             <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-stretch">
-              
+
               {/* Preparation Timer Card */}
               <div className="md:col-span-5 card p-5 flex flex-col justify-center items-center text-center space-y-3 bg-gradient-to-b from-indigo-500/10 to-transparent border-indigo-500/20 shadow-md">
                 <div className="w-12 h-12 rounded-2xl bg-indigo-500/15 flex items-center justify-center text-indigo-500">
@@ -952,7 +953,7 @@ export default function GdLiveRoom({
           </div>
           <h1 className="text-2xl font-black text-heading tracking-tight">Speech Recorded Successfully</h1>
           <p className="text-xs text-muted-soft">Thank you. Your voice arguments have been compiled and sent to the AI processing engine.</p>
-          
+
           <div className="card p-6 space-y-4">
             <div className="flex items-center justify-between text-xs font-bold text-heading">
               <span>Finished Members</span>
@@ -965,7 +966,7 @@ export default function GdLiveRoom({
             )}
           </div>
           <div className="flex items-center justify-center gap-2 text-xs text-muted-soft">
-            <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-500" /> 
+            <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-500" />
             <span>{evalStage ? STAGE_LABELS[evalStage] || "Processing..." : "Awaiting final members submission..."}</span>
           </div>
         </div>
@@ -990,7 +991,7 @@ export default function GdLiveRoom({
           </div>
           <h1 className="text-2xl font-black text-heading tracking-tight">AI Evaluation Engine</h1>
           <p className="text-xs text-muted-soft">Please wait while the speech analytics model reviews metrics.</p>
-          
+
           <div className="card p-5 space-y-3.5 text-left">
             {steps.map((s, i) => {
               const done = currentIdx > i;
@@ -1026,177 +1027,177 @@ export default function GdLiveRoom({
       <div className="relative z-10 flex-1 flex flex-col p-4 md:p-6">
         {warnModal}
         <div className="max-w-6xl mx-auto w-full space-y-6 flex-1 flex flex-col justify-center animate-fade-up">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          {/* Left Panel: Active Speakers Sidebar */}
-          <div className="lg:col-span-4 space-y-4">
-            <div className="card p-4">
-              <h3 className="text-xs font-bold text-heading uppercase tracking-wider mb-4 flex items-center gap-1.5">
-                <Users className="w-4 h-4 text-indigo-400" /> Active Speakers Sidebar
-              </h3>
-              <div className="space-y-3">
-                {members.map((m: any, i: number) => {
-                  const label = m.label || m.anonymous_label || `Member ${i + 1}`;
-                  const isMe = m.user_id === userId;
-                  const isCurrent = m.user_id === currentSpeakerId;
-                  const done = finishedIds.has(m.user_id);
-                  return (
-                    <div key={m.user_id} className={`p-3.5 rounded-2xl border transition-all duration-300 flex items-center justify-between gap-3 ${isCurrent ? "border-red-500/40 bg-red-500/5 shadow-md shadow-red-500/5 animate-pulse" : done ? "border-emerald-500/25 bg-emerald-500/5" : "border-slate-200/40 dark:border-slate-800/40 bg-white/40 dark:bg-slate-900/40"}`}>
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-white text-xs font-bold shadow-sm shrink-0 ${isCurrent ? "bg-red-500" : "bg-gradient-to-tr from-indigo-500 to-purple-600"}`}>
-                          {label[0].toUpperCase()}
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-xs font-bold text-heading truncate">{label} {isMe && "(You)"}</p>
-                          <p className={`text-[10px] ${isCurrent ? "text-red-500 font-bold" : done ? "text-emerald-500 font-semibold" : "text-muted-soft"}`}>
-                            {isCurrent ? "Speaking Turn" : done ? "Turn Complete" : "Waiting Turn"}
-                          </p>
-                        </div>
-                      </div>
-
-                      {isCurrent && (
-                        <div className="flex items-center gap-1 shrink-0">
-                          <span className="w-2 h-2 rounded-full bg-red-500 animate-ping" />
-                          <div className="flex gap-0.5 items-end h-3">
-                            <span className="w-0.5 bg-red-500 rounded-full animate-bounce" style={{ height: "40%", animationDelay: "0.1s" }} />
-                            <span className="w-0.5 bg-red-500 rounded-full animate-bounce" style={{ height: "80%", animationDelay: "0.3s" }} />
-                            <span className="w-0.5 bg-red-500 rounded-full animate-bounce" style={{ height: "50%", animationDelay: "0.5s" }} />
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            {/* Left Panel: Active Speakers Sidebar */}
+            <div className="lg:col-span-4 space-y-4">
+              <div className="card p-4">
+                <h3 className="text-xs font-bold text-heading uppercase tracking-wider mb-4 flex items-center gap-1.5">
+                  <Users className="w-4 h-4 text-indigo-400" /> Active Speakers Sidebar
+                </h3>
+                <div className="space-y-3">
+                  {members.map((m: any, i: number) => {
+                    const label = m.label || m.anonymous_label || `Member ${i + 1}`;
+                    const isMe = m.user_id === userId;
+                    const isCurrent = m.user_id === currentSpeakerId;
+                    const done = finishedIds.has(m.user_id);
+                    return (
+                      <div key={m.user_id} className={`p-3.5 rounded-2xl border transition-all duration-300 flex items-center justify-between gap-3 ${isCurrent ? "border-red-500/40 bg-red-500/5 shadow-md shadow-red-500/5 animate-pulse" : done ? "border-emerald-500/25 bg-emerald-500/5" : "border-slate-200/40 dark:border-slate-800/40 bg-white/40 dark:bg-slate-900/40"}`}>
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-white text-xs font-bold shadow-sm shrink-0 ${isCurrent ? "bg-red-500" : "bg-gradient-to-tr from-indigo-500 to-purple-600"}`}>
+                            {label[0].toUpperCase()}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-heading truncate">{label} {isMe && "(You)"}</p>
+                            <p className={`text-[10px] ${isCurrent ? "text-red-500 font-bold" : done ? "text-emerald-500 font-semibold" : "text-muted-soft"}`}>
+                              {isCurrent ? "Speaking Turn" : done ? "Turn Complete" : "Waiting Turn"}
+                            </p>
                           </div>
                         </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
 
-            {/* Real-time scorecards and dials */}
-            <div className="card p-5 space-y-4">
-              <h3 className="text-xs font-bold text-heading uppercase tracking-wider flex items-center gap-1.5">
-                <Activity className="w-4 h-4 text-emerald-400" /> Real-time Speech Metrics
-              </h3>
-              
-              <div className="grid grid-cols-2 gap-3 text-center">
-                <div className="p-3 rounded-xl bg-slate-900/50 border border-[var(--border)]">
-                  <p className="text-[10px] text-muted-soft uppercase font-bold">Grammar</p>
-                  <p className="text-xl font-extrabold text-heading mt-1">{liveScores.grammar}%</p>
-                </div>
-                <div className="p-3 rounded-xl bg-slate-900/50 border border-[var(--border)]">
-                  <p className="text-[10px] text-muted-soft uppercase font-bold">Fluency</p>
-                  <p className="text-xl font-extrabold text-heading mt-1">{liveScores.fluency}%</p>
-                </div>
-                <div className="p-3 rounded-xl bg-slate-900/50 border border-[var(--border)]">
-                  <p className="text-[10px] text-muted-soft uppercase font-bold">Confidence</p>
-                  <p className="text-xl font-extrabold text-heading mt-1">{liveScores.confidence}%</p>
-                </div>
-                <div className="p-3 rounded-xl bg-slate-900/50 border border-[var(--border)]">
-                  <p className="text-[10px] text-muted-soft uppercase font-bold">Vocabulary</p>
-                  <p className="text-xl font-extrabold text-heading mt-1">{liveScores.vocabulary}%</p>
-                </div>
-              </div>
-
-              <div className="border-t border-[var(--border)] pt-3 text-center">
-                <p className="text-[10px] text-muted-soft uppercase font-bold">Overall Performance Index</p>
-                <p className="text-2xl font-black text-emerald-400 mt-1">{liveScores.overall}%</p>
-              </div>
-            </div>
-
-            {/* AI Alerts Sidebar Panel */}
-            {aiAlertsList.length > 0 && (
-              <div className="card p-4 space-y-2 border-l-4 border-l-amber-500 bg-amber-500/5 animate-pulse">
-                <h4 className="text-xs font-bold text-heading uppercase tracking-wider flex items-center gap-1.5">
-                  <AlertTriangle className="w-4 h-4 text-amber-500" /> AI Coach Alerts
-                </h4>
-                <div className="space-y-2">
-                  {aiAlertsList.map((alert: any, idx: number) => (
-                    <p key={idx} className="text-[10px] text-body leading-normal">{alert.message}</p>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Middle & Right Column: Active Room and Log */}
-          <div className="lg:col-span-8 space-y-6">
-            {/* Active Topic Banner */}
-            <div className="card p-6 bg-gradient-to-r from-indigo-500/5 to-purple-500/5 border-l-4 border-l-indigo-500 relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none" />
-              <div className="flex justify-between items-start gap-4 mb-3">
-                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/10 text-indigo-500 border border-indigo-500/20 uppercase tracking-wider">
-                  MZ ThinkCircle Discussion · Round {discussionRound}
-                </span>
-                <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-bold bg-slate-900 border border-indigo-500/30 text-heading`}>
-                  <Clock className="w-3.5 h-3.5 text-indigo-400" />
-                  Remaining: {formatTime(timerSeconds)}
-                </div>
-              </div>
-              <h2 className="text-base font-extrabold text-heading leading-snug">{topic}</h2>
-            </div>
-
-            {/* Live speech transcription display */}
-            <div className="card p-6 space-y-4">
-              <div className="flex justify-between items-center">
-                <h3 className="text-xs font-bold text-heading uppercase tracking-wider flex items-center gap-1.5">
-                  <Mic className="w-4 h-4 text-indigo-400" /> Live Transcript Monitor
-                </h3>
-                <span className="text-[10px] font-mono font-bold text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded-full">
-                  Real-time WebSpeech API
-                </span>
-              </div>
-
-              {currentSpeakerId === userId ? (
-                <div className="p-4 rounded-2xl bg-indigo-500/5 border border-indigo-500/30 min-h-24">
-                  <p className="text-xs text-indigo-400 font-bold mb-1">Your Speaking Turn (Present Opinion):</p>
-                  <p className="text-sm text-heading italic whitespace-pre-wrap leading-relaxed">{liveSpeechText || "Start speaking into your mic..."}</p>
-                </div>
-              ) : (
-                <div className="p-4 rounded-2xl bg-slate-900/50 border border-[var(--border)] min-h-24">
-                  <p className="text-xs text-muted-soft font-bold mb-1">
-                    Active Speaker Transcript ({members.find(m => m.user_id === currentSpeakerId)?.label || "Teammate Speaking"}):
-                  </p>
-                  <p className="text-sm text-heading whitespace-pre-wrap leading-relaxed">
-                    {liveTranscripts[currentSpeakerId || 0] || "Waiting for teammate to start speaking..."}
-                  </p>
-                </div>
-              )}
-            </div>
-
-            {/* AI Moderator Chat Log */}
-            <div className="card p-6 flex flex-col justify-between">
-              <div>
-                <h3 className="text-xs font-bold text-heading uppercase tracking-wider mb-4 flex items-center gap-1.5">
-                  <Brain className="w-4 h-4 text-indigo-400" /> AI Moderator Panel
-                </h3>
-                <div className="space-y-3 max-h-60 overflow-y-auto pr-2 text-xs flex flex-col">
-                  {/* Base Welcome Msg */}
-                  <div className="p-3.5 rounded-2xl bg-indigo-500/5 border border-indigo-500/10 self-start w-full">
-                    <p className="font-bold text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5">🤖 AI Moderator</p>
-                    <p className="text-muted-soft mt-1 leading-relaxed">Welcome everyone. Today's discussion topic is <strong>{topic}</strong>. Please structure your arguments carefully and await turn allocation prompts.</p>
-                  </div>
-                  {/* Dynamic Chat Messages */}
-                  {chatMessages.map((msg: any, idx: number) => {
-                    const isSystem = msg.user_id === 0;
-                    return (
-                      <div key={idx} className={`p-3.5 rounded-2xl self-start w-full transition-all ${isSystem ? "bg-indigo-500/5 border border-indigo-500/10" : "bg-slate-900/40 border border-[var(--border)]"}`}>
-                        <p className={`font-bold flex items-center gap-1.5 ${isSystem ? "text-indigo-400" : "text-heading"}`}>
-                          {isSystem ? (msg.label || "🤖 AI Moderator") : (msg.label || msg.name)}
-                        </p>
-                        <p className="text-muted-soft mt-1 leading-relaxed">{msg.text}</p>
+                        {isCurrent && (
+                          <div className="flex items-center gap-1 shrink-0">
+                            <span className="w-2 h-2 rounded-full bg-red-500 animate-ping" />
+                            <div className="flex gap-0.5 items-end h-3">
+                              <span className="w-0.5 bg-red-500 rounded-full animate-bounce" style={{ height: "40%", animationDelay: "0.1s" }} />
+                              <span className="w-0.5 bg-red-500 rounded-full animate-bounce" style={{ height: "80%", animationDelay: "0.3s" }} />
+                              <span className="w-0.5 bg-red-500 rounded-full animate-bounce" style={{ height: "50%", animationDelay: "0.5s" }} />
+                            </div>
+                          </div>
+                        )}
                       </div>
                     );
                   })}
                 </div>
               </div>
 
-              {/* Speaker action buttons */}
-              {!myFinished && submitStep === "idle" && currentSpeakerId === userId && (
-                <Button onClick={() => executeFinish()} className="w-full btn-primary h-12 text-sm mt-6 bg-gradient-to-r from-red-500 to-orange-600 hover:from-red-400 hover:to-orange-500 border-0 font-bold">
-                  Conclude Turn & Save
-                </Button>
+              {/* Real-time scorecards and dials */}
+              <div className="card p-5 space-y-4">
+                <h3 className="text-xs font-bold text-heading uppercase tracking-wider flex items-center gap-1.5">
+                  <Activity className="w-4 h-4 text-emerald-400" /> Real-time Speech Metrics
+                </h3>
+
+                <div className="grid grid-cols-2 gap-3 text-center">
+                  <div className="p-3 rounded-xl bg-slate-900/50 border border-[var(--border)]">
+                    <p className="text-[10px] text-muted-soft uppercase font-bold">Grammar</p>
+                    <p className="text-xl font-extrabold text-heading mt-1">{liveScores.grammar}%</p>
+                  </div>
+                  <div className="p-3 rounded-xl bg-slate-900/50 border border-[var(--border)]">
+                    <p className="text-[10px] text-muted-soft uppercase font-bold">Fluency</p>
+                    <p className="text-xl font-extrabold text-heading mt-1">{liveScores.fluency}%</p>
+                  </div>
+                  <div className="p-3 rounded-xl bg-slate-900/50 border border-[var(--border)]">
+                    <p className="text-[10px] text-muted-soft uppercase font-bold">Confidence</p>
+                    <p className="text-xl font-extrabold text-heading mt-1">{liveScores.confidence}%</p>
+                  </div>
+                  <div className="p-3 rounded-xl bg-slate-900/50 border border-[var(--border)]">
+                    <p className="text-[10px] text-muted-soft uppercase font-bold">Vocabulary</p>
+                    <p className="text-xl font-extrabold text-heading mt-1">{liveScores.vocabulary}%</p>
+                  </div>
+                </div>
+
+                <div className="border-t border-[var(--border)] pt-3 text-center">
+                  <p className="text-[10px] text-muted-soft uppercase font-bold">Overall Performance Index</p>
+                  <p className="text-2xl font-black text-emerald-400 mt-1">{liveScores.overall}%</p>
+                </div>
+              </div>
+
+              {/* AI Alerts Sidebar Panel */}
+              {aiAlertsList.length > 0 && (
+                <div className="card p-4 space-y-2 border-l-4 border-l-amber-500 bg-amber-500/5 animate-pulse">
+                  <h4 className="text-xs font-bold text-heading uppercase tracking-wider flex items-center gap-1.5">
+                    <AlertTriangle className="w-4 h-4 text-amber-500" /> AI Coach Alerts
+                  </h4>
+                  <div className="space-y-2">
+                    {aiAlertsList.map((alert: any, idx: number) => (
+                      <p key={idx} className="text-[10px] text-body leading-normal">{alert.message}</p>
+                    ))}
+                  </div>
+                </div>
               )}
+            </div>
+
+            {/* Middle & Right Column: Active Room and Log */}
+            <div className="lg:col-span-8 space-y-6">
+              {/* Active Topic Banner */}
+              <div className="card p-6 bg-gradient-to-r from-indigo-500/5 to-purple-500/5 border-l-4 border-l-indigo-500 relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none" />
+                <div className="flex justify-between items-start gap-4 mb-3">
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/10 text-indigo-500 border border-indigo-500/20 uppercase tracking-wider">
+                    MZ ThinkCircle Discussion · Round {discussionRound}
+                  </span>
+                  <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-bold bg-slate-900 border border-indigo-500/30 text-heading`}>
+                    <Clock className="w-3.5 h-3.5 text-indigo-400" />
+                    Remaining: {formatTime(timerSeconds)}
+                  </div>
+                </div>
+                <h2 className="text-base font-extrabold text-heading leading-snug">{topic}</h2>
+              </div>
+
+              {/* Live speech transcription display */}
+              <div className="card p-6 space-y-4">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-xs font-bold text-heading uppercase tracking-wider flex items-center gap-1.5">
+                    <Mic className="w-4 h-4 text-indigo-400" /> Live Transcript Monitor
+                  </h3>
+                  <span className="text-[10px] font-mono font-bold text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded-full">
+                    Real-time WebSpeech API
+                  </span>
+                </div>
+
+                {currentSpeakerId === userId ? (
+                  <div className="p-4 rounded-2xl bg-indigo-500/5 border border-indigo-500/30 min-h-24">
+                    <p className="text-xs text-indigo-400 font-bold mb-1">Your Speaking Turn (Present Opinion):</p>
+                    <p className="text-sm text-heading italic whitespace-pre-wrap leading-relaxed">{liveSpeechText || "Start speaking into your mic..."}</p>
+                  </div>
+                ) : (
+                  <div className="p-4 rounded-2xl bg-slate-900/50 border border-[var(--border)] min-h-24">
+                    <p className="text-xs text-muted-soft font-bold mb-1">
+                      Active Speaker Transcript ({members.find(m => m.user_id === currentSpeakerId)?.label || "Teammate Speaking"}):
+                    </p>
+                    <p className="text-sm text-heading whitespace-pre-wrap leading-relaxed">
+                      {liveTranscripts[currentSpeakerId || 0] || "Waiting for teammate to start speaking..."}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* AI Moderator Chat Log */}
+              <div className="card p-6 flex flex-col justify-between">
+                <div>
+                  <h3 className="text-xs font-bold text-heading uppercase tracking-wider mb-4 flex items-center gap-1.5">
+                    <Brain className="w-4 h-4 text-indigo-400" /> AI Moderator Panel
+                  </h3>
+                  <div className="space-y-3 max-h-60 overflow-y-auto pr-2 text-xs flex flex-col">
+                    {/* Base Welcome Msg */}
+                    <div className="p-3.5 rounded-2xl bg-indigo-500/5 border border-indigo-500/10 self-start w-full">
+                      <p className="font-bold text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5">🤖 AI Moderator</p>
+                      <p className="text-muted-soft mt-1 leading-relaxed">Welcome everyone. Today's discussion topic is <strong>{topic}</strong>. Please structure your arguments carefully and await turn allocation prompts.</p>
+                    </div>
+                    {/* Dynamic Chat Messages */}
+                    {chatMessages.map((msg: any, idx: number) => {
+                      const isSystem = msg.user_id === 0;
+                      return (
+                        <div key={idx} className={`p-3.5 rounded-2xl self-start w-full transition-all ${isSystem ? "bg-indigo-500/5 border border-indigo-500/10" : "bg-slate-900/40 border border-[var(--border)]"}`}>
+                          <p className={`font-bold flex items-center gap-1.5 ${isSystem ? "text-indigo-400" : "text-heading"}`}>
+                            {isSystem ? (msg.label || "🤖 AI Moderator") : (msg.label || msg.name)}
+                          </p>
+                          <p className="text-muted-soft mt-1 leading-relaxed">{msg.text}</p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Speaker action buttons */}
+                {!myFinished && submitStep === "idle" && currentSpeakerId === userId && (
+                  <Button onClick={() => executeFinish()} className="w-full btn-primary h-12 text-sm mt-6 bg-gradient-to-r from-red-500 to-orange-600 hover:from-red-400 hover:to-orange-500 border-0 font-bold">
+                    Conclude Turn & Save
+                  </Button>
+                )}
+              </div>
             </div>
           </div>
         </div>
-      </div>
       </div>
     </div>
   );

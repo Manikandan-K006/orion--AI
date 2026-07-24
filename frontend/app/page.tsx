@@ -11,7 +11,7 @@ import GdLiveRoom from "@/components/GdLiveRoom";
 import GdLiveAdminMonitor from "@/components/GdLiveAdminMonitor";
 import { useGdLiveWs, GDLiveWsMessage } from "@/lib/useGdLiveWs";
 import { useVoiceAnnouncement } from "@/services/voice/useVoiceAnnouncement";
-import { AllTimeAchiever, ComprehensiveLeaderboard, GDLiveLeaderboardEntry, LeaderboardRanking, LeaderboardStats, Progress, SoloQuote, SoloStartResponse, SoloSubmitResponse, User, apiRequest, hostGdLiveMeeting, endGdLiveMeeting, getGdLiveState, changePassword } from "@/lib/api";
+import { AllTimeAchiever, ComprehensiveLeaderboard, GDLiveLeaderboardEntry, LeaderboardRanking, LeaderboardStats, Progress, SoloQuote, SoloStartResponse, SoloSubmitResponse, User, apiRequest, hostGdLiveMeeting, endGdLiveMeeting, getGdLiveState, changePassword, API_URL } from "@/lib/api";
 
 function speak(text: string) {
   if (typeof window === "undefined" || !window.speechSynthesis) return;
@@ -596,8 +596,7 @@ export default function Home() {
         formData.append("file", blob, "recording.webm");
         setRecordingStatus("Transcribing...");
         try {
-          const BASE_URL = typeof window !== "undefined" ? `${window.location.protocol}//${window.location.hostname}:8000` : "http://localhost:8000";
-          const res = await fetch(`${BASE_URL}/interviews/upload-audio`, {
+          const res = await fetch(`${API_URL}/interviews/upload-audio`, {
             method: "POST", headers: { Authorization: `Bearer ${token}` }, body: formData,
           });
           const data = await res.json();
@@ -731,8 +730,7 @@ export default function Home() {
     formData.append("file", file);
     setLoading(true);
     try {
-      const apiHost = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-      const res = await fetch(`${apiHost}/gd-live/import-students`, {
+      const res = await fetch(`${API_URL}/gd-live/import-students`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
         body: formData
