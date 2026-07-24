@@ -645,7 +645,7 @@ def join_live_session(connection: MySQLConnection, session_code: str, user_id: i
         return "already_joined"
         
     # If there are any pre-invited participants for this session code, then ONLY those invited participants can join!
-    has_invites = fetch_one(connection, "SELECT id FROM gd_live_participants WHERE session_code = %s LIMIT 1", (session_code,))
+    has_invites = fetch_one(connection, "SELECT id FROM gd_live_participants WHERE session_code = %s AND status = 'invited' LIMIT 1", (session_code,))
     if has_invites:
         return "unauthorized"
         

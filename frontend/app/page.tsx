@@ -461,8 +461,12 @@ export default function Home() {
           }
           return sessions;
         });
-      } catch (err) {
-        console.error("Failed to poll live sessions for notifications:", err);
+      } catch (err: any) {
+        if (err.message && err.message.includes("timed out")) {
+          console.warn("Polling live sessions timed out (backend may be restarting)");
+        } else {
+          console.error("Failed to poll live sessions for notifications:", err);
+        }
       }
     }, 10000);
 
