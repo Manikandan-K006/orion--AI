@@ -152,36 +152,53 @@ def import_students_from_excel(filepath: str) -> dict:
 
         pw_hash = hash_password(DEFAULT_PASSWORD)
         imported = 0
-        duplicates = 0
+        updated = 0
         dept_count: dict[str, int] = {}
 
         user_batch: list[tuple[str, str, str, str, str]] = []
         profile_batch: list[tuple[str, str, str, str | None, str | None, str]] = []
         insert_regs: list[str] = []
 
-        for r in validated:
-            reg = r["register_number"]
-            if reg in existing_regs:
-                duplicates += 1
-                continue
+        conn.start_transaction()
+        cursor = conn.cursor()
+        try:
+            for r in validated:
+                reg = r["register_number"]
+                dept_count[r["dept"]] = dept_count.get(r["dept"], 0) + 1
+                if reg in existing_regs:
+                    # Update existing student
+                    cursor.execute(
+                        "UPDATE users SET name = %s, email = %s WHERE register_number = %s",
+                        (r["full_name"], f"{reg}@mountzion.ac.in", reg)
+                    )
+                    cursor.execute("SELECT id FROM users WHERE register_number = %s", (reg,))
+                    uid_row = cursor.fetchone()
+                    if uid_row:
+                        uid = uid_row[0]
+                        cursor.execute(
+                            "INSERT INTO student_profile (user_id, department, year, section, gender, date_of_birth, spr_no) "
+                            "VALUES (%s, %s, %s, %s, %s, %s, %s) "
+                            "ON DUPLICATE KEY UPDATE department = VALUES(department), year = VALUES(year), "
+                            "section = VALUES(section), gender = VALUES(gender), date_of_birth = VALUES(date_of_birth), "
+                            "spr_no = VALUES(spr_no)",
+                            (uid, r["dept"], r["year_str"], r["section"], r["gender"], r["date_of_birth"], r["spr_no"])
+                        )
+                    updated += 1
+                else:
+                    # Prepare new insertion
+                    email = f"{reg}@mountzion.ac.in"
+                    user_batch.append((reg, r["full_name"], email, pw_hash, "student"))
+                    profile_batch.append((
+                        r["dept"],
+                        r["year_str"],
+                        r["section"],
+                        r["gender"],
+                        r["date_of_birth"],
+                        r["spr_no"],
+                    ))
+                    insert_regs.append(reg)
 
-            email = f"{reg}@mountzion.ac.in"
-            user_batch.append((reg, r["full_name"], email, pw_hash, "student"))
-            profile_batch.append((
-                r["dept"],
-                r["year_str"],
-                r["section"],
-                r["gender"],
-                r["date_of_birth"],
-                r["spr_no"],
-            ))
-            insert_regs.append(reg)
-            dept_count[r["dept"]] = dept_count.get(r["dept"], 0) + 1
-
-        if user_batch:
-            conn.start_transaction()
-            cursor = conn.cursor()
-            try:
+            if user_batch:
                 cursor.executemany(
                     "INSERT INTO users (register_number, name, email, password_hash, role) "
                     "VALUES (%s, %s, %s, %s, %s)",
@@ -209,18 +226,20 @@ def import_students_from_excel(filepath: str) -> dict:
                     "VALUES (%s, %s, %s, %s, %s, %s, %s)",
                     profile_rows,
                 )
-                conn.commit()
                 imported = len(user_batch)
                 logger.info("Imported %d students", imported)
-            except Exception:
-                conn.rollback()
-                raise
-            finally:
-                cursor.close()
+
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            cursor.close()
 
         return {
             "imported": imported,
-            "duplicates": duplicates,
+            "updated": updated,
+            "duplicates": 0,
             "errors": errors,
             "dept_count": dept_count,
             "total_read": len(rows),

@@ -688,7 +688,7 @@ export default function GdLiveRoom({
             <Button
               onClick={async () => {
                 try {
-                  const res = await fetch(`${apiUrl}/gd-live/sessions/${sessionCode}/report`, {
+                  const res = await fetch(`${apiUrl}/reports/gd-live/${sessionCode}/pdf`, {
                     headers: { Authorization: `Bearer ${token}` },
                   });
                   if (!res.ok) throw new Error("Failed to fetch report");
@@ -700,7 +700,7 @@ export default function GdLiveRoom({
                   a.click();
                   window.URL.revokeObjectURL(url);
                 } catch (e) {
-                  alert("Report download initiated.");
+                  alert("Report download failed. Please try again.");
                 }
               }}
               className="flex-1 btn-primary h-12 text-sm flex items-center justify-center gap-2 bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-700"

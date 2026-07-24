@@ -326,13 +326,13 @@ async def wait_and_broadcast_results(session_code: str, team_number: int, ts: Te
 class TeamState:
     """Per-team state for parallel discussion: timer, members, evaluation."""
 
-    def __init__(self, team_number: int, topic: str, members: list[dict]) -> None:
+    def __init__(self, team_number: int, topic: str, members: list[dict], speaking_time: int = 120) -> None:
         self.team_number = team_number
         self.topic = topic
         self.members: dict[int, dict] = {m["user_id"]: m for m in members}
         self.finished_user_ids: set[int] = set()
         self.all_finished = False
-        self.timer_seconds = 600  # 10 minutes shared discussion timer
+        self.timer_seconds = speaking_time  # Use custom speaking time!
         self.timer_running = False
         self.transcripts: dict[int, str] = {}
         self.evaluations: dict[int, dict] = {}
@@ -387,9 +387,9 @@ class RoomState:
         self.participants: dict[int, dict] = {}
         self.team_states: dict[int, TeamState] = {}
 
-    def ensure_team(self, team_number: int, topic: str, members: list[dict]) -> TeamState:
+    def ensure_team(self, team_number: int, topic: str, members: list[dict], speaking_time: int = 120) -> TeamState:
         if team_number not in self.team_states:
-            self.team_states[team_number] = TeamState(team_number, topic, members)
+            self.team_states[team_number] = TeamState(team_number, topic, members, speaking_time)
         return self.team_states[team_number]
 
     def snapshot(self) -> dict:
@@ -595,13 +595,14 @@ async def gd_live_socket(
         )
 
     # Initialize TeamState for each team from DB
+    speaking_time = session.get("speaking_time", 120) if session else 120
     team_topic_map = {t["team_number"]: t["topic"] for t in teams_from_db}
     for p in participants_list:
         tn = p.get("team_number")
         if tn and tn not in state.team_states:
             members = [m for m in participants_list if m.get("team_number") == tn]
             t_topic = team_topic_map.get(tn, topic or "")
-            state.ensure_team(tn, t_topic, members)
+            state.ensure_team(tn, t_topic, members, speaking_time=speaking_time)
 
     # Send snapshot
     await manager.send_personal(websocket, "STATE_SYNC", state.snapshot())
@@ -885,7 +886,8 @@ async def _handle_admin_event(
                     "current_speaker_id": first_speaker_id,
                     "next_speaker_id": ts.speaking_order[1] if len(ts.speaking_order) > 1 else None,
                     "round": 1,
-                    "topic": ts.topic
+                    "topic": ts.topic,
+                    "speaking_time": ts.timer_seconds
                 }))
                 
                 # Initial AI Moderator prompt in Chat

@@ -97,6 +97,9 @@ class GDSessionCreate(BaseModel):
     year: str | None = None
     department: str | None = None
     section: str | None = None
+    speaking_time: int = 120
+    student_ids: list[int] | None = None
+
 
 
 class GDTranscriptSubmit(BaseModel):

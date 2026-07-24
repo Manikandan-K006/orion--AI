@@ -34,14 +34,14 @@ def list_easy_topics(
     return queries.fetch_all(connection, "SELECT * FROM gd_easy_topics ORDER BY id")
 
 
-def _create_live_session_db(user_id: int, topic_id: int, team_size: int, department: str | None, year: str | None, section: str | None) -> dict:
+def _create_live_session_db(user_id: int, topic_id: int, team_size: int, department: str | None, year: str | None, section: str | None, speaking_time: int, student_ids: list[int] | None) -> dict:
     from backend.database.db import get_connection
     conn = get_connection()
     try:
         code = queries.generate_live_code(conn)
         queries.execute(conn, 
-            "INSERT INTO gd_live_sessions (session_code, status, total_participants, created_by, department, year, section, team_size) VALUES (%s, 'waiting', 0, %s, %s, %s, %s, %s)", 
-            (code, user_id, department, year, section, team_size))
+            "INSERT INTO gd_live_sessions (session_code, status, total_participants, created_by, department, year, section, team_size, speaking_time) VALUES (%s, 'waiting', 0, %s, %s, %s, %s, %s, %s)", 
+            (code, user_id, department, year, section, team_size, speaking_time))
         
         # Fetch the selected topic
         topic_row = queries.fetch_one(conn, "SELECT topic FROM gd_easy_topics WHERE id = %s", (topic_id,))
@@ -51,6 +51,12 @@ def _create_live_session_db(user_id: int, topic_id: int, team_size: int, departm
         queries.execute(conn,
             "INSERT INTO gd_live_teams (session_code, team_number, topic) VALUES (%s, %s, %s)",
             (code, 1, topic))
+            
+        if student_ids:
+            for s_id in student_ids:
+                queries.execute(conn,
+                    "INSERT INTO gd_live_participants (session_code, user_id, status) VALUES (%s, %s, 'invited')",
+                    (code, s_id))
             
         return {"session_code": code, "topic": topic}
     except Exception as e:
@@ -75,13 +81,18 @@ async def create_live_session(
         payload.team_size, 
         payload.department, 
         payload.year, 
-        payload.section
+        payload.section,
+        payload.speaking_time,
+        payload.student_ids
     )
     session_code = result.get("session_code") if isinstance(result, dict) else None
     if session_code:
-        manager.ensure_state(session_code, result.get("topic"))
+        # Pass the speaking_time or store it in room state
+        state = manager.ensure_state(session_code, result.get("topic"))
+        state.speaking_time = payload.speaking_time
         await manager.broadcast(session_code, "SESSION_CREATED", {"session_code": session_code})
     return result
+
 
 
 @router.get("/sessions")
@@ -140,12 +151,15 @@ def join_live_session(
         )
 
     result = queries.join_live_session(connection, session_code, current_user["id"])
+    if result == "unauthorized":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="You are not authorized for this discussion.")
     if result == "invalid":
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found or not waiting")
     if result == "already_joined":
         return {"message": "You have already joined this session"}
         
     return {"message": "Joined session successfully"}
+
 
 
 @router.get("/sessions/{session_code}/participants")

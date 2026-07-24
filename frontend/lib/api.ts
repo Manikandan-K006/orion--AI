@@ -371,3 +371,72 @@ export async function changePassword(payload: { current_password: string; new_pa
     token
   );
 }
+
+export async function downloadGdLivePdfReport(sessionCode: string, studentId: number | undefined, token: string) {
+  const query = studentId ? `?user_id=${studentId}` : "";
+  const response = await fetch(`${API_URL}/reports/gd-live/${sessionCode}/pdf${query}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.detail || "Download failed");
+  }
+  const blob = await response.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `gd_live_report_${sessionCode}${studentId ? `_${studentId}` : ""}.pdf`;
+  a.click();
+  window.URL.revokeObjectURL(url);
+}
+
+export async function downloadGdLiveExcelReport(sessionCode: string, token: string) {
+  const response = await fetch(`${API_URL}/reports/gd-live/${sessionCode}/excel`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.detail || "Download failed");
+  }
+  const blob = await response.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `gd_live_session_report_${sessionCode}.xlsx`;
+  a.click();
+  window.URL.revokeObjectURL(url);
+}
+
+export async function exportGdLiveAttendance(sessionCode: string, token: string) {
+  const response = await fetch(`${API_URL}/gd-live/sessions/${sessionCode}/participants`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.detail || "Failed to load participants for attendance export.");
+  }
+  const participants = await response.json() as any[];
+
+  const headers = ["User ID", "Name", "Register Number", "Department", "Year", "Section", "Status", "Anonymous Label"];
+  const rows = participants.map(p => [
+    p.user_id || p.id,
+    p.name,
+    p.register_number,
+    p.department,
+    p.year,
+    p.section,
+    p.status,
+    p.anonymous_label
+  ]);
+
+  const csvContent = [headers.join(","), ...rows.map(e => e.map(val => `"${String(val ?? '').replace(/"/g, '""')}"`).join(","))].join("\n");
+
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `gd_live_attendance_${sessionCode}.csv`;
+  a.click();
+  window.URL.revokeObjectURL(url);
+}
+

@@ -11,7 +11,7 @@ import GdLiveRoom from "@/components/GdLiveRoom";
 import GdLiveAdminMonitor from "@/components/GdLiveAdminMonitor";
 import { useGdLiveWs, GDLiveWsMessage } from "@/lib/useGdLiveWs";
 import { useVoiceAnnouncement } from "@/services/voice/useVoiceAnnouncement";
-import { AllTimeAchiever, ComprehensiveLeaderboard, GDLiveLeaderboardEntry, LeaderboardRanking, LeaderboardStats, Progress, SoloQuote, SoloStartResponse, SoloSubmitResponse, User, apiRequest, hostGdLiveMeeting, endGdLiveMeeting, getGdLiveState, changePassword, API_URL } from "@/lib/api";
+import { AllTimeAchiever, ComprehensiveLeaderboard, GDLiveLeaderboardEntry, LeaderboardRanking, LeaderboardStats, Progress, SoloQuote, SoloStartResponse, SoloSubmitResponse, User, apiRequest, hostGdLiveMeeting, endGdLiveMeeting, getGdLiveState, changePassword, API_URL, downloadGdLivePdfReport, downloadGdLiveExcelReport, exportGdLiveAttendance } from "@/lib/api";
 
 function speak(text: string) {
   if (typeof window === "undefined" || !window.speechSynthesis) return;
@@ -35,25 +35,63 @@ type PageView = "login" | "dashboard" | "profile" | "gd-leaderboard" | "solo-pra
 
 /** Student-side waiter: opens a WebSocket to the session and auto-redirects into the
  *  live room when the admin hosts the meeting (SESSION_STARTED broadcast). */
-function StudentLiveWaiter({ code, token, onStart }: { code: string; token: string; onStart: (topic: string | null, members: any[], teams?: any[]) => void }) {
-  const { connected, error, subscribe } = useGdLiveWs(code, token);
+function StudentLiveWaiter({
+  code,
+  token,
+  onStart,
+  onParticipantsUpdate
+}: {
+  code: string;
+  token: string;
+  onStart: (topic: string | null, members: any[], teams?: any[]) => void;
+  onParticipantsUpdate?: (parts: any[]) => void;
+}) {
+  const { subscribe } = useGdLiveWs(code, token);
   const startedRef = useRef(false);
+
+  useEffect(() => {
+    let active = true;
+    apiRequest<any[]>(`/gd-live/sessions/${code}/participants`, {}, token)
+      .then(data => {
+        if (active && onParticipantsUpdate) onParticipantsUpdate(data || []);
+      })
+      .catch(() => { });
+    return () => { active = false; };
+  }, [code, token]);
+
   useEffect(() => {
     const unsub = subscribe((msg: GDLiveWsMessage) => {
       if (msg.event === "SESSION_STARTED" && !startedRef.current) {
         startedRef.current = true;
         onStart(msg.payload?.topic ?? null, msg.payload?.members ?? [], msg.payload?.teams ?? []);
+      } else if (msg.event === "PARTICIPANTS_UPDATED") {
+        if (onParticipantsUpdate) onParticipantsUpdate(msg.payload?.participants || []);
+      } else if (msg.event === "PARTICIPANT_JOINED" || msg.event === "PARTICIPANT_LEFT") {
+        apiRequest<any[]>(`/gd-live/sessions/${code}/participants`, {}, token)
+          .then(data => { if (onParticipantsUpdate) onParticipantsUpdate(data || []); })
+          .catch(() => { });
       }
     });
     return unsub;
-  }, [subscribe, onStart]);
+  }, [subscribe, onStart, onParticipantsUpdate, code, token]);
+
   return null;
 }
 
 /** Student-side polling fallback: if the WebSocket SESSION_STARTED event is
  *  missed (e.g. reconnect), poll the live-state and redirect when the session
  *  becomes "live". No manual refresh required. */
-function StudentLivePoller({ code, token, onStart }: { code: string; token: string; onStart: (topic: string | null, members: any[], teams?: any[]) => void }) {
+function StudentLivePoller({
+  code,
+  token,
+  onStart,
+  onParticipantsUpdate
+}: {
+  code: string;
+  token: string;
+  onStart: (topic: string | null, members: any[], teams?: any[]) => void;
+  onParticipantsUpdate?: (parts: any[]) => void;
+}) {
   const startedRef = useRef(false);
   useEffect(() => {
     let active = true;
@@ -64,15 +102,18 @@ function StudentLivePoller({ code, token, onStart }: { code: string; token: stri
         if (st.status === "live" || st.status === "active") {
           startedRef.current = true;
           onStart(st.topic ?? null, st.members || [], st.teams || []);
+        } else {
+          const parts = await apiRequest<any[]>(`/gd-live/sessions/${code}/participants`, {}, token);
+          if (active && onParticipantsUpdate) onParticipantsUpdate(parts || []);
         }
       } catch {
         /* ignore transient errors */
       }
     };
     tick();
-    const id = setInterval(tick, 2000);
+    const id = setInterval(tick, 3000);
     return () => { active = false; clearInterval(id); };
-  }, [code, token, onStart]);
+  }, [code, token, onStart, onParticipantsUpdate]);
   return null;
 }
 
@@ -313,8 +354,14 @@ export default function Home() {
   const [selectedSection, setSelectedSection] = useState<string>("ALL");
   const [easyTopicsList, setEasyTopicsList] = useState<any[]>([]);
   const [studentList, setStudentList] = useState<any[]>([]);
+  const [optDirDept, setOptDirDept] = useState<string>("ALL");
+  const [optDirYear, setOptDirYear] = useState<string>("ALL");
+  const [optDirSec, setOptDirSec] = useState<string>("ALL");
   const [departmentList, setDepartmentList] = useState<string[]>([]);
   const [yearList, setYearList] = useState<string[]>([]);
+  const [sessionStudents, setSessionStudents] = useState<any[]>([]);
+  const [selectedStudentIds, setSelectedStudentIds] = useState<number[]>([]);
+  const [waitingRoomParticipants, setWaitingRoomParticipants] = useState<any[]>([]);
   const [adminSubTab, setAdminSubTab] = useState<"sessions" | "students" | "analytics">("sessions");
   const [studentModalOpen, setStudentModalOpen] = useState(false);
   const [editingStudent, setEditingStudent] = useState<any | null>(null);
@@ -687,6 +734,26 @@ export default function Home() {
     } catch { }
   }
 
+  async function loadSessionStudents() {
+    if (!token) return;
+    try {
+      const d = selectedDept === "ALL" ? "" : selectedDept;
+      const y = selectedYear === "ALL" ? "" : selectedYear;
+      const s = selectedSection === "ALL" ? "" : selectedSection;
+      const data = await apiRequest<any[]>(`/gd-live/students?department=${encodeURIComponent(d)}&year=${encodeURIComponent(y)}&section=${encodeURIComponent(s)}`, {}, token);
+      setSessionStudents(data || []);
+      setSelectedStudentIds(data ? data.map(st => st.id || st.user_id) : []);
+    } catch (err) {
+      console.warn("Failed to load session students:", err);
+    }
+  }
+
+  useEffect(() => {
+    if (token && user?.role === "admin" && view === "gd-live-admin") {
+      loadSessionStudents();
+    }
+  }, [selectedDept, selectedYear, selectedSection, view, token]);
+
   useEffect(() => {
     if (token && user?.role === "admin" && (view === "gd-live-admin" || view === "gd-live-admin-view")) {
       loadAdminDetails();
@@ -744,35 +811,27 @@ export default function Home() {
   }
 
   async function exportAttendance(sessionCode: string) {
+    setLoading(true);
     try {
-      const data = await apiRequest<any[]>(`/gd-live/sessions/${sessionCode}/attendance`, {}, token);
-      if (!data || data.length === 0) return;
-      const headers = Object.keys(data[0]).join(",");
-      const rows = data.map(r => Object.values(r).map(val => `"${val}"`).join(","));
-      const csv = [headers, ...rows].join("\n");
-      const blob = new Blob([csv], { type: "text/csv" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `Attendance_${sessionCode}.csv`;
-      a.click();
-    } catch (err: any) { setMessage(err.message); }
+      await exportGdLiveAttendance(sessionCode, token);
+      setSuccess("Attendance exported successfully!");
+    } catch (err: any) {
+      setMessage(err.message);
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function exportEvaluations(sessionCode: string) {
+    setLoading(true);
     try {
-      const data = await apiRequest<any[]>(`/gd-live/sessions/${sessionCode}/evaluation-export`, {}, token);
-      if (!data || data.length === 0) return;
-      const headers = Object.keys(data[0]).join(",");
-      const rows = data.map(r => Object.values(r).map(val => `"${val}"`).join(","));
-      const csv = [headers, ...rows].join("\n");
-      const blob = new Blob([csv], { type: "text/csv" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `Evaluations_${sessionCode}.csv`;
-      a.click();
-    } catch (err: any) { setMessage(err.message); }
+      await downloadGdLiveExcelReport(sessionCode, token);
+      setSuccess("Evaluation details exported successfully!");
+    } catch (err: any) {
+      setMessage(err.message);
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function createGdLiveSession() {
@@ -940,6 +999,8 @@ export default function Home() {
     } catch (err: any) { setMessage(err.message); }
     finally { setLoading(false); }
   }
+
+
 
   // ─── Solo Practice Functions ───
 
@@ -3187,11 +3248,30 @@ export default function Home() {
                                   <td className="py-2 pr-2 text-purple-300">{entry.anonymous_label || "-"}</td>
                                   <td className="py-2 pr-2 text-emerald-300 font-semibold">{(entry.overall_score != null ? Number(entry.overall_score) : 0).toFixed(1)}</td>
                                   <td className="py-2 pr-2 text-amber-300">{(entry.credential_points != null ? Number(entry.credential_points) : 0).toFixed(1)}</td>
-                                  <td className="py-2 pr-2">
-                                    <details className="cursor-pointer">
-                                      <summary className="text-amber-300 hover:text-amber-200 text-xs">View</summary>
-                                      <p className="mt-1 text-muted-soft whitespace-pre-wrap max-w-xs">{entry.transcript || "N/A"}</p>
-                                    </details>
+                                  <td className="py-2 pr-2 font-semibold">
+                                    <div className="flex items-center gap-2">
+                                      <details className="cursor-pointer flex-1">
+                                        <summary className="text-amber-300 hover:text-amber-200 text-xs">View</summary>
+                                        <p className="mt-1 text-muted-soft whitespace-pre-wrap max-w-xs">{entry.transcript || "N/A"}</p>
+                                      </details>
+                                      <Button
+                                        onClick={async () => {
+                                          setLoading(true);
+                                          try {
+                                            await downloadGdLivePdfReport(sess.session_code, entry.user_id, token);
+                                            setSuccess(`PDF Report downloaded!`);
+                                          } catch (err: any) {
+                                            setMessage(err.message);
+                                          } finally {
+                                            setLoading(false);
+                                          }
+                                        }}
+                                        variant="ghost"
+                                        className="h-6 px-1.5 py-0 text-[10px] text-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/10 font-bold border border-indigo-500/20 rounded"
+                                      >
+                                        PDF
+                                      </Button>
+                                    </div>
                                   </td>
                                 </tr>
                               ))}
@@ -3235,7 +3315,76 @@ export default function Home() {
 
                   {/* Student Directory Table */}
                   <div className="card p-6">
-                    <h3 className="text-base font-semibold text-heading mb-4">Student Directory</h3>
+                    <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+                      <h3 className="text-base font-semibold text-heading">Student Directory</h3>
+                      <span className="text-xs text-muted-soft bg-[var(--surface-2)]/50 px-2.5 py-1 rounded-full border border-[var(--border)]/10 font-medium">
+                        Showing {
+                          studentList.filter((stud) => {
+                            const matchDept = optDirDept === "ALL" || (stud.department && stud.department.toUpperCase() === optDirDept.toUpperCase());
+                            const matchYear = optDirYear === "ALL" || (
+                              (optDirYear === "1" && (stud.year?.includes("1") || stud.year?.toLowerCase().includes("first"))) ||
+                              (optDirYear === "2" && (stud.year?.includes("2") || stud.year?.toLowerCase().includes("second"))) ||
+                              (optDirYear === "3" && (stud.year?.includes("3") || stud.year?.toLowerCase().includes("third"))) ||
+                              (optDirYear === "4" && (stud.year?.includes("4") || stud.year?.toLowerCase().includes("fourth") || stud.year?.toLowerCase().includes("final")))
+                            );
+                            const matchSec = optDirSec === "ALL" || (stud.section && stud.section.toUpperCase() === optDirSec.toUpperCase());
+                            return matchDept && matchYear && matchSec;
+                          }).length
+                        } of {studentList.length} Students
+                      </span>
+                    </div>
+
+                    {/* Filters Bar */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6 p-4 rounded-lg bg-[var(--surface-2)]/30 border border-[var(--border)]/10">
+                      <div>
+                        <label className="block text-xs font-semibold text-muted-soft mb-1">Academic Year</label>
+                        <select
+                          value={optDirYear}
+                          onChange={(e) => setOptDirYear(e.target.value)}
+                          className="w-full h-10 px-3 rounded-lg bg-[var(--background)] border border-[var(--border)]/30 text-heading text-sm focus:border-indigo-500 focus:outline-none"
+                        >
+                          <option value="ALL">All Years</option>
+                          <option value="1">1st Year</option>
+                          <option value="2">2nd Year</option>
+                          <option value="3">3rd Year</option>
+                          <option value="4">Final Year</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold text-muted-soft mb-1">Department</label>
+                        <select
+                          value={optDirDept}
+                          onChange={(e) => setOptDirDept(e.target.value)}
+                          className="w-full h-10 px-3 rounded-lg bg-[var(--background)] border border-[var(--border)]/30 text-heading text-sm focus:border-indigo-500 focus:outline-none"
+                        >
+                          <option value="ALL">All Departments</option>
+                          <option value="CSE">CSE</option>
+                          <option value="IT">IT</option>
+                          <option value="AI&DS">AI&DS</option>
+                          <option value="ECE">ECE</option>
+                          <option value="EEE">EEE</option>
+                          <option value="MECH">MECH</option>
+                          <option value="CIVIL">CIVIL</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold text-muted-soft mb-1">Section</label>
+                        <select
+                          value={optDirSec}
+                          onChange={(e) => setOptDirSec(e.target.value)}
+                          className="w-full h-10 px-3 rounded-lg bg-[var(--background)] border border-[var(--border)]/30 text-heading text-sm focus:border-indigo-500 focus:outline-none"
+                        >
+                          <option value="ALL">All Sections</option>
+                          <option value="A">Section A</option>
+                          <option value="B">Section B</option>
+                          <option value="C">Section C</option>
+                          <option value="D">Section D</option>
+                        </select>
+                      </div>
+                    </div>
+
                     <div className="overflow-x-auto">
                       <table className="ent-table">
                         <thead>
@@ -3249,42 +3398,64 @@ export default function Home() {
                           </tr>
                         </thead>
                         <tbody>
-                          {studentList.map((stud) => (
-                            <tr key={stud.id} className="hover:surface-2 border-b border-[var(--border)]/30">
-                              <td className="py-2.5 pr-2 text-heading font-medium">{stud.name}</td>
-                              <td className="py-2.5 pr-2 text-body font-mono">{stud.register_number}</td>
-                              <td className="py-2.5 pr-2 text-body">{stud.department || "-"}</td>
-                              <td className="py-2.5 pr-2 text-body">{stud.year || "-"}</td>
-                              <td className="py-2.5 pr-2 text-body font-bold text-amber-400">{stud.section || "-"}</td>
-                              <td className="py-2.5 pr-2">
-                                <div className="flex gap-2">
-                                  <button onClick={() => {
-                                    setEditingStudent(stud);
-                                    setStudentForm({
-                                      name: stud.name,
-                                      email: stud.email || "",
-                                      password: "",
-                                      register_number: stud.register_number,
-                                      department: stud.department || "IT",
-                                      year: stud.year || "First Year",
-                                      section: stud.section || "A"
-                                    });
-                                    setStudentModalOpen(true);
-                                  }} className="text-xs text-indigo-400 hover:text-indigo-300 font-semibold">
-                                    Edit
-                                  </button>
-                                  <button onClick={() => deleteStudent(stud.id)} className="text-xs text-red-400 hover:text-red-300 font-semibold">
-                                    Delete
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          ))}
-                          {studentList.length === 0 && (
-                            <tr>
-                              <td colSpan={6} className="py-8 text-center text-muted-soft text-sm">No students registered yet. Import or add one above!</td>
-                            </tr>
-                          )}
+                          {studentList
+                            .filter((stud) => {
+                              const matchDept = optDirDept === "ALL" || (stud.department && stud.department.toUpperCase() === optDirDept.toUpperCase());
+                              const matchYear = optDirYear === "ALL" || (
+                                (optDirYear === "1" && (stud.year?.includes("1") || stud.year?.toLowerCase().includes("first"))) ||
+                                (optDirYear === "2" && (stud.year?.includes("2") || stud.year?.toLowerCase().includes("second"))) ||
+                                (optDirYear === "3" && (stud.year?.includes("3") || stud.year?.toLowerCase().includes("third"))) ||
+                                (optDirYear === "4" && (stud.year?.includes("4") || stud.year?.toLowerCase().includes("fourth") || stud.year?.toLowerCase().includes("final")))
+                              );
+                              const matchSec = optDirSec === "ALL" || (stud.section && stud.section.toUpperCase() === optDirSec.toUpperCase());
+                              return matchDept && matchYear && matchSec;
+                            })
+                            .map((stud) => (
+                              <tr key={stud.id} className="hover:surface-2 border-b border-[var(--border)]/30">
+                                <td className="py-2.5 pr-2 text-heading font-medium">{stud.name}</td>
+                                <td className="py-2.5 pr-2 text-body font-mono">{stud.register_number}</td>
+                                <td className="py-2.5 pr-2 text-body">{stud.department || "-"}</td>
+                                <td className="py-2.5 pr-2 text-body">{stud.year || "-"}</td>
+                                <td className="py-2.5 pr-2 text-body font-bold text-amber-400">{stud.section || "-"}</td>
+                                <td className="py-2.5 pr-2">
+                                  <div className="flex gap-2">
+                                    <button onClick={() => {
+                                      setEditingStudent(stud);
+                                      setStudentForm({
+                                        name: stud.name,
+                                        email: stud.email || "",
+                                        password: "",
+                                        register_number: stud.register_number,
+                                        department: stud.department || "IT",
+                                        year: stud.year || "First Year",
+                                        section: stud.section || "A"
+                                      });
+                                      setStudentModalOpen(true);
+                                    }} className="text-xs text-indigo-400 hover:text-indigo-300 font-semibold">
+                                      Edit
+                                    </button>
+                                    <button onClick={() => deleteStudent(stud.id)} className="text-xs text-red-400 hover:text-red-300 font-semibold">
+                                      Delete
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          {studentList.filter((stud) => {
+                            const matchDept = optDirDept === "ALL" || (stud.department && stud.department.toUpperCase() === optDirDept.toUpperCase());
+                            const matchYear = optDirYear === "ALL" || (
+                              (optDirYear === "1" && (stud.year?.includes("1") || stud.year?.toLowerCase().includes("first"))) ||
+                              (optDirYear === "2" && (stud.year?.includes("2") || stud.year?.toLowerCase().includes("second"))) ||
+                              (optDirYear === "3" && (stud.year?.includes("3") || stud.year?.toLowerCase().includes("third"))) ||
+                              (optDirYear === "4" && (stud.year?.includes("4") || stud.year?.toLowerCase().includes("fourth") || stud.year?.toLowerCase().includes("final")))
+                            );
+                            const matchSec = optDirSec === "ALL" || (stud.section && stud.section.toUpperCase() === optDirSec.toUpperCase());
+                            return matchDept && matchYear && matchSec;
+                          }).length === 0 && (
+                              <tr>
+                                <td colSpan={6} className="py-8 text-center text-muted-soft text-sm">No students registered yet matching these criteria.</td>
+                              </tr>
+                            )}
                         </tbody>
                       </table>
                     </div>
@@ -3528,11 +3699,13 @@ export default function Home() {
                 code={gdLiveSession.session_code}
                 token={token}
                 onStart={(topic, members, teams) => enterGdLiveRoom(gdLiveSession.session_code, topic, members, teams)}
+                onParticipantsUpdate={(parts) => setWaitingRoomParticipants(parts)}
               />
               <StudentLivePoller
                 code={gdLiveSession.session_code}
                 token={token}
                 onStart={(topic, members, teams) => enterGdLiveRoom(gdLiveSession.session_code, topic, members, teams)}
+                onParticipantsUpdate={(parts) => setWaitingRoomParticipants(parts)}
               />
               <div className="card p-6 text-center py-12">
                 <div className="icon-badge icon-purple mx-auto mb-5" style={{ width: "72px", height: "72px" }}>
@@ -3545,7 +3718,7 @@ export default function Home() {
                 <div className="flex items-center justify-center gap-3 text-muted-soft">
                   <span className={`w-2 h-2 rounded-full ${gdLiveWsConnected ? "bg-emerald-500" : "bg-red-500 animate-pulse"}`} />
                   <Loader2 className="h-5 w-5 animate-spin text-amber-400" />
-                  <span className="text-base">
+                  <span className="text-base font-semibold">
                     {gdLiveWsConnected
                       ? "Waiting for Host to Start Discussion..."
                       : "Connecting to session server..."}
@@ -3554,6 +3727,33 @@ export default function Home() {
                 {gdLiveWsError && (
                   <p className="text-xs text-red-500 mt-3">{gdLiveWsError}</p>
                 )}
+
+                {waitingRoomParticipants.length > 0 ? (
+                  <div className="mt-8 border-t border-[var(--border)] pt-6 text-left">
+                    <h3 className="text-xs font-bold text-heading uppercase tracking-wider mb-4 flex items-center gap-1.5">
+                      <Users className="w-4 h-4 text-indigo-400" /> Joined Participants ({waitingRoomParticipants.length})
+                    </h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {waitingRoomParticipants.map((p: any) => (
+                        <div key={p.user_id || p.id} className="flex items-center gap-2.5 p-3 rounded-xl border border-[var(--border)] bg-slate-900/10 dark:bg-slate-900/50">
+                          <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center text-white text-[9px] font-bold">
+                            {(p.name || "?")[0].toUpperCase()}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-bold text-heading truncate">{p.name}</p>
+                            <p className="text-[10px] text-muted-soft truncate">{p.department || "-"} · {p.year || "-"}</p>
+                          </div>
+                          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" title="Joined" />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-8 border-t border-[var(--border)] pt-6 text-center">
+                    <p className="text-xs text-muted-soft">Waiting for other participants to connect...</p>
+                  </div>
+                )}
+
                 <p className="text-xs text-muted-soft mt-6">
                   The discussion room opens automatically the moment the host starts — no refresh needed.
                 </p>

@@ -633,10 +633,22 @@ def list_live_sessions(connection: MySQLConnection) -> list[dict[str, Any]]:
 
 
 def join_live_session(connection: MySQLConnection, session_code: str, user_id: int) -> str:
-    existing = fetch_one(connection, "SELECT id FROM gd_live_participants WHERE session_code = %s AND user_id = %s",
+    existing = fetch_one(connection, "SELECT id, status FROM gd_live_participants WHERE session_code = %s AND user_id = %s",
                          (session_code, user_id))
     if existing:
+        if existing.get("status") == "invited":
+            execute(connection, "UPDATE gd_live_participants SET status = 'joined' WHERE session_code = %s AND user_id = %s",
+                    (session_code, user_id))
+            execute(connection, "UPDATE gd_live_sessions SET total_participants = total_participants + 1 WHERE session_code = %s",
+                    (session_code,))
+            return "joined"
         return "already_joined"
+        
+    # If there are any pre-invited participants for this session code, then ONLY those invited participants can join!
+    has_invites = fetch_one(connection, "SELECT id FROM gd_live_participants WHERE session_code = %s LIMIT 1", (session_code,))
+    if has_invites:
+        return "unauthorized"
+        
     session = fetch_one(connection, "SELECT id FROM gd_live_sessions WHERE session_code = %s AND status = 'waiting'",
                         (session_code,))
     if not session:
@@ -646,6 +658,7 @@ def join_live_session(connection: MySQLConnection, session_code: str, user_id: i
     execute(connection, "UPDATE gd_live_sessions SET total_participants = total_participants + 1 WHERE session_code = %s",
             (session_code,))
     return "joined"
+
 
 
 def allocate_teams(participants: list[dict[str, Any]], max_team_size: int = 3) -> list[dict[str, Any]]:

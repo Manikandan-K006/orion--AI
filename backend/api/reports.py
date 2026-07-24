@@ -6,7 +6,7 @@ from mysql.connector import MySQLConnection
 
 from backend.database import queries
 from backend.database.db import get_db
-from backend.reporting import generate_pdf_report
+from backend.reporting import generate_pdf_report, generate_gd_live_pdf_report, generate_gd_live_excel_report
 from backend.security import get_current_user
 
 router = APIRouter(prefix="/reports", tags=["Reports"])
@@ -57,3 +57,60 @@ def download_report(
         media_type="application/pdf",
         filename=f"interview_report_{session_id}.pdf",
     )
+
+
+@router.get("/gd-live/{session_code}/pdf")
+def download_gd_live_pdf(
+    session_code: str,
+    user_id: int | None = None,
+    current_user: dict = Depends(get_current_user),
+    connection: MySQLConnection = Depends(get_db),
+) -> FileResponse:
+    target_uid = current_user["id"]
+    if user_id is not None:
+        if current_user.get("role") != "admin":
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only admins can query other members' reports.")
+        target_uid = user_id
+        
+    eval_data = queries.get_live_evaluation_for_user(connection, session_code, target_uid)
+    if not eval_data:
+         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No evaluation found for this user in this session.")
+         
+    # Query student name
+    user_row = queries.fetch_one(connection, "SELECT name FROM users WHERE id = %s", (target_uid,))
+    student_name = user_row["name"] if user_row else "Student"
+    
+    # Query topic
+    topic_row = queries.fetch_one(connection, "SELECT topic FROM gd_live_teams WHERE session_code = %s AND team_number = %s", (session_code, eval_data["team_number"]))
+    topic = topic_row["topic"] if topic_row else "Group Discussion"
+    
+    path = generate_gd_live_pdf_report(session_code, student_name, topic, eval_data)
+    
+    return FileResponse(
+        path=path,
+        media_type="application/pdf",
+        filename=f"gd_live_report_{session_code}_{target_uid}.pdf",
+    )
+
+
+@router.get("/gd-live/{session_code}/excel")
+def download_gd_live_excel(
+    session_code: str,
+    current_user: dict = Depends(get_current_user),
+    connection: MySQLConnection = Depends(get_db),
+) -> FileResponse:
+    if current_user.get("role") != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only admins can download session Excel sheets.")
+        
+    evals = queries.get_live_leaderboard(connection, session_code)
+    if not evals:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No evaluations found for this session code.")
+        
+    path = generate_gd_live_excel_report(session_code, evals)
+    
+    return FileResponse(
+        path=path,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        filename=f"gd_live_session_report_{session_code}.xlsx",
+    )
+
