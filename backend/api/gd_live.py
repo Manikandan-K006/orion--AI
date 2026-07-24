@@ -125,7 +125,20 @@ def join_live_session(
     if session["status"] != "waiting":
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Session is already active or completed")
 
-    # 3. Check department/year/section matching (case-insensitive)
+    # 3. Check department/year/section matching (case-insensitive with flexible mapping)
+    def _normalize_year(y: str) -> str:
+        if not y: return ""
+        v = y.lower().strip()
+        if "1" in v or "first" in v: return "1"
+        if "2" in v or "second" in v: return "2"
+        if "3" in v or "third" in v: return "3"
+        if "4" in v or "fourth" in v or "final" in v: return "4"
+        return v
+
+    def _normalize_dept(d: str) -> str:
+        if not d: return ""
+        return "".join(c for c in d.lower() if c.isalnum())
+
     sess_dept = (session.get("department") or "").strip().lower()
     sess_year = (session.get("year") or "").strip().lower()
     sess_sec = (session.get("section") or "").strip().lower()
@@ -134,12 +147,12 @@ def join_live_session(
     stud_year = (profile.get("year") or "").strip().lower()
     stud_sec = (profile.get("section") or "").strip().lower()
     
-    if sess_dept and sess_dept != stud_dept:
+    if sess_dept and _normalize_dept(sess_dept) != _normalize_dept(stud_dept):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, 
             detail=f"Department mismatch. This session is for '{session.get('department')}', but you are in '{profile.get('department')}'."
         )
-    if sess_year and sess_year != stud_year:
+    if sess_year and _normalize_year(sess_year) != _normalize_year(stud_year):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, 
             detail=f"Academic Year mismatch. This session is for '{session.get('year')}', but you are in '{profile.get('year')}'."

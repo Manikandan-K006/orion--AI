@@ -1,3 +1,0 @@
-backend\api\gd_live.py Line 140: detail=f"Department mismatch. This session is for '{session.get('department')}', but you are in '{profile.get('department')}'."
-backend\api\gd_live.py Line 145: detail=f"Academic Year mismatch. This session is for '{session.get('year')}', but you are in '{profile.get('year')}'."
-backend\api\gd_live.py Line 150: detail=f"Section mismatch. This session is for Section '{session.get('section')}', but you are in Section '{profile.get('section')}'."
