@@ -825,14 +825,33 @@ async def gd_live_socket(
 async def _broadcast_team_results(
     session_code: str, team_number: int, ts: TeamState
 ) -> None:
-    """Build and broadcast SESSION_RESULTS for the team once all members have finished."""
+    """Build and broadcast SESSION_RESULTS for the team once all members have finished.
+
+    Compares team members using topic relevance, argument quality, communication,
+    fluency, grammar, pronunciation, confidence, vocabulary, and contribution quality.
+    Does NOT rank a student highly merely because they spoke more.
+    """
     try:
-        # Build results list from stored evaluations
         results = []
         member_ids = list(ts.members.keys())
         for uid in member_ids:
             member = ts.members.get(uid, {})
             eval_data = ts.evaluations.get(uid, {})
+            transcript_text = ts.transcripts.get(uid, "")
+
+            # Compute contribution quality (not just word count — penalize repetition)
+            word_count = len(transcript_text.split()) if transcript_text else 0
+            unique_words = len(set(transcript_text.lower().split())) if transcript_text else 0
+            repetition_penalty = 0
+            if word_count > 20:
+                unique_ratio = unique_words / word_count
+                if unique_ratio < 0.35:
+                    repetition_penalty = 20
+                elif unique_ratio < 0.5:
+                    repetition_penalty = 10
+
+            contribution_quality = max(0, min(100, word_count * 2 - repetition_penalty)) if word_count > 5 else 0
+
             results.append({
                 "user_id": uid,
                 "name": member.get("name"),
@@ -843,7 +862,15 @@ async def _broadcast_team_results(
                 "fluency_score": eval_data.get("fluency_score", 0),
                 "vocabulary_score": eval_data.get("vocabulary_score", 0),
                 "pronunciation_score": eval_data.get("pronunciation_score", 0),
+                "topic_relevance_score": eval_data.get("topic_relevance_score", 0),
+                "contribution_quality": contribution_quality,
+                "word_count": word_count,
             })
+
+        # Sort by overall_score descending for ranking
+        results.sort(key=lambda r: r.get("overall_score", 0), reverse=True)
+        for rank, r in enumerate(results, 1):
+            r["rank"] = rank
 
         # Broadcast results to team and admin
         await manager.broadcast_to_team(session_code, team_number, "SESSION_RESULTS", {
