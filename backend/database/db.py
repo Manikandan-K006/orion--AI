@@ -23,8 +23,9 @@ def _make_config() -> dict:
         "autocommit": True,
         "use_pure": True,
     }
-    if settings.mysql_host not in ("localhost", "127.0.0.1"):
+    if settings.ssl_enabled:
         config["ssl_disabled"] = False
+        config["ssl_verify_cert"] = False
     return config
 
 
