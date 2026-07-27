@@ -40,7 +40,7 @@ const STAGE_LABELS: Record<string, string> = {
   complete: "Complete!",
 };
 
-type SubmitStep = "idle" | "uploading" | "submitted" | "complete";
+type SubmitStep = "idle" | "uploading" | "finalizing" | "analyzing" | "generating" | "submitted" | "complete";
 
 export default function GdLiveRoom({
   sessionCode, token, user, theme, initialTopic, initialMembers, initialTeams,
