@@ -164,7 +164,7 @@ export default function GdLiveRoom({
   }, [timerSeconds, timerRunning]);
 
   // Stop mic when timer stops
-  useEffect(() => { if (!timerRunning && isRecording) stopMic(); }, [timerRunning]);
+  useEffect(() => { if (!timerRunning && isRecording) { stopChunkUpload(); stopMic(); } }, [timerRunning]);
 
   // Auto-generating screen when all finished and submit is done
   useEffect(() => {
@@ -406,6 +406,7 @@ export default function GdLiveRoom({
     finishLockRef.current = true;
     setTimerRunning(false);
     if (timerRef.current) clearInterval(timerRef.current);
+    stopChunkUpload();
     stopMic();
     proctoring.disable();
     const blob = new Blob(audioChunksRef.current, { type: "audio/webm" });
@@ -1030,15 +1031,23 @@ export default function GdLiveRoom({
 
   // ─── SUBMITTED WAITING SCREEN ───
   if (submitStep !== "idle" && !allDone && generatingStep === "") {
+    const stepLabel: Record<string, string> = {
+      uploading: "Uploading final audio...",
+      finalizing: "Finalizing audio...",
+      analyzing: "Analyzing discussion...",
+      generating: "Generating report...",
+      submitted: "Processing...",
+      complete: "Done",
+    };
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-6" style={{ background: "var(--bg)" }}>
         {warnModal}
         <div className="w-full max-w-lg space-y-6 animate-fade-up text-center">
           <div className="w-16 h-16 mx-auto rounded-2xl bg-emerald-500/10 flex items-center justify-center text-emerald-500 shadow-sm">
-            <CheckCircle2 className="w-8 h-8" />
+            <Loader2 className="w-8 h-8 animate-spin" />
           </div>
-          <h1 className="text-2xl font-black text-heading tracking-tight">Speech Recorded Successfully</h1>
-          <p className="text-xs text-muted-soft">Thank you. Your voice arguments have been compiled and sent to the AI processing engine.</p>
+          <h1 className="text-2xl font-black text-heading tracking-tight">{stepLabel[submitStep] || "Processing..."}</h1>
+          <p className="text-xs text-muted-soft">Your discussion is being evaluated. Please wait.</p>
 
           <div className="card p-6 space-y-4">
             <div className="flex items-center justify-between text-xs font-bold text-heading">
