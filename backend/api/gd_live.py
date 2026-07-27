@@ -570,17 +570,34 @@ async def upload_gd_live_audio(
     async def _progress(name: str):
         await _send_progress(name)
 
-    # Step 1: Transcribe with Whisper (offloaded to thread)
+    # Step 1: Check for accumulated transcript from incremental chunks
     await _send_progress("uploading")
-    result = await loop.run_in_executor(None, transcribe_audio, str(file_path))
-    if not result.get("success", True):
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=result.get("error", "Speech recognition service unavailable."),
-        )
-    transcript = result.get("transcript", "")
-    if not transcript:
-        transcript = "[Audio could not be transcribed clearly]"
+    state = manager.get_state(session_code)
+    uid = current_user["id"]
+    accumulated_transcript = ""
+    if state:
+        p = state.participants.get(uid)
+        if p:
+            tn = p.get("team_number")
+            if tn and tn in state.team_states:
+                ts = state.team_states[tn]
+                accumulated_transcript = ts.transcripts.get(uid, "").strip()
+
+    if accumulated_transcript and len(accumulated_transcript) > 20:
+        # Use accumulated transcript from incremental chunks — skip re-transcription
+        transcript = accumulated_transcript
+        logger.info("Using accumulated transcript (%d chars) for uid=%s", len(transcript), uid)
+    else:
+        # Fallback: transcribe the entire recording at once
+        result = await loop.run_in_executor(None, transcribe_audio, str(file_path))
+        if not result.get("success", True):
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=result.get("error", "Speech recognition service unavailable."),
+            )
+        transcript = result.get("transcript", "")
+        if not transcript:
+            transcript = "[Audio could not be transcribed clearly]"
     await _send_progress("transcribing")
 
     # Step 2: Parallel AI evaluation with per-module progress
@@ -665,6 +682,97 @@ async def upload_gd_live_audio(
             "pronunciation_score": round(evaluation.pronunciation_score, 1) if evaluation else 0,
         } if evaluation else None,
         "message": "Audio processed",
+    }
+
+
+@router.post("/sessions/{session_code}/upload-chunk", status_code=status.HTTP_201_CREATED)
+async def upload_audio_chunk(
+    session_code: str,
+    file: UploadFile,
+    current_user: dict = Depends(get_current_user),
+) -> dict:
+    """Upload an audio chunk during the GD session for incremental transcription.
+
+    The chunk is transcribed immediately and appended to the user's accumulated
+    transcript in memory. On Finish Discussion, the frontend sends a final chunk
+    and the accumulated transcript is used for evaluation — no double transcription.
+    """
+    ext = Path(file.filename or "").suffix.lower()
+    if ext not in ALLOWED_AUDIO_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unsupported file type '{ext}'.",
+        )
+
+    settings = get_settings()
+    upload_dir = Path(settings.upload_dir)
+    upload_dir.mkdir(parents=True, exist_ok=True)
+
+    safe_name = f"gd_chunk_{session_code}_{current_user['id']}_{os.urandom(4).hex()}{ext}"
+    file_path = upload_dir / safe_name
+    loop = asyncio.get_running_loop()
+
+    content = await loop.run_in_executor(None, file.file.read)
+    await loop.run_in_executor(None, file_path.write_bytes, content)
+
+    # Transcribe the chunk (beam_size=1 for speed)
+    from backend.ai.speech_recognition import transcribe_chunk
+    result = await loop.run_in_executor(None, transcribe_chunk, str(file_path))
+    chunk_text = result.get("transcript", "") if result.get("success") else ""
+
+    # Append to accumulated transcript in room state
+    state = manager.get_state(session_code)
+    uid = current_user["id"]
+    accumulated = ""
+    if state:
+        p = state.participants.get(uid)
+        if p:
+            tn = p.get("team_number")
+            if tn and tn in state.team_states:
+                ts = state.team_states[tn]
+                existing = ts.transcripts.get(uid, "")
+                ts.transcripts[uid] = (existing + " " + chunk_text).strip()
+                accumulated = ts.transcripts[uid]
+
+    # Clean up chunk file
+    try:
+        os.remove(file_path)
+    except Exception:
+        pass
+
+    return {
+        "chunk_transcript": chunk_text,
+        "accumulated_transcript": accumulated,
+        "message": "Chunk processed",
+    }
+
+
+@router.post("/sessions/{session_code}/finalize-transcript")
+async def finalize_transcript(
+    session_code: str,
+    current_user: dict = Depends(get_current_user),
+) -> dict:
+    """Finalize the accumulated transcript after the last chunk is uploaded.
+
+    Returns the complete transcript for the student, ready for evaluation.
+    The frontend calls this after the final upload-chunk when Finish Discussion
+    is clicked, before triggering SPEAKER_FINISHED.
+    """
+    state = manager.get_state(session_code)
+    uid = current_user["id"]
+    transcript = ""
+
+    if state:
+        p = state.participants.get(uid)
+        if p:
+            tn = p.get("team_number")
+            if tn and tn in state.team_states:
+                ts = state.team_states[tn]
+                transcript = ts.transcripts.get(uid, "")
+
+    return {
+        "transcript": transcript.strip(),
+        "message": "Transcript finalized",
     }
 
 

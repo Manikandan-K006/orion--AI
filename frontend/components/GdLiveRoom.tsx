@@ -31,6 +31,9 @@ function anonStatus(m: any, uid: number): string {
 
 const STAGE_LABELS: Record<string, string> = {
   uploading: "Uploading Audio...",
+  finalizing: "Finalizing audio...",
+  analyzing: "Analyzing discussion...",
+  generating: "Generating report...",
   transcribing: "Transcribing...",
   evaluating: "Analyzing grammar, fluency, and confidence...",
   saving: "Saving results...",
@@ -90,6 +93,8 @@ export default function GdLiveRoom({
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const thinkingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const finishLockRef = useRef(false);
+  const chunkIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const chunkUploadRef = useRef(false);
   const userId = user?.user_id ?? user?.id;
   const apiUrl = getApiUrl();
   const voice = useVoiceAnnouncement();
@@ -269,6 +274,42 @@ export default function GdLiveRoom({
     audioContextRef.current = null;
   }
 
+  async function sendAudioChunk() {
+    if (!isRecording || chunkUploadRef.current || audioChunksRef.current.length === 0) return;
+    chunkUploadRef.current = true;
+    try {
+      // Take a snapshot of current chunks and clear for new recording
+      const chunks = [...audioChunksRef.current];
+      audioChunksRef.current = [];
+      const blob = new Blob(chunks, { type: "audio/webm" });
+      if (blob.size < 100) { chunkUploadRef.current = false; return; }
+      const formData = new FormData();
+      formData.append("file", blob, "gd_chunk_" + sessionCode + "_" + userId + ".webm");
+      await fetch(apiUrl + "/gd-live/sessions/" + sessionCode + "/upload-chunk", {
+        method: "POST",
+        headers: { Authorization: "Bearer " + token },
+        body: formData,
+      });
+    } catch (err) {
+      console.warn("Chunk upload failed:", err);
+    }
+    chunkUploadRef.current = false;
+  }
+
+  function startChunkUpload() {
+    if (chunkIntervalRef.current) clearInterval(chunkIntervalRef.current);
+    chunkUploadRef.current = false;
+    chunkIntervalRef.current = setInterval(sendAudioChunk, 20000);
+  }
+
+  function stopChunkUpload() {
+    if (chunkIntervalRef.current) {
+      clearInterval(chunkIntervalRef.current);
+      chunkIntervalRef.current = null;
+    }
+    chunkUploadRef.current = false;
+  }
+
   function startDiscussion() {
     setDiscussionStarted(true);
     setThinkingPhase(true);
@@ -282,6 +323,7 @@ export default function GdLiveRoom({
     setThinkingPhase(false);
     setTimerRunning(true);
     startRecording();
+    startChunkUpload();
     proctoring.enable();
     voice.announceBeginSpeaking();
   }
@@ -291,28 +333,72 @@ export default function GdLiveRoom({
     finishLockRef.current = true;
     setTimerRunning(false);
     if (timerRef.current) clearInterval(timerRef.current);
-    stopMic();
+    stopChunkUpload();
     proctoring.disable();
-    setSubmitStep("uploading");
-    const blob = new Blob(audioChunksRef.current, { type: "audio/webm" });
-    if (blob.size >= 100) {
-      try {
-        const formData = new FormData();
-        formData.append("file", blob, "gd_" + sessionCode + "_" + userId + ".webm");
-        const res = await fetch(apiUrl + "/gd-live/sessions/" + sessionCode + "/upload-audio", {
-          method: "POST",
-          headers: { Authorization: "Bearer " + token },
-          body: formData,
-        });
-        const data = await res.json();
-        if (data.transcript) setTranscript(data.transcript);
-        if (data.evaluation) setAiResult(data.evaluation);
-      } catch (err) {
-        console.warn("Upload failed:", err);
+    setSubmitStep("finalizing");
+
+    // Send final chunk (remaining audio since last interval)
+    try {
+      if (audioChunksRef.current.length > 0) {
+        const finalBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+        audioChunksRef.current = [];
+        if (finalBlob.size >= 100) {
+          const fd = new FormData();
+          fd.append("file", finalBlob, "gd_chunk_" + sessionCode + "_" + userId + ".webm");
+          await fetch(apiUrl + "/gd-live/sessions/" + sessionCode + "/upload-chunk", {
+            method: "POST",
+            headers: { Authorization: "Bearer " + token },
+            body: fd,
+          });
+        }
+      }
+    } catch (err) {
+      console.warn("Final chunk upload failed:", err);
+    }
+
+    // Stop mic after final chunk is sent
+    stopMic();
+
+    // Get accumulated transcript from server
+    setSubmitStep("analyzing");
+    let transcript = "";
+    try {
+      const finRes = await fetch(apiUrl + "/gd-live/sessions/" + sessionCode + "/finalize-transcript", {
+        method: "POST",
+        headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
+      });
+      const finData = await finRes.json();
+      transcript = finData.transcript || "";
+    } catch (err) {
+      console.warn("Finalize transcript failed:", err);
+    }
+
+    // If accumulated transcript is empty, fall back to full upload
+    if (!transcript || transcript.length < 20) {
+      const blob = new Blob(audioChunksRef.current.length > 0
+        ? audioChunksRef.current
+        : [new Blob()], { type: "audio/webm" });
+      if (blob.size >= 100) {
+        try {
+          const formData = new FormData();
+          formData.append("file", blob, "gd_" + sessionCode + "_" + userId + ".webm");
+          const res = await fetch(apiUrl + "/gd-live/sessions/" + sessionCode + "/upload-audio", {
+            method: "POST",
+            headers: { Authorization: "Bearer " + token },
+            body: formData,
+          });
+          const data = await res.json();
+          if (data.transcript) transcript = data.transcript;
+          if (data.evaluation) setAiResult(data.evaluation);
+        } catch (err) {
+          console.warn("Fallback upload failed:", err);
+        }
       }
     }
-    send("SPEAKER_FINISHED", { user_id: userId });
+
+    if (transcript) setTranscript(transcript);
     setSubmitStep("complete");
+    send("SPEAKER_FINISHED", { user_id: userId, transcript });
   }
 
   function forceFinish(reason: string) {
