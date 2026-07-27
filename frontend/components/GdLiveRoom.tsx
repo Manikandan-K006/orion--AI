@@ -7,7 +7,7 @@ import { ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, Radar } fro
 import { useGdLiveWs, GDLiveWsMessage } from "@/lib/useGdLiveWs";
 import { useVoiceAnnouncement } from "@/services/voice/useVoiceAnnouncement";
 import { useProctoring } from "@/services/proctoring/lockdown";
-import { API_URL } from "@/lib/api";
+import { getApiUrl } from "@/lib/config";
 
 function formatTime(s: number) {
   const m = Math.floor(s / 60).toString().padStart(2, "0");
@@ -91,7 +91,7 @@ export default function GdLiveRoom({
   const thinkingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const finishLockRef = useRef(false);
   const userId = user?.user_id ?? user?.id;
-  const apiUrl = API_URL;
+  const apiUrl = getApiUrl();
   const voice = useVoiceAnnouncement();
   const announcedMarkers = useRef<Set<string>>(new Set());
   const [showWarning, setShowWarning] = useState<string | null>(null);

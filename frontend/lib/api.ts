@@ -1,8 +1,6 @@
-export const API_URL = typeof window !== "undefined"
-  ? (process.env.NEXT_PUBLIC_API_URL && !process.env.NEXT_PUBLIC_API_URL.includes("localhost") && !process.env.NEXT_PUBLIC_API_URL.includes("127.0.0.1")
-    ? process.env.NEXT_PUBLIC_API_URL
-    : `${window.location.protocol}//${window.location.hostname}:8000`)
-  : (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000");
+import { getApiUrl } from "@/lib/config";
+
+export { getApiUrl };
 
 export type User = {
   id: number;
@@ -302,7 +300,7 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}, tok
   const timeoutId = setTimeout(() => controller.abort(), 30000); // 30-second max timeout
 
   try {
-    const response = await fetch(`${API_URL}${path}`, {
+    const response = await fetch(`${getApiUrl()}${path}`, {
       ...options,
       signal: controller.signal,
       headers: {
@@ -337,7 +335,7 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}, tok
 export async function uploadAudio(file: File, token: string) {
   const formData = new FormData();
   formData.append("file", file);
-  const response = await fetch(`${API_URL}/interviews/upload-audio`, {
+  const response = await fetch(`${getApiUrl()}/interviews/upload-audio`, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}` },
     body: formData,
@@ -348,7 +346,7 @@ export async function uploadAudio(file: File, token: string) {
 }
 
 export async function downloadReport(sessionId: number, token: string) {
-  const response = await fetch(`${API_URL}/reports/${sessionId}/download`, {
+  const response = await fetch(`${getApiUrl()}/reports/${sessionId}/download`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!response.ok) {
@@ -374,7 +372,7 @@ export async function changePassword(payload: { current_password: string; new_pa
 
 export async function downloadGdLivePdfReport(sessionCode: string, studentId: number | undefined, token: string) {
   const query = studentId ? `?user_id=${studentId}` : "";
-  const response = await fetch(`${API_URL}/reports/gd-live/${sessionCode}/pdf${query}`, {
+  const response = await fetch(`${getApiUrl()}/reports/gd-live/${sessionCode}/pdf${query}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!response.ok) {
@@ -391,7 +389,7 @@ export async function downloadGdLivePdfReport(sessionCode: string, studentId: nu
 }
 
 export async function downloadGdLiveExcelReport(sessionCode: string, token: string) {
-  const response = await fetch(`${API_URL}/reports/gd-live/${sessionCode}/excel`, {
+  const response = await fetch(`${getApiUrl()}/reports/gd-live/${sessionCode}/excel`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!response.ok) {
@@ -408,7 +406,7 @@ export async function downloadGdLiveExcelReport(sessionCode: string, token: stri
 }
 
 export async function exportGdLiveAttendance(sessionCode: string, token: string) {
-  const response = await fetch(`${API_URL}/gd-live/sessions/${sessionCode}/participants`, {
+  const response = await fetch(`${getApiUrl()}/gd-live/sessions/${sessionCode}/participants`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!response.ok) {

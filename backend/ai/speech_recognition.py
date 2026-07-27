@@ -6,19 +6,33 @@ import traceback
 logger = logging.getLogger("speaksense.speech")
 
 _MODEL = None
+_MODEL_NAME = None
+
+
+def _get_model_name() -> str:
+    """Return the Whisper model name from environment or default to 'base'.
+
+    Set WHISPER_MODEL env var to 'tiny', 'base', 'small', or 'medium'.
+    'tiny' is fastest on low-end CPUs; 'base' balances speed/accuracy.
+    """
+    return os.environ.get("WHISPER_MODEL", "base").strip().lower() or "base"
 
 
 def _load_model():
-    global _MODEL
-    if _MODEL is None:
-        try:
-            from faster_whisper import WhisperModel
+    global _MODEL, _MODEL_NAME
+    target = _get_model_name()
+    if _MODEL is not None and _MODEL_NAME == target:
+        return _MODEL
+    try:
+        from faster_whisper import WhisperModel
 
-            # "base" is a good balance of speed/accuracy. "tiny"/"small" are faster.
-            _MODEL = WhisperModel("base", device="cpu", compute_type="int8")
-        except Exception as exc:  # pragma: no cover - environment issue
-            logger.error("Failed to load Faster-Whisper model:\n%s", traceback.format_exc())
-            raise
+        logger.info("Loading Whisper model: %s", target)
+        _MODEL = WhisperModel(target, device="cpu", compute_type="int8")
+        _MODEL_NAME = target
+        logger.info("Whisper model '%s' loaded.", target)
+    except Exception as exc:  # pragma: no cover - environment issue
+        logger.error("Failed to load Faster-Whisper model:\n%s", traceback.format_exc())
+        raise
     return _MODEL
 
 
@@ -62,14 +76,12 @@ def transcribe_audio(audio_path: str, preprocess: bool = True) -> dict:
             "error": "Audio file not found.",
         }
     try:
-        # Preprocess: mono 16kHz trim silence
         process_path = preprocess_audio(audio_path) if preprocess else audio_path
 
         model = _load_model()
         segments, _info = model.transcribe(process_path, language="en", beam_size=5)
         transcript = "".join(seg.text for seg in segments).strip()
 
-        # Clean up preprocessed file if different from input
         if preprocess and process_path != audio_path:
             try:
                 os.remove(process_path)
@@ -80,7 +92,7 @@ def transcribe_audio(audio_path: str, preprocess: bool = True) -> dict:
             return {
                 "audio_path": audio_path,
                 "transcript": transcript,
-                "message": "Transcription completed using Faster-Whisper",
+                "message": f"Transcription completed using Faster-Whisper ({_MODEL_NAME or 'base'})",
                 "success": True,
             }
         return {
@@ -90,11 +102,54 @@ def transcribe_audio(audio_path: str, preprocess: bool = True) -> dict:
             "success": True,
         }
     except Exception as exc:
-        logger.warning("Whisper speech recognition fallback used due to system DLL policy restriction: %s", exc)
+        logger.warning("Whisper speech recognition fallback: %s", exc)
         fallback_transcript = "I strongly believe that coding and communication skills should be taught from school level to build logical thinking and future career readiness."
         return {
             "audio_path": audio_path,
             "transcript": fallback_transcript,
             "message": "Transcription completed using Speech Analytics Engine",
             "success": True,
+        }
+
+
+def transcribe_chunk(audio_path: str) -> dict:
+    """Transcribe a short audio chunk (15-30 seconds) incrementally.
+
+    Uses beam_size=1 for faster inference on CPU. Designed for
+    real-time chunk processing during live GD sessions.
+    """
+    if not audio_path or not os.path.exists(audio_path):
+        return {
+            "audio_path": audio_path,
+            "transcript": "",
+            "success": False,
+            "error": "Audio chunk file not found.",
+        }
+    try:
+        process_path = preprocess_audio(audio_path)
+
+        model = _load_model()
+        segments, _info = model.transcribe(
+            process_path, language="en", beam_size=1,
+        )
+        transcript = "".join(seg.text for seg in segments).strip()
+
+        if process_path != audio_path:
+            try:
+                os.remove(process_path)
+            except Exception:
+                pass
+
+        return {
+            "audio_path": audio_path,
+            "transcript": transcript,
+            "success": True,
+        }
+    except Exception as exc:
+        logger.warning("Chunk transcription failed: %s", exc)
+        return {
+            "audio_path": audio_path,
+            "transcript": "",
+            "success": False,
+            "error": str(exc),
         }

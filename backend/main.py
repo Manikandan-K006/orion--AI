@@ -56,6 +56,10 @@ class IPFilterMiddleware(BaseHTTPMiddleware):
         if request.url.path == "/health" or request.method == "OPTIONS":
             return await call_next(request)
 
+        # Skip IP filter when network restriction is disabled
+        if settings.network_restriction_enabled.strip().lower() != "true":
+            return await call_next(request)
+
         allowed = settings.allowed_ips.strip()
         if allowed:
             forwarded = request.headers.get("x-forwarded-for", "")

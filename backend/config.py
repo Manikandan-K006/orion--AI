@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     report_dir: str = "reports"
 
     allowed_ips: str = ""
+    network_restriction_enabled: str = "true"
 
     model_config = SettingsConfigDict(env_file=(".env", "backend/.env"), env_file_encoding="utf-8")
 
