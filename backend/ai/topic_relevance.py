@@ -1,10 +1,10 @@
-"""Topic relevance and content quality analysis for GD Live.
+"""Topic relevance and content quality analysis.
 
 Evaluates whether a student's transcript semantically addresses the assigned
 GD topic and provides meaningful arguments, reasoning, examples, or conclusions.
 
-Uses lightweight TF-IDF cosine similarity (no GPU required) combined with
-sentence-level alignment and argument structure analysis.
+Uses TF-IDF cosine similarity combined with sentence-level alignment,
+domain concept mapping, and argument structure analysis.
 """
 
 import re
@@ -35,14 +35,39 @@ STOP_WORDS = frozenset({
     "few", "each", "both", "all", "any", "every",
 })
 
+DOMAIN_CONCEPTS: dict[str, set[str]] = {
+    "education": {"student", "learning", "classroom", "pedagogy", "school", "university", "academic", "knowledge", "study", "curriculum", "skills", "tutoring", "assessment", "teaching", "teacher", "educator", "exam", "grade"},
+    "technology": {"algorithm", "machine", "automation", "digital", "data", "computation", "software", "neural", "computing", "model", "processor", "ai", "deep learning", "artificial intelligence", "robot", "computer", "code", "programming", "innovation"},
+    "health": {"doctor", "healthcare", "disease", "imaging", "treatment", "diagnosis", "medicine", "patient", "clinical", "hospitals", "medical", "therapy", "surgery", "symptom", "cure", "wellness"},
+    "economy": {"finance", "industry", "workers", "jobs", "employment", "growth", "regulatory", "business", "market", "displacement", "income", "investment", "gdp", "inflation", "trade", "policy"},
+    "environment": {"climate", "pollution", "sustainability", "renewable", "carbon", "emission", "ecosystem", "biodiversity", "conservation", "recycle", "energy", "green"},
+    "society": {"culture", "community", "social", "equality", "diversity", "inclusion", "rights", "justice", "democracy", "governance", "policy", "welfare"},
+}
+
+_REASONING_PATTERNS = [
+    (r'\b(because|since|therefore|consequently|thus|hence|as a result|reason is)\b', "reasoning"),
+    (r'\b(for example|for instance|such as|specifically|to illustrate|e\.g\.|consider)\b', "examples"),
+    (r'\b(however|although|on the other hand|nevertheless|despite|conversely|whereas|in contrast)\b', "counterpoint"),
+    (r'\b(in conclusion|to summarize|overall|in summary|to sum up|ultimately|concluding)\b', "conclusion"),
+    (r'\b(i believe|i think|in my opinion|from my perspective|i argue|i contend|in my view)\b', "opinion"),
+    (r'\b(data|research|evidence|statistics|studies|reports|findings|according to)\b', "evidence"),
+    (r'\b(first|second|third|firstly|secondly|thirdly|additionally|furthermore|moreover)\b', "structure"),
+    (r'\b(should|must|need to|have to|ought to|important|essential|crucial|vital)\b', "recommendation"),
+]
+
+RELEVANCE_THRESHOLDS = {
+    "highly_relevant": 70,
+    "relevant": 50,
+    "partially_relevant": 30,
+    "mostly_off_topic": 10,
+}
+
 
 def _tokenize(text: str) -> list[str]:
-    """Tokenize into lowercase alpha words, stripping stop words."""
     return [w for w in re.findall(r'\b[a-z]{3,}\b', text.lower()) if w not in STOP_WORDS]
 
 
 def _tfidf_cosine(text_a: str, text_b: str) -> float:
-    """Compute cosine similarity between two texts using TF-IDF vectors."""
     words_a = _tokenize(text_a)
     words_b = _tokenize(text_b)
     if not words_a or not words_b:
@@ -78,32 +103,20 @@ def _tfidf_cosine(text_a: str, text_b: str) -> float:
     return dot / (norm_a * norm_b)
 
 
-_REASONING_PATTERNS = [
-    (r'\b(because|since|therefore|consequently|thus|hence|as a result)\b', "reasoning"),
-    (r'\b(for example|for instance|such as|specifically|to illustrate|e\.g\.)\b', "examples"),
-    (r'\b(however|although|on the other hand|nevertheless|despite|conversely)\b', "counterpoint"),
-    (r'\b(in conclusion|to summarize|overall|in summary|to sum up|ultimately)\b', "conclusion"),
-    (r'\b(I believe|I think|in my opinion|from my perspective|I argue|I contend)\b', "opinion"),
-    (r'\b(data|research|evidence|statistics|studies|reports|findings)\b', "evidence"),
-    (r'\b(first|second|third|firstly|secondly|thirdly|additionally|furthermore|moreover)\b', "structure"),
-    (r'\b(should|must|need to|have to|ought to|important|essential|crucial)\b', "recommendation"),
-]
+def _domain_concept_score(text_words: list[str], topic_text: str) -> float:
+    matched = 0
+    total = 0
+    for domain, concepts in DOMAIN_CONCEPTS.items():
+        if any(kw in topic_text.lower() for kw in [domain] + list(concepts)[:3]):
+            domain_matches = sum(1 for w in text_words if w in concepts)
+            matched += domain_matches
+            total += max(1, len(concepts) // 2)
+    if total == 0:
+        return 0.0
+    return min(100.0, (matched / max(1, total)) * 100.0)
 
 
 def analyze_topic_relevance(transcript: str, topic: str) -> dict[str, Any]:
-    """Evaluate whether the transcript semantically addresses the GD topic.
-
-    Returns:
-        relevance_score: 0-100
-        content_quality_score: 0-100
-        off_topic_percentage: 0-100
-        relevant_points: list of relevant sentences
-        irrelevant_points: list of off-topic sentences
-        reasoning_quality: 0-100
-        feedback: human-readable string
-        classification: one of highly_relevant, relevant, partially_relevant,
-                        mostly_off_topic, off_topic
-    """
     text = transcript.strip()
     topic_text = topic.strip()
 
@@ -121,20 +134,18 @@ def analyze_topic_relevance(transcript: str, topic: str) -> dict[str, Any]:
 
     if not topic_text:
         return {
-            "relevance_score": 50.0,
-            "content_quality_score": 50.0,
-            "off_topic_percentage": 50.0,
+            "relevance_score": 30.0,
+            "content_quality_score": 30.0,
+            "off_topic_percentage": 70.0,
             "relevant_points": [],
             "irrelevant_points": [],
-            "reasoning_quality": 50.0,
+            "reasoning_quality": 30.0,
             "feedback": "No topic provided for relevance analysis.",
             "classification": "partially_relevant",
         }
 
-    # --- 1. Semantic similarity (TF-IDF cosine) ---
     semantic_sim = _tfidf_cosine(text, topic_text)
 
-    # --- 2. Sentence-level topic alignment ---
     sentences = [s.strip() for s in re.split(r'[.!?]+', text) if len(s.strip()) > 5]
     topic_words = _tokenize(topic_text)
 
@@ -151,7 +162,6 @@ def analyze_topic_relevance(transcript: str, topic: str) -> dict[str, Any]:
 
     sentence_relevance = (len(relevant_sentences) / max(1, len(sentences))) * 100.0
 
-    # --- 3. Argument structure / reasoning quality ---
     reasoning_hits: dict[str, int] = {}
     for pattern, category in _REASONING_PATTERNS:
         count = len(re.findall(pattern, text.lower()))
@@ -162,44 +172,42 @@ def analyze_topic_relevance(transcript: str, topic: str) -> dict[str, Any]:
     reasoning_total = sum(reasoning_hits.values())
     reasoning_quality = min(100.0, (reasoning_categories_hit / 4.0) * 60 + min(40, reasoning_total * 5))
 
-    # --- 4. Vocabulary diversity ---
     all_words = _tokenize(text)
     unique_ratio = len(set(all_words)) / max(1, len(all_words))
     vocab_diversity_score = min(100.0, unique_ratio * 130)
 
-    # --- 5. Compose final relevance score ---
+    domain_score = _domain_concept_score(all_words, topic_text)
+
     relevance_score = (
-        semantic_sim * 35
+        semantic_sim * 30
         + sentence_relevance * 0.30 * 100 / 100
-        + reasoning_quality * 0.25
+        + reasoning_quality * 0.20
         + vocab_diversity_score * 0.10
+        + domain_score * 0.10
     )
     relevance_score = max(0.0, min(100.0, relevance_score))
 
-    # --- 6. Content quality ---
     content_quality_score = (
-        sentence_relevance * 0.35
+        sentence_relevance * 0.30
         + reasoning_quality * 0.35
-        + vocab_diversity_score * 0.30
+        + vocab_diversity_score * 0.15
+        + domain_score * 0.20
     )
     content_quality_score = max(0.0, min(100.0, content_quality_score))
 
-    # --- 7. Off-topic percentage ---
     off_topic_percentage = max(0.0, min(100.0, 100.0 - sentence_relevance))
 
-    # --- 8. Classification ---
-    if relevance_score >= 70:
+    if relevance_score >= RELEVANCE_THRESHOLDS["highly_relevant"]:
         classification = "highly_relevant"
-    elif relevance_score >= 50:
+    elif relevance_score >= RELEVANCE_THRESHOLDS["relevant"]:
         classification = "relevant"
-    elif relevance_score >= 30:
+    elif relevance_score >= RELEVANCE_THRESHOLDS["partially_relevant"]:
         classification = "partially_relevant"
-    elif relevance_score >= 10:
+    elif relevance_score >= RELEVANCE_THRESHOLDS["mostly_off_topic"]:
         classification = "mostly_off_topic"
     else:
         classification = "off_topic"
 
-    # --- 9. Feedback ---
     parts: list[str] = []
     if classification == "highly_relevant":
         parts.append("Strong topic alignment with well-structured arguments.")
@@ -213,10 +221,7 @@ def analyze_topic_relevance(transcript: str, topic: str) -> dict[str, Any]:
         parts.append("Content is largely unrelated to the assigned topic.")
 
     if reasoning_categories_hit < 3:
-        missing = []
-        for cat in ["reasoning", "examples", "counterpoint", "conclusion"]:
-            if cat not in reasoning_hits:
-                missing.append(cat)
+        missing = [cat for cat in ["reasoning", "examples", "counterpoint", "conclusion"] if cat not in reasoning_hits]
         if missing:
             parts.append(f"Strengthen with: {', '.join(missing)}.")
 
