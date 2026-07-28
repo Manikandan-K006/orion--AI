@@ -312,6 +312,15 @@ export default function Home() {
   const audioChunksRef = useRef<Blob[]>([]);
   const [liveDetectedText, setLiveDetectedText] = useState("");
 
+  // New state machine state & refs for Solo Practice
+  const [soloState, setSoloState] = useState<"IDLE" | "PREPARING" | "RECORDING" | "FINALIZING" | "EVALUATING" | "RESULT">("IDLE");
+  const [remainingPrepSeconds, setRemainingPrepSeconds] = useState<number | null>(null);
+  const lastTranscribedTimeRef = useRef<number>(0.0);
+  const chunkIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const isChunkUploadingRef = useRef<boolean>(false);
+  const recordingEndedAtRef = useRef<number>(0);
+  const audioStreamRef = useRef<MediaStream | null>(null);
+
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [pageLoading, setPageLoading] = useState(false);
   const voice = useVoiceAnnouncement();
