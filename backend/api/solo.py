@@ -63,8 +63,7 @@ def submit_solo(
 
     result = evaluate_transcript(transcript)
 
-    delivery_score = min(100, result.confidence_score * 0.5 + result.pronunciation_score * 0.5)
-    overall = round((result.grammar_score + result.fluency_score + result.pronunciation_score + delivery_score) / 4, 2)
+    overall = result.overall_score
 
     weaknesses = []
     tips = []

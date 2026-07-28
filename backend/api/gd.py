@@ -237,12 +237,12 @@ def submit_transcript(
     if not queries.is_member_of_gd(connection, session_code, current_user["id"]):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not a member of this session")
 
-    result = evaluate_transcript(payload.transcript)
+    result = evaluate_transcript(payload.transcript, topic=session.get("topic", ""))
 
-    relevance_score = min(100, result.grammar_score * 0.3 + result.fluency_score * 0.3 + result.confidence_score * 0.4)
-    content_quality = min(100, result.vocabulary_score * 0.5 + result.overall_score * 0.5)
+    relevance_score = result.topic_relevance_score
+    content_quality = result.content_quality_score
     accent_score = result.pronunciation_score
-    overall = round((result.grammar_score + result.fluency_score + accent_score + relevance_score + content_quality) / 5, 2)
+    overall = result.overall_score
     points = round(overall * 0.5, 2)
 
     queries.create_gd_evaluation(
