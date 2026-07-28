@@ -665,43 +665,260 @@ export default function Home() {
     }
   }
 
-  async function toggleRecording() {
-    if (isRecording) {
-      mediaRecorderRef.current?.stop();
-      setIsRecording(false);
-      setRecordingStatus("Processing audio...");
-      speak("Recording stopped");
-      return;
-    }
+  const isRequestingMicRef = useRef(false);
+
+  async function checkMicPermissionAndStartRecording() {
+    if (isRequestingMicRef.current || soloState === "RECORDING") return;
+    isRequestingMicRef.current = true;
+    setMessage("");
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      speak("Recording started");
+      
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+      setRemainingPrepSeconds(prepSeconds);
+      
+      audioStreamRef.current = stream;
       const mediaRecorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
-      mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
-      mediaRecorder.onstop = async () => {
-        stream.getTracks().forEach(t => t.stop());
-        const blob = new Blob(audioChunksRef.current, { type: "audio/webm" });
-        const formData = new FormData();
-        formData.append("file", blob, "recording.webm");
-        setRecordingStatus("Transcribing...");
-        try {
-          const res = await fetch(`${getApiUrl()}/interviews/upload-audio`, {
-            method: "POST", headers: { Authorization: `Bearer ${token}` }, body: formData,
-          });
-          const data = await res.json();
-          if (data.transcript) {
-            setTranscript(prev => prev + " " + data.transcript);
-            setLiveDetectedText(data.transcript);
-          }
-          setRecordingStatus(data.message || "Done");
-        } catch { setRecordingStatus("Transcription failed"); }
+      
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
       };
-      mediaRecorder.start();
+      
+      mediaRecorder.start(1000); // 1-second chunks
       setIsRecording(true);
-      setRecordingStatus("Recording...");
-    } catch { setMessage("Microphone access denied"); }
+      setIsPrepPhase(false);
+      setIsSpeakingPhase(true);
+      setSoloState("RECORDING");
+      setRecordingStatus("Listening...");
+      speak("Recording started");
+      
+      setSpeakingSeconds(600);
+      timerRef.current = setInterval(() => {
+        setSpeakingSeconds(prev => {
+          if (prev <= 1) {
+            if (timerRef.current) {
+              clearInterval(timerRef.current);
+              timerRef.current = null;
+            }
+            stopSoloRecording();
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+      
+      lastTranscribedTimeRef.current = 0.0;
+      isChunkUploadingRef.current = false;
+      if (chunkIntervalRef.current) {
+        clearInterval(chunkIntervalRef.current);
+      }
+      chunkIntervalRef.current = setInterval(sendSoloAudioChunk, 15000);
+      
+    } catch (err) {
+      console.warn("Mic permission denied:", err);
+      setMessage("Microphone access is required to participate in the GD.");
+    } finally {
+      isRequestingMicRef.current = false;
+    }
+  }
+
+  async function sendSoloAudioChunk() {
+    if (soloState !== "RECORDING" && soloState !== "FINALIZING") return;
+    if (isChunkUploadingRef.current) return;
+    if (audioChunksRef.current.length === 0) return;
+
+    isChunkUploadingRef.current = true;
+    try {
+      const chunks = [...audioChunksRef.current];
+      const blob = new Blob(chunks, { type: "audio/webm" });
+      if (blob.size < 100) {
+        isChunkUploadingRef.current = false;
+        return;
+      }
+
+      const startTime = Math.max(0, lastTranscribedTimeRef.current - 3.0);
+      const currentDuration = Math.round(audioChunksRef.current.length);
+      
+      const formData = new FormData();
+      formData.append("file", blob, `solo_chunk_${soloSession?.session_id}.webm`);
+
+      setRecordingStatus("Transcribing...");
+      const res = await fetch(`${getApiUrl()}/interviews/upload-chunk?start_time=${startTime}`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+
+      if (!res.ok) throw new Error("Chunk upload failed");
+
+      const data = await res.json();
+      if (data.chunk_transcript) {
+        setTranscript(prev => mergeTranscripts(prev, data.chunk_transcript));
+        setLiveDetectedText(data.chunk_transcript);
+      }
+      
+      lastTranscribedTimeRef.current = currentDuration;
+      setRecordingStatus("Listening...");
+    } catch (err) {
+      console.warn("Solo chunk upload failed:", err);
+      setRecordingStatus("Listening (reconnecting)...");
+    } finally {
+      isChunkUploadingRef.current = false;
+    }
+  }
+
+  async function stopSoloRecording() {
+    if (soloState !== "RECORDING") return;
+    setSoloState("FINALIZING");
+    setRecordingStatus("Finalizing transcript...");
+    speak("Recording stopped");
+
+    recordingEndedAtRef.current = Date.now();
+
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    if (chunkIntervalRef.current) {
+      clearInterval(chunkIntervalRef.current);
+      chunkIntervalRef.current = null;
+    }
+
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      try {
+        mediaRecorderRef.current.stop();
+      } catch (e) {}
+    }
+    if (audioStreamRef.current) {
+      audioStreamRef.current.getTracks().forEach(track => track.stop());
+      audioStreamRef.current = null;
+    }
+    setIsRecording(false);
+
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    let finalTranscriptText = transcript;
+    try {
+      const chunks = [...audioChunksRef.current];
+      const blob = new Blob(chunks, { type: "audio/webm" });
+      if (blob.size >= 100) {
+        const startTime = Math.max(0, lastTranscribedTimeRef.current - 3.0);
+        const formData = new FormData();
+        formData.append("file", blob, `solo_final_${soloSession?.session_id}.webm`);
+
+        const res = await fetch(`${getApiUrl()}/interviews/upload-chunk?start_time=${startTime}`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+          body: formData,
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          if (data.chunk_transcript) {
+            finalTranscriptText = mergeTranscripts(finalTranscriptText, data.chunk_transcript);
+            setTranscript(finalTranscriptText);
+            setLiveDetectedText(data.chunk_transcript);
+          }
+        }
+      }
+    } catch (err) {
+      console.warn("Final chunk upload failed:", err);
+    }
+
+    const transcriptionCompletedAt = Date.now();
+    const transcriptionLatency = (transcriptionCompletedAt - recordingEndedAtRef.current) / 1000;
+    console.log(`[Solo Practice] Transcription Latency: ${transcriptionLatency.toFixed(2)} seconds`);
+
+    setRecordingStatus("Evaluating performance...");
+    setSoloState("EVALUATING");
+
+    await executeSoloSubmission(finalTranscriptText);
+  }
+
+  async function executeSoloSubmission(textToSubmit: string) {
+    if (!soloSession) return;
+    
+    const cleanText = textToSubmit.trim();
+    if (cleanText.length < 10) {
+      setRecordingStatus("Evaluation failed");
+      setSoloState("PREPARING");
+      setMessage("Audio transcript is too short (min 10 characters required). Please try recording again.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const res = await apiRequest<SoloSubmitResponse>("/solo/submit", {
+        method: "POST",
+        body: JSON.stringify({ session_id: soloSession.session_id, transcript: cleanText })
+      }, token);
+      
+      setSoloResult(res);
+      setSoloState("RESULT");
+      setView("solo-result");
+      setSuccess(`${res.message} — Score: ${res.overall_score}`);
+      
+      const phrase = MOTIVATIONAL_PHRASES[Math.floor(Math.random() * MOTIVATIONAL_PHRASES.length)];
+      speak(phrase);
+      
+      setIsPrepPhase(false);
+      setIsSpeakingPhase(false);
+      setIsSessionLocked(false);
+      
+      const history = await apiRequest<SoloSubmitResponse["last_session"][]>("/solo/history", {}, token).catch(() => []);
+      setSoloHistory(history);
+      await loadDashboardData(token, user);
+    } catch (err: any) {
+      setMessage(err.message || "Evaluation failed");
+      setRecordingStatus("Evaluation failed");
+      setSoloState("PREPARING");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function cancelSoloSession() {
+    setView("solo-practice");
+    setSoloState("IDLE");
+    setIsPrepPhase(false);
+    setIsSpeakingPhase(false);
+    setIsSessionLocked(false);
+    setIsRecording(false);
+    setPrepSeconds(0);
+    setSpeakingSeconds(0);
+    setRemainingPrepSeconds(null);
+    lastTranscribedTimeRef.current = 0.0;
+    
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    if (chunkIntervalRef.current) {
+      clearInterval(chunkIntervalRef.current);
+      chunkIntervalRef.current = null;
+    }
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      try {
+        mediaRecorderRef.current.stop();
+      } catch (e) {}
+    }
+    if (audioStreamRef.current) {
+      audioStreamRef.current.getTracks().forEach(track => track.stop());
+      audioStreamRef.current = null;
+    }
+  }
+
+  async function toggleRecording() {
+    if (isRecording || soloState === "RECORDING") {
+      await stopSoloRecording();
+    } else {
+      await checkMicPermissionAndStartRecording();
+    }
   }
 
   function formatTime(seconds: number) {
@@ -1060,7 +1277,18 @@ export default function Home() {
       setIsSpeakingPhase(false);
       setPrepSeconds(0);
       setSpeakingSeconds(0);
-      if (timerRef.current) clearInterval(timerRef.current);
+      setRemainingPrepSeconds(null);
+      setSoloState("IDLE");
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+      if (chunkIntervalRef.current) {
+        clearInterval(chunkIntervalRef.current);
+        chunkIntervalRef.current = null;
+      }
+      lastTranscribedTimeRef.current = 0.0;
+      isChunkUploadingRef.current = false;
       setView("solo-practice");
       setSuccess("");
     } catch (err: any) { setMessage(err.message); }
@@ -1069,30 +1297,31 @@ export default function Home() {
 
   function beginSoloPrep() {
     if (!soloSession) return;
+    setSoloState("PREPARING");
     setIsPrepPhase(true);
     setIsSessionLocked(true);
     setPrepSeconds(240);
     setIsSpeakingPhase(false);
     setSpeakingSeconds(0);
+    setRemainingPrepSeconds(null);
     setView("solo-session");
     setSuccess("You have 4 minutes to prepare. Use the notes area below.");
     speak(`Your topic is: ${soloSession.topic}. You have 4 minutes to prepare.`);
-    if (timerRef.current) clearInterval(timerRef.current);
+    
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+    }
+    
     timerRef.current = setInterval(() => {
       setPrepSeconds(prev => {
         if (prev <= 1) {
-          clearInterval(timerRef.current!);
-          setIsPrepPhase(false);
-          setIsSpeakingPhase(true);
-          setSpeakingSeconds(600);
-          setSuccess("Preparation time over! Start speaking now. You have 10 minutes.");
-          speak("Preparation time is over. Start speaking now. You have 10 minutes.");
-          timerRef.current = setInterval(() => {
-            setSpeakingSeconds(p => {
-              if (p <= 1) { clearInterval(timerRef.current!); return 0; }
-              return p - 1;
-            });
-          }, 1000);
+          if (timerRef.current) {
+            clearInterval(timerRef.current);
+            timerRef.current = null;
+          }
+          setPrepSeconds(0);
+          setSuccess("Preparation Complete! Start recording when you are ready.");
+          speak("Preparation is complete. Click start recording when you are ready.");
           return 0;
         }
         return prev - 1;
@@ -2887,55 +3116,135 @@ export default function Home() {
           {/* ─── Solo Session (Prep + Speaking) ─── */}
           {view === "solo-session" && soloSession && (
             <div className="max-w-3xl mx-auto space-y-4">
-              <div className={`card p-6`}>
+              <div className="card p-6">
                 <div className="flex items-center justify-between mb-4">
                   <div>
                     <h2 className="text-xl font-bold text-heading">{soloSession.topic}</h2>
                     <p className="text-sm text-muted-soft">Session #{soloSession.session_number} · Solo Practice</p>
                   </div>
                   <div className="flex gap-2">
-                    {isSpeakingPhase && (
-                      <Button onClick={endSoloEarly} disabled={loading} variant="secondary" className="bg-red-500/20 text-red-300 border-red-500/30 hover:bg-red-500/30">
+                    {soloState === "RECORDING" && (
+                      <Button onClick={stopSoloRecording} disabled={loading} variant="secondary" className="bg-red-500/20 text-red-300 border-red-500/30 hover:bg-red-500/30">
                         End & Submit
                       </Button>
                     )}
                   </div>
                 </div>
-                {(isPrepPhase || isSpeakingPhase) && (
-                  <div className={`rounded-lg p-4 text-center mb-4 ${isPrepPhase ? "bg-blue-500/20 border border-blue-500/30" : "bg-emerald-500/20 border border-emerald-500/30"}`}>
-                    <p className="text-sm text-body mb-1">{isPrepPhase ? "Preparation Phase — Think & Take Notes" : "Speaking Phase — Deliver Your Thoughts"}</p>
-                    <p className="text-4xl font-bold text-heading font-mono">{formatTime(isPrepPhase ? prepSeconds : speakingSeconds)}</p>
+
+                {/* State-aware Timer Panel */}
+                {(soloState === "PREPARING" || soloState === "RECORDING" || soloState === "FINALIZING" || soloState === "EVALUATING") && (
+                  <div className={`rounded-xl p-6 text-center mb-6 border transition-all ${
+                    soloState === "PREPARING"
+                      ? "bg-blue-500/10 border-blue-500/30 animate-pulse"
+                      : soloState === "RECORDING"
+                      ? "bg-emerald-500/10 border-emerald-500/30"
+                      : "bg-purple-500/10 border-purple-500/30"
+                  }`}>
+                    <p className="text-sm font-semibold text-body mb-2">
+                      {soloState === "PREPARING"
+                        ? (prepSeconds > 0 ? "Preparation Phase — Think & Take Notes" : "Preparation Complete!")
+                        : soloState === "RECORDING"
+                        ? "Speaking Phase — Deliver Your Thoughts"
+                        : soloState === "FINALIZING"
+                        ? "Finalizing transcript..."
+                        : "Evaluating performance..."}
+                    </p>
+                    
+                    {(soloState === "PREPARING" || soloState === "RECORDING") && (
+                      <p className="text-5xl font-extrabold text-heading font-mono tracking-wider mb-4">
+                        {formatTime(soloState === "PREPARING" ? prepSeconds : speakingSeconds)}
+                      </p>
+                    )}
+
+                    {/* Mic Permission Error Alert */}
+                    {message && message.includes("Microphone") && (
+                      <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 my-3 max-w-md mx-auto text-xs text-red-300 flex flex-col items-center gap-2">
+                        <span>{message}</span>
+                        <Button onClick={checkMicPermissionAndStartRecording} className="btn-secondary h-8 px-4 text-xs font-bold">
+                          Retry Permission
+                        </Button>
+                      </div>
+                    )}
+
+                    {/* Main Interaction Button */}
+                    {soloState === "PREPARING" && (
+                      <Button onClick={checkMicPermissionAndStartRecording} className="btn-primary w-full max-w-sm h-12 text-sm font-bold bg-gradient-to-r from-amber-500 to-orange-600 border-0">
+                        <Mic className="h-4 w-4 mr-2" /> Start Recording
+                      </Button>
+                    )}
+
+                    {soloState === "RECORDING" && (
+                      <Button onClick={stopSoloRecording} className="btn-primary w-full max-w-sm h-12 text-sm font-bold bg-red-500 hover:bg-red-600 border-0 animate-pulse">
+                        <MicOff className="h-4 w-4 mr-2" /> Stop Recording
+                      </Button>
+                    )}
+
+                    {(soloState === "FINALIZING" || soloState === "EVALUATING") && (
+                      <div className="flex flex-col items-center justify-center gap-3 py-4">
+                        <Loader2 className="h-8 w-8 animate-spin text-purple-500" />
+                        <span className="text-xs text-muted-soft">
+                          {soloState === "FINALIZING" ? "Assembling audio slices and finalizing transcript..." : "Analyzing speech characteristics & scoring..."}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 )}
-                <div className="mb-4">
-                  <p className="text-sm font-medium text-body mb-2">Your Topic</p>
-                  <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
-                    <p className="text-sm text-heading">{soloSession.topic}</p>
+
+                {/* Topic info */}
+                <div className="mb-6">
+                  <p className="text-xs font-bold uppercase tracking-wider text-muted-soft mb-2">Selected Topic</p>
+                  <div className="p-4 rounded-xl bg-amber-500/5 border border-amber-500/20">
+                    <p className="text-sm font-semibold text-heading leading-relaxed">{soloSession.topic}</p>
                   </div>
                 </div>
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2">
-                    <Button onClick={toggleRecording} className={`border-0 ${isRecording ? "bg-red-500 hover:bg-red-600" : "bg-gradient-to-r from-amber-500 to-orange-600"}`}>
-                      {isRecording ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />} {isRecording ? "Stop" : "Record"}
-                    </Button>
-                    {recordingStatus && <span className="text-xs text-muted-soft">{recordingStatus}</span>}
-                    <span className="ml-auto text-xs text-slate-500">{isPrepPhase ? "Prepare your thoughts..." : "Speak clearly into the mic..."}</span>
+
+                {/* Live Transcript & Notes Area */}
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold uppercase tracking-wider text-muted-soft">
+                      {soloState === "PREPARING" ? "Preparation Notes" : "Speech Transcript"}
+                    </span>
+                    {recordingStatus && (
+                      <span className="text-xs font-bold px-2 py-0.5 rounded bg-slate-800 text-amber-400 border border-slate-700 animate-pulse">
+                        {recordingStatus}
+                      </span>
+                    )}
                   </div>
-                  {liveDetectedText && <p className="text-xs text-emerald-300 bg-emerald-500/10 p-2 rounded"><span className="font-medium">Detected:</span> {liveDetectedText}</p>}
+
+                  {liveDetectedText && (
+                    <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 animate-in fade-in duration-300">
+                      <p className="text-xs text-emerald-300 leading-normal">
+                        <span className="font-bold mr-1">Live Detected:</span> "{liveDetectedText}"
+                      </p>
+                    </div>
+                  )}
+
                   <Textarea
-                    placeholder={isPrepPhase ? "Jot down notes and key points for your speech..." : "Type or record your speech here..."}
+                    placeholder={
+                      soloState === "PREPARING"
+                        ? "Jot down notes, bullet points, and key arguments during preparation..."
+                        : "Your spoken transcript will appear here progressively..."
+                    }
                     value={transcript}
                     onChange={(e) => setTranscript(e.target.value)}
-                    className="inp min-h-[150px]"
+                    className="inp min-h-[180px] font-sans text-sm leading-relaxed"
+                    disabled={soloState === "FINALIZING" || soloState === "EVALUATING"}
                   />
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs text-muted-soft">{transcript.trim().split(/\s+/).filter(Boolean).length} words</span>
+
+                  <div className="flex justify-between items-center pt-2">
+                    <span className="text-xs font-semibold text-muted-soft">
+                      {transcript.trim().split(/\s+/).filter(Boolean).length} words
+                    </span>
                     <div className="flex gap-2">
-                      <Button onClick={() => { setView("solo-practice"); if (timerRef.current) clearInterval(timerRef.current); setIsPrepPhase(false); setIsSpeakingPhase(false); }} variant="secondary">
+                      <Button onClick={cancelSoloSession} variant="secondary" className="text-xs font-bold">
                         Cancel
                       </Button>
-                      <Button onClick={submitSoloPractice} disabled={loading || transcript.trim().length < 10} className="bg-gradient-to-r from-amber-500 to-orange-600 border-0">
-                        {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Award className="h-4 w-4" />} Submit
+                      <Button
+                        onClick={() => executeSoloSubmission(transcript)}
+                        disabled={loading || transcript.trim().length < 10 || soloState === "FINALIZING" || soloState === "EVALUATING"}
+                        className="bg-gradient-to-r from-amber-500 to-orange-600 border-0 text-xs font-bold"
+                      >
+                        {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Award className="h-4 w-4" />} Submit Transcript
                       </Button>
                     </div>
                   </div>
