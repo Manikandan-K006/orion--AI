@@ -487,9 +487,9 @@ def _evaluate_live_participant(
         voice_clarity_score=result.pronunciation_score,
         body_language_score=85.0,
         eye_contact_score=85.0,
-        filler_words_count=len([w for w in re.findall(r'\b\w+\b', transcript.lower()) if w in ["uh", "umm", "um", "like", "actually", "basically"]]),
-        speech_speed_wpm=int(len(re.findall(r'\b\w+\b', transcript)) / 0.5) if len(transcript) > 0 else 0,
-        pauses_count=len(re.findall(r'[,\.]', transcript)),
+        filler_words_count=result.filler_count,
+        speech_speed_wpm=int(result.wpm),
+        pauses_count=result.long_pause_count,
         missing_discussion_points="; ".join(result.missing_discussion_points),
         strengths="; ".join(result.strengths),
         recommendations="; ".join(result.recommendations)
@@ -614,14 +614,17 @@ async def upload_gd_live_audio(
     if not evaluation:
         from backend.models.schemas import AnalysisResult
         evaluation = AnalysisResult(
-            grammar_score=88.0,
-            pronunciation_score=84.0,
-            fluency_score=85.0,
-            confidence_score=80.0,
-            vocabulary_score=86.0,
+            grammar_score=0.0,
+            pronunciation_score=0.0,
+            fluency_score=0.0,
+            confidence_score=0.0,
+            vocabulary_score=0.0,
+            delivery_score=0.0,
             emotion="neutral",
-            overall_score=84.6,
-            feedback="Speech evaluated. Continue practicing targeted arguments and fluency."
+            overall_score=0.0,
+            feedback="AI evaluation failed. Score set to 0.",
+            evaluation_status="evaluation_failed",
+            evaluation_status_detail="AI evaluation pipeline returned no result.",
         )
 
     # Step 3: Broadcast TRANSCRIPT + AI_EVALUATION to team immediately
@@ -835,9 +838,9 @@ async def _save_evaluation_bg(
                 body_language_score=85.0,
                 eye_contact_score=85.0,
                 confidence_score=evaluation.confidence_score,
-                filler_words_count=len([w for w in __import__("re").findall(r'\b\w+\b', transcript.lower()) if w in ["uh", "umm", "um", "like", "actually", "basically"]]),
-                speech_speed_wpm=int(len(__import__("re").findall(r'\b\w+\b', transcript)) / 0.5) if len(transcript) > 0 else 0,
-                pauses_count=len(__import__("re").findall(r'[,\.]', transcript)),
+                filler_words_count=evaluation.filler_count,
+                speech_speed_wpm=int(evaluation.wpm),
+                pauses_count=evaluation.long_pause_count,
                 missing_discussion_points="; ".join(evaluation.missing_discussion_points),
                 strengths="; ".join(evaluation.strengths),
                 recommendations="; ".join(evaluation.recommendations)
@@ -889,7 +892,7 @@ def get_gd_report(
         "SELECT overall_score, weaknesses, improvement_tips, transcript FROM gd_live_evaluations WHERE session_code = %s AND user_id = %s ORDER BY id DESC LIMIT 1",
         (session_code, current_user["id"])
     )
-    score = eval_data["overall_score"] if eval_data and eval_data.get("overall_score") else 85.0
+    score = eval_data["overall_score"] if eval_data and eval_data.get("overall_score") else 0.0
     weaknesses = eval_data["weaknesses"] if eval_data and eval_data.get("weaknesses") else "Good overall communication."
     tips = eval_data["improvement_tips"] if eval_data and eval_data.get("improvement_tips") else "Keep practicing."
     summary = f"Overall score: {score}/100. Feedback: {weaknesses}. Tips: {tips}"
