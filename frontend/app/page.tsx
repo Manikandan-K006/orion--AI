@@ -207,6 +207,37 @@ function GdLiveAdminPanel({ code, token, topic, onOpenRoom, onEnd }: {
   );
 }
 
+function mergeTranscripts(a: string, b: string): string {
+  const cleanA = a.trim();
+  const cleanB = b.trim();
+  if (!cleanA) return cleanB;
+  if (!cleanB) return cleanA;
+
+  const wordsA = cleanA.split(/\s+/);
+  const wordsB = cleanB.split(/\s+/);
+
+  let maxOverlap = 0;
+  const maxSearch = Math.min(wordsA.length, wordsB.length, 15);
+
+  for (let len = 1; len <= maxSearch; len++) {
+    const suffix = wordsA.slice(wordsA.length - len).join(" ").toLowerCase();
+    const prefix = wordsB.slice(0, len).join(" ").toLowerCase();
+
+    // Clean punctuation for matching
+    const cleanSuffix = suffix.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?]/g, "").replace(/\s+/g, " ");
+    const cleanPrefix = prefix.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?]/g, "").replace(/\s+/g, " ");
+
+    if (cleanSuffix === cleanPrefix) {
+      maxOverlap = len;
+    }
+  }
+
+  if (maxOverlap > 0) {
+    return wordsA.concat(wordsB.slice(maxOverlap)).join(" ");
+  }
+  return cleanA + " " + cleanB;
+}
+
 export default function Home() {
   const [token, setToken] = useState("");
   const [user, setUser] = useState<User | null>(null);
