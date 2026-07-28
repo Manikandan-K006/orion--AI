@@ -1,33 +1,129 @@
-$root = $PSScriptRoot
-$pythonExe = "$root\backend\venv\Scripts\python.exe"
+param(
+    [switch]$NoFrontend,
+    [switch]$NoBackend
+)
 
-Write-Host "=== MZ Orator Local Launcher ===" -ForegroundColor Cyan
-Write-Host "Checking ports 8000 and 3000..." -ForegroundColor Gray
-$port8000 = Get-NetTCPConnection -LocalPort 8000 -ErrorAction SilentlyContinue
-if ($port8000) { foreach ($p in $port8000) { Stop-Process -Id $p.OwningProcess -Force -ErrorAction SilentlyContinue } }
-$port3000 = Get-NetTCPConnection -LocalPort 3000 -ErrorAction SilentlyContinue
-if ($port3000) { foreach ($p in $port3000) { Stop-Process -Id $p.OwningProcess -Force -ErrorAction SilentlyContinue } }
-Start-Sleep -Seconds 2
+$ErrorActionPreference = "Stop"
+$ScriptRoot = $PSScriptRoot
 
-$mysqlPort = 3306
-$isMysqlRunning = Get-NetTCPConnection -LocalPort $mysqlPort -ErrorAction SilentlyContinue
-if (-not $isMysqlRunning) {
-    Write-Host "Starting local MySQL database..." -ForegroundColor Yellow
-    $mysqlExe = "C:\Program Files\MySQL\MySQL Server 8.4\bin\mysqld.exe"
-    $mysqlDataDir = "$root\database\data"
-    if (Test-Path $mysqlExe) {
-        $args = @("--datadir=`"$mysqlDataDir`"", "--port=$mysqlPort")
-        Start-Process -FilePath $mysqlExe -ArgumentList $args -WindowStyle Hidden
-        Start-Sleep -Seconds 3
-    }
+# ────────────────────────────────────────────────────────────
+# Helpers
+# ────────────────────────────────────────────────────────────
+function Write-Header {
+    Clear-Host
+    Write-Host "========================================" -ForegroundColor Cyan
+    Write-Host "  SpeakSense AI - LAN Server" -ForegroundColor Cyan
+    Write-Host "========================================" -ForegroundColor Cyan
+    Write-Host ""
 }
 
-Write-Host "[1/2] Starting backend..." -ForegroundColor Yellow
-$p1 = Start-Process -FilePath $pythonExe -ArgumentList "-m", "uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000" -WindowStyle Hidden -PassThru -WorkingDirectory "$root"
+function Get-LanIPv4 {
+    $adapters = Get-NetIPAddress -AddressFamily IPv4 | Where-Object {
+        $_.InterfaceAlias -notlike "*Loopback*" -and
+        $_.PrefixOrigin -ne "WellKnown" -and
+        $_.AddressFamily -eq "IPv4"
+    }
+    $lan = $adapters | Where-Object { $_.PrefixLength -le 24 -and $_.PrefixLength -ge 16 } |
+        Sort-Object PrefixLength -Descending |
+        Select-Object -First 1
+    if (-not $lan) { $lan = $adapters | Select-Object -First 1 }
+    if (-not $lan) { throw "Could not determine LAN IPv4 address." }
+    return $lan.IPAddress
+}
 
-Start-Sleep -Seconds 4
+function Test-PortInUse {
+    param([int]$Port)
+    $conn = Get-NetTCPConnection -LocalPort $Port -ErrorAction SilentlyContinue
+    return [bool]$conn
+}
 
-Write-Host "[2/2] Starting frontend..." -ForegroundColor Yellow
-$p2 = Start-Process -FilePath "npm.cmd" -ArgumentList "run", "dev", "--", "-p", "3000", "-H", "0.0.0.0" -WindowStyle Hidden -PassThru -WorkingDirectory "$root\frontend"
+function Start-ProcessWindow {
+    param([string]$Title, [string]$Command, [string]$Args)
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName = "powershell.exe"
+    $psi.Arguments = "-NoExit -Command `"$Command $Args`""
+    $psi.WindowStyle = [System.Diagnostics.ProcessWindowStyle]::Normal
+    $psi.UseShellExecute = $true
+    $null = [System.Diagnostics.Process]::Start($psi)
+}
 
-Write-Host "`n=== BOTH SERVERS STARTING ===" -ForegroundColor Green
+# ────────────────────────────────────────────────────────────
+# Validation
+# ────────────────────────────────────────────────────────────
+$FrontendDir = Join-Path $ScriptRoot "frontend"
+$BackendDir  = Join-Path $ScriptRoot "backend"
+
+if (-not (Test-Path $FrontendDir)) { throw "Frontend directory not found: $FrontendDir" }
+if (-not (Test-Path $BackendDir))  { throw "Backend directory not found: $BackendDir" }
+
+# Check npm
+$npmPath = (Get-Command npm -ErrorAction SilentlyContinue).Source
+if (-not $npmPath) { throw "npm is not installed or not in PATH." }
+
+# Check Python / venv
+$venvPython = Join-Path $BackendDir "venv\Scripts\python.exe"
+if (-not (Test-Path $venvPython)) {
+    # Try system Python as fallback
+    $pythonCmd = Get-Command python -ErrorAction SilentlyContinue
+    if (-not $pythonCmd) { throw "Python not found and venv missing at $venvPython." }
+    $venvPython = $pythonCmd.Source
+}
+
+# Check uvicorn
+$uvicornExe = Join-Path $BackendDir "venv\Scripts\uvicorn.exe"
+if (-not (Test-Path $uvicornExe)) { throw "uvicorn not found at $uvicornExe. Run: pip install uvicorn" }
+
+# ────────────────────────────────────────────────────────────
+# Port checks
+# ────────────────────────────────────────────────────────────
+$port3000 = Test-PortInUse -Port 3000
+$port8000 = Test-PortInUse -Port 8000
+
+if ($port3000) { Write-Host "WARNING: Port 3000 is already in use." -ForegroundColor Yellow }
+if ($port8000) { Write-Host "WARNING: Port 8000 is already in use." -ForegroundColor Yellow }
+if ($port3000 -or $port8000) {
+    Write-Host ""
+    $answer = Read-Host "Port(s) occupied. Continue anyway? (y/N)"
+    if ($answer -ne "y") { Write-Host "Aborted."; exit 1 }
+}
+
+# ────────────────────────────────────────────────────────────
+# Detect LAN IP & display info
+# ────────────────────────────────────────────────────────────
+$lanIp = Get-LanIPv4
+
+Write-Header
+Write-Host "  Host PC:" -ForegroundColor Green
+Write-Host "    http://localhost:3000" -ForegroundColor White
+Write-Host ""
+Write-Host "  Student devices:" -ForegroundColor Green
+Write-Host "    http://$lanIp`:3000" -ForegroundColor White
+Write-Host ""
+Write-Host "  Backend:" -ForegroundColor Green
+Write-Host "    http://$lanIp`:8000" -ForegroundColor White
+Write-Host ""
+Write-Host "  API Docs:" -ForegroundColor Green
+Write-Host "    http://$lanIp`:8000/docs" -ForegroundColor White
+Write-Host ""
+Write-Host "========================================" -ForegroundColor Cyan
+Write-Host ""
+
+# ────────────────────────────────────────────────────────────
+# Start processes
+# ────────────────────────────────────────────────────────────
+$backendCommand = "cd '$ScriptRoot'; & '$uvicornExe' backend.main:app --host 0.0.0.0 --port 8000"
+$frontendCommand = "npm run dev"
+
+if (-not $NoBackend) {
+    Write-Host "Starting Backend..." -ForegroundColor Magenta
+    Start-ProcessWindow -Title "SpeakSense Backend" -Command "cd '$BackendDir'; $backendCommand"
+    Start-Sleep -Seconds 2
+}
+
+if (-not $NoFrontend) {
+    Write-Host "Starting Frontend..." -ForegroundColor Magenta
+    Start-ProcessWindow -Title "SpeakSense Frontend" -Command "cd '$FrontendDir'; $frontendCommand"
+}
+
+Write-Host ""
+Write-Host "Done. Check the new terminal windows for startup logs." -ForegroundColor Green

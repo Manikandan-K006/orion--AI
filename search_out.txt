@@ -1,0 +1,11 @@
+Line 431: loadGdLiveSessions();
+Line 714: async function loadGdLiveSessions() {
+Line 853: await loadGdLiveSessions();
+Line 908: if (typeof loadGdLiveSessions === "function") loadGdLiveSessions();
+Line 939: loadGdLiveSessions();
+Line 942: loadGdLiveSessions();
+Line 987: await loadGdLiveSessions();
+Line 998: await loadGdLiveSessions();
+Line 1310: else if (item.view === "gd-live") { setView("gd-live"); loadGdLiveSessions(); }
+Line 1311: else if (item.view === "gd-live-admin") { setView("gd-live-admin"); loadGdLiveSessions(); }
+Line 3602: <Button onClick={() => { setView("gd-live-admin"); loadGdLiveSessions(); }} variant="secondary" className="text-sm">

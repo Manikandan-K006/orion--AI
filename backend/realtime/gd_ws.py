@@ -326,13 +326,13 @@ async def wait_and_broadcast_results(session_code: str, team_number: int, ts: Te
 class TeamState:
     """Per-team state for parallel discussion: timer, members, evaluation."""
 
-    def __init__(self, team_number: int, topic: str, members: list[dict]) -> None:
+    def __init__(self, team_number: int, topic: str, members: list[dict], speaking_time: int = 120) -> None:
         self.team_number = team_number
         self.topic = topic
         self.members: dict[int, dict] = {m["user_id"]: m for m in members}
         self.finished_user_ids: set[int] = set()
         self.all_finished = False
-        self.timer_seconds = 600  # 10 minutes shared discussion timer
+        self.timer_seconds = speaking_time  # Use custom speaking time!
         self.timer_running = False
         self.transcripts: dict[int, str] = {}
         self.evaluations: dict[int, dict] = {}
@@ -387,9 +387,9 @@ class RoomState:
         self.participants: dict[int, dict] = {}
         self.team_states: dict[int, TeamState] = {}
 
-    def ensure_team(self, team_number: int, topic: str, members: list[dict]) -> TeamState:
+    def ensure_team(self, team_number: int, topic: str, members: list[dict], speaking_time: int = 120) -> TeamState:
         if team_number not in self.team_states:
-            self.team_states[team_number] = TeamState(team_number, topic, members)
+            self.team_states[team_number] = TeamState(team_number, topic, members, speaking_time)
         return self.team_states[team_number]
 
     def snapshot(self) -> dict:
@@ -595,13 +595,14 @@ async def gd_live_socket(
         )
 
     # Initialize TeamState for each team from DB
+    speaking_time = session.get("speaking_time", 120) if session else 120
     team_topic_map = {t["team_number"]: t["topic"] for t in teams_from_db}
     for p in participants_list:
         tn = p.get("team_number")
         if tn and tn not in state.team_states:
             members = [m for m in participants_list if m.get("team_number") == tn]
             t_topic = team_topic_map.get(tn, topic or "")
-            state.ensure_team(tn, t_topic, members)
+            state.ensure_team(tn, t_topic, members, speaking_time=speaking_time)
 
     # Send snapshot
     await manager.send_personal(websocket, "STATE_SYNC", state.snapshot())
@@ -824,14 +825,33 @@ async def gd_live_socket(
 async def _broadcast_team_results(
     session_code: str, team_number: int, ts: TeamState
 ) -> None:
-    """Build and broadcast SESSION_RESULTS for the team once all members have finished."""
+    """Build and broadcast SESSION_RESULTS for the team once all members have finished.
+
+    Compares team members using topic relevance, argument quality, communication,
+    fluency, grammar, pronunciation, confidence, vocabulary, and contribution quality.
+    Does NOT rank a student highly merely because they spoke more.
+    """
     try:
-        # Build results list from stored evaluations
         results = []
         member_ids = list(ts.members.keys())
         for uid in member_ids:
             member = ts.members.get(uid, {})
             eval_data = ts.evaluations.get(uid, {})
+            transcript_text = ts.transcripts.get(uid, "")
+
+            # Compute contribution quality (not just word count — penalize repetition)
+            word_count = len(transcript_text.split()) if transcript_text else 0
+            unique_words = len(set(transcript_text.lower().split())) if transcript_text else 0
+            repetition_penalty = 0
+            if word_count > 20:
+                unique_ratio = unique_words / word_count
+                if unique_ratio < 0.35:
+                    repetition_penalty = 20
+                elif unique_ratio < 0.5:
+                    repetition_penalty = 10
+
+            contribution_quality = max(0, min(100, word_count * 2 - repetition_penalty)) if word_count > 5 else 0
+
             results.append({
                 "user_id": uid,
                 "name": member.get("name"),
@@ -842,7 +862,15 @@ async def _broadcast_team_results(
                 "fluency_score": eval_data.get("fluency_score", 0),
                 "vocabulary_score": eval_data.get("vocabulary_score", 0),
                 "pronunciation_score": eval_data.get("pronunciation_score", 0),
+                "topic_relevance_score": eval_data.get("topic_relevance_score", 0),
+                "contribution_quality": contribution_quality,
+                "word_count": word_count,
             })
+
+        # Sort by overall_score descending for ranking
+        results.sort(key=lambda r: r.get("overall_score", 0), reverse=True)
+        for rank, r in enumerate(results, 1):
+            r["rank"] = rank
 
         # Broadcast results to team and admin
         await manager.broadcast_to_team(session_code, team_number, "SESSION_RESULTS", {
@@ -885,7 +913,8 @@ async def _handle_admin_event(
                     "current_speaker_id": first_speaker_id,
                     "next_speaker_id": ts.speaking_order[1] if len(ts.speaking_order) > 1 else None,
                     "round": 1,
-                    "topic": ts.topic
+                    "topic": ts.topic,
+                    "speaking_time": ts.timer_seconds
                 }))
                 
                 # Initial AI Moderator prompt in Chat

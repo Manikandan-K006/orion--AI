@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-const WS_BASE = typeof window !== "undefined" ? `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.hostname}:8000` : "ws://localhost:8000";
+import { getWsBase } from "@/lib/config";
 export type GDLiveWsEvent =
   | "SESSION_STARTED"
   | "TEAMS_ASSIGNED"
@@ -101,7 +101,7 @@ export function useGdLiveWs(sessionCode: string | null, token: string | null) {
     setError(null);
 
     const connect = () => {
-      const url = `${WS_BASE}/ws/gd-live/${sessionCode}?token=${encodeURIComponent(token)}`;
+      const url = `${getWsBase()}/ws/gd-live/${sessionCode}?token=${encodeURIComponent(token)}`;
       const ws = new WebSocket(url);
       wsRef.current = ws;
 

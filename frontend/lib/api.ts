@@ -1,4 +1,6 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || (typeof window !== "undefined" ? `${window.location.protocol}//${window.location.hostname}:8000` : "http://localhost:8000");
+import { getApiUrl } from "@/lib/config";
+
+export { getApiUrl };
 
 export type User = {
   id: number;
@@ -298,7 +300,7 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}, tok
   const timeoutId = setTimeout(() => controller.abort(), 30000); // 30-second max timeout
 
   try {
-    const response = await fetch(`${API_URL}${path}`, {
+    const response = await fetch(`${getApiUrl()}${path}`, {
       ...options,
       signal: controller.signal,
       headers: {
@@ -333,7 +335,7 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}, tok
 export async function uploadAudio(file: File, token: string) {
   const formData = new FormData();
   formData.append("file", file);
-  const response = await fetch(`${API_URL}/interviews/upload-audio`, {
+  const response = await fetch(`${getApiUrl()}/interviews/upload-audio`, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}` },
     body: formData,
@@ -344,7 +346,7 @@ export async function uploadAudio(file: File, token: string) {
 }
 
 export async function downloadReport(sessionId: number, token: string) {
-  const response = await fetch(`${API_URL}/reports/${sessionId}/download`, {
+  const response = await fetch(`${getApiUrl()}/reports/${sessionId}/download`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!response.ok) {
@@ -367,3 +369,72 @@ export async function changePassword(payload: { current_password: string; new_pa
     token
   );
 }
+
+export async function downloadGdLivePdfReport(sessionCode: string, studentId: number | undefined, token: string) {
+  const query = studentId ? `?user_id=${studentId}` : "";
+  const response = await fetch(`${getApiUrl()}/reports/gd-live/${sessionCode}/pdf${query}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.detail || "Download failed");
+  }
+  const blob = await response.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `gd_live_report_${sessionCode}${studentId ? `_${studentId}` : ""}.pdf`;
+  a.click();
+  window.URL.revokeObjectURL(url);
+}
+
+export async function downloadGdLiveExcelReport(sessionCode: string, token: string) {
+  const response = await fetch(`${getApiUrl()}/reports/gd-live/${sessionCode}/excel`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.detail || "Download failed");
+  }
+  const blob = await response.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `gd_live_session_report_${sessionCode}.xlsx`;
+  a.click();
+  window.URL.revokeObjectURL(url);
+}
+
+export async function exportGdLiveAttendance(sessionCode: string, token: string) {
+  const response = await fetch(`${getApiUrl()}/gd-live/sessions/${sessionCode}/participants`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.detail || "Failed to load participants for attendance export.");
+  }
+  const participants = await response.json() as any[];
+
+  const headers = ["User ID", "Name", "Register Number", "Department", "Year", "Section", "Status", "Anonymous Label"];
+  const rows = participants.map(p => [
+    p.user_id || p.id,
+    p.name,
+    p.register_number,
+    p.department,
+    p.year,
+    p.section,
+    p.status,
+    p.anonymous_label
+  ]);
+
+  const csvContent = [headers.join(","), ...rows.map(e => e.map(val => `"${String(val ?? '').replace(/"/g, '""')}"`).join(","))].join("\n");
+
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `gd_live_attendance_${sessionCode}.csv`;
+  a.click();
+  window.URL.revokeObjectURL(url);
+}
+

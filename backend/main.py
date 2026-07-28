@@ -56,6 +56,10 @@ class IPFilterMiddleware(BaseHTTPMiddleware):
         if request.url.path == "/health" or request.method == "OPTIONS":
             return await call_next(request)
 
+        # Skip IP filter when network restriction is disabled
+        if settings.network_restriction_enabled.strip().lower() != "true":
+            return await call_next(request)
+
         allowed = settings.allowed_ips.strip()
         if allowed:
             forwarded = request.headers.get("x-forwarded-for", "")
@@ -92,6 +96,22 @@ def root_redirect() -> RedirectResponse:
 @app.get("/health", tags=["System"])
 def health_check() -> dict:
     return {"status": "ok", "service": settings.app_name}
+
+
+@app.get("/health/database", tags=["System"])
+def health_database() -> dict:
+    try:
+        from backend.database.db import get_connection
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT 1")
+        cursor.fetchone()
+        cursor.close()
+        conn.close()
+        return {"status": "connected", "database": "mysql"}
+    except Exception as exc:
+        logger.error("Database health check failed: %s", exc)
+        return JSONResponse(status_code=503, content={"status": "disconnected", "database": "mysql", "error": str(exc)})
 
 
 app.include_router(auth.router)
