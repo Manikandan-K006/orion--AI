@@ -448,7 +448,6 @@ export default function Home() {
   useEffect(() => {
     const savedToken = localStorage.getItem("mzgd_token");
     if (savedToken) {
-      setToken(savedToken);
       loadProfile(savedToken);
     }
 
@@ -614,6 +613,7 @@ export default function Home() {
   async function loadProfile(t: string) {
     try {
       const profile = await apiRequest<User>("/profile", {}, t);
+      setToken(t);
       setUser(profile);
       setView("dashboard");
       voice.announceLogin();
