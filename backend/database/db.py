@@ -1,11 +1,14 @@
 from collections.abc import Generator
 from queue import Empty, Queue
+import logging
 import threading
 
 import mysql.connector
 from mysql.connector import MySQLConnection
 
 from backend.config import get_settings
+
+logger = logging.getLogger("speaksense.db")
 
 _pool: "Queue[MySQLConnection] | None" = None
 _pool_lock = threading.Lock()
@@ -22,6 +25,7 @@ def _make_config() -> dict:
         "database": settings.mysql_database,
         "autocommit": True,
         "use_pure": True,
+        "connection_timeout": 10,
     }
     if settings.ssl_enabled:
         config["ssl_disabled"] = False
@@ -31,6 +35,24 @@ def _make_config() -> dict:
 
 def _open() -> MySQLConnection:
     return mysql.connector.connect(**_make_config())
+
+
+def _is_alive(conn: MySQLConnection) -> bool:
+    """Return True only if the connection is genuinely usable."""
+    try:
+        if not conn.is_connected():
+            return False
+        conn.cmd_ping()
+        return True
+    except Exception:
+        return False
+
+
+def _safe_close(conn: MySQLConnection) -> None:
+    try:
+        conn.close()
+    except Exception:
+        pass
 
 
 def _get_pool() -> "Queue[MySQLConnection]":
@@ -50,36 +72,40 @@ def get_connection() -> MySQLConnection:
     try:
         conn = pool.get_nowait()
     except Empty:
-        # Pool exhausted — open a one-off connection (still reused on return
-        # only if there's room; otherwise it's just closed).
+        # Pool exhausted — open a fresh one-off connection
         return _open()
-    # Dead/idle connections must be refreshed before reuse, otherwise the
-    # caller hits "'NoneType' object has no attribute 'cursor'".
-    try:
-        conn.ping(reconnect=True, attempts=3, delay=1)
-    except Exception:
+
+    # Validate the connection is still alive before handing it to the caller
+    if not _is_alive(conn):
+        logger.warning("Stale pooled connection detected — reconnecting")
+        _safe_close(conn)
         try:
             conn = _open()
-        except Exception:
-            return _open()
+        except Exception as exc:
+            logger.error("Failed to open replacement connection: %s", exc)
+            raise
     return conn
 
 
 def _return(conn: MySQLConnection) -> None:
     pool = _pool
     if pool is None:
+        _safe_close(conn)
+        return
+    # Only return healthy connections to the pool
+    if not _is_alive(conn):
+        logger.warning("Discarding dead connection instead of returning to pool")
+        _safe_close(conn)
+        # Replenish pool with a fresh connection to keep it full
         try:
-            conn.close()
+            pool.put_nowait(_open())
         except Exception:
             pass
         return
     try:
         pool.put_nowait(conn)
     except Exception:
-        try:
-            conn.close()
-        except Exception:
-            pass
+        _safe_close(conn)
 
 
 def get_db() -> Generator[MySQLConnection, None, None]:
@@ -88,3 +114,4 @@ def get_db() -> Generator[MySQLConnection, None, None]:
         yield connection
     finally:
         _return(connection)
+
