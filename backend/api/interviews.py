@@ -115,3 +115,55 @@ def upload_audio(
         "transcript": result["transcript"],
         "message": result["message"],
     }
+
+
+@router.post("/upload-chunk", status_code=status.HTTP_201_CREATED)
+async def upload_chunk(
+    file: UploadFile,
+    start_time: float = 0.0,
+    current_user: dict = Depends(get_current_user),
+) -> dict:
+    """Upload a progressive audio chunk, slice it from start_time, and transcribe it.
+
+    This returns the transcript of the sliced chunk.
+    """
+    ext = Path(file.filename or "").suffix.lower()
+    if ext not in ALLOWED_AUDIO_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unsupported file type '{ext}'. Allowed: {', '.join(sorted(ALLOWED_AUDIO_TYPES))}",
+        )
+
+    settings = get_settings()
+    upload_dir = Path(settings.upload_dir)
+    upload_dir.mkdir(parents=True, exist_ok=True)
+
+    safe_name = f"solo_chunk_{current_user['id']}_{os.urandom(4).hex()}{ext}"
+    file_path = upload_dir / safe_name
+    loop = asyncio.get_running_loop()
+
+    # Save file off the event loop
+    content = await loop.run_in_executor(None, file.file.read)
+    await loop.run_in_executor(None, file_path.write_bytes, content)
+
+    # Slice and transcribe chunk (beam_size=1 for speed)
+    from backend.ai.speech_recognition import transcribe_chunk_slice
+    result = await loop.run_in_executor(None, transcribe_chunk_slice, str(file_path), start_time)
+
+    # Clean up chunk file
+    try:
+        os.remove(file_path)
+    except Exception:
+        pass
+
+    if not result.get("success", True):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=result.get("error", "Speech recognition failed."),
+        )
+
+    return {
+        "chunk_transcript": result.get("transcript", ""),
+        "success": True,
+    }
+

@@ -153,3 +153,75 @@ def transcribe_chunk(audio_path: str) -> dict:
             "success": False,
             "error": str(exc),
         }
+
+
+def transcribe_chunk_slice(audio_path: str, start_time: float) -> dict:
+    """Slice audio starting from start_time (seconds) and transcribe it using beam_size=1.
+
+    This enables rapid progressive transcription by only transcribing the newly recorded portion.
+    """
+    if not audio_path or not os.path.exists(audio_path):
+        return {
+            "audio_path": audio_path,
+            "transcript": "",
+            "success": False,
+            "error": "Audio file not found.",
+        }
+
+    base, ext = os.path.splitext(audio_path)
+    slice_path = base + f"_slice_{int(start_time)}.wav"
+
+    try:
+        # Use FFmpeg to slice and preprocess: convert to mono, 16kHz wav
+        cmd = ["ffmpeg", "-y"]
+        if start_time > 0.0:
+            cmd.extend(["-ss", f"{start_time:.3f}"])
+
+        cmd.extend([
+            "-i", audio_path,
+            "-ac", "1",
+            "-ar", "16000",
+            "-f", "wav",
+            slice_path
+        ])
+
+        subprocess.run(cmd, capture_output=True, timeout=30)
+
+        if not os.path.exists(slice_path) or os.path.getsize(slice_path) == 0:
+            return {
+                "audio_path": audio_path,
+                "transcript": "",
+                "success": True,
+                "message": "Empty slice or slicing failed.",
+            }
+
+        model = _load_model()
+        segments, _info = model.transcribe(
+            slice_path, language="en", beam_size=1
+        )
+        transcript = "".join(seg.text for seg in segments).strip()
+
+        try:
+            os.remove(slice_path)
+        except Exception:
+            pass
+
+        return {
+            "audio_path": audio_path,
+            "transcript": transcript,
+            "success": True,
+        }
+    except Exception as exc:
+        logger.warning("Chunk slice transcription failed: %s", exc)
+        if os.path.exists(slice_path):
+            try:
+                os.remove(slice_path)
+            except Exception:
+                pass
+        return {
+            "audio_path": audio_path,
+            "transcript": "",
+            "success": False,
+            "error": str(exc),
+        }
+
