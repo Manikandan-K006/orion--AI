@@ -84,11 +84,12 @@ def _apply_relevance_gating(overall: float, relevance_score: float) -> float:
 
 def _aggregate_module_status(*statuses: str) -> str:
     """Return worst-case status across all modules."""
+    VALID_STATUSES = {"ok", "text_fallback", "highly_relevant", "relevant", "partially_relevant", "mostly_off_topic", "off_topic"}
     if any(s == "no_speech" for s in statuses):
         return "no_speech"
     if any(s == "insufficient_speech" for s in statuses):
         return "insufficient_speech"
-    if any(s not in ("ok", "text_fallback") for s in statuses):
+    if any(s not in VALID_STATUSES for s in statuses):
         return "partial_failure"
     return "ok"
 
