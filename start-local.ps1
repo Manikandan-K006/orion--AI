@@ -92,6 +92,12 @@ if ($port3000 -or $port8000) {
 # ────────────────────────────────────────────────────────────
 $lanIp = Get-LanIPv4
 
+# Dynamically write backend API URL using detected LAN IP address
+$envLocalFile = Join-Path $FrontendDir ".env.local"
+$envProdFile  = Join-Path $FrontendDir ".env.production"
+"NEXT_PUBLIC_API_URL=http://$lanIp:8000" | Out-File -FilePath $envLocalFile -Encoding utf8 -Force
+"NEXT_PUBLIC_API_URL=http://$lanIp:8000" | Out-File -FilePath $envProdFile  -Encoding utf8 -Force
+
 Write-Header
 Write-Host "  Host PC:" -ForegroundColor Green
 Write-Host "    http://localhost:3000" -ForegroundColor White
