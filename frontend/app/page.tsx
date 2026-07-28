@@ -2766,7 +2766,7 @@ export default function Home() {
                           <Trophy className="w-5 h-5 text-amber-400" /> Comprehensive Rankings
                         </h3>
                         <p className="text-xs text-muted-soft mb-6 leading-normal">
-                          Analyze students' performance across departments, semesters, and overall credit points.
+                          Analyze students' performance across departments, semesters, and overall scores.
                         </p>
                       </div>
                       <Button
@@ -3585,7 +3585,6 @@ export default function Home() {
                                 <th className="pb-2 pr-2">Team</th>
                                 <th className="pb-2 pr-2">Label</th>
                                 <th className="pb-2 pr-2">Score</th>
-                                <th className="pb-2 pr-2">Credits</th>
                                 <th className="pb-2 pr-2">Transcript</th>
                               </tr>
                             </thead>
@@ -3600,7 +3599,6 @@ export default function Home() {
                                   <td className="py-2 pr-2 text-amber-300 font-mono">{entry.team_number}</td>
                                   <td className="py-2 pr-2 text-purple-300">{entry.anonymous_label || "-"}</td>
                                   <td className="py-2 pr-2 text-emerald-300 font-semibold">{(entry.overall_score != null ? Number(entry.overall_score) : 0).toFixed(1)}</td>
-                                  <td className="py-2 pr-2 text-amber-300">{(entry.credential_points != null ? Number(entry.credential_points) : 0).toFixed(1)}</td>
                                   <td className="py-2 pr-2 font-semibold">
                                     <div className="flex items-center gap-2">
                                       <details className="cursor-pointer flex-1">
