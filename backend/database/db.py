@@ -36,7 +36,7 @@ def _make_config() -> dict:
 def _open() -> MySQLConnection:
     config = _make_config()
     config["connection_timeout"] = 10
-    config["pool_name"] = None
+    config.pop("pool_name", None)
     return mysql.connector.connect(**config)
 
 

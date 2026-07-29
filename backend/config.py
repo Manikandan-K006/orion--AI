@@ -43,7 +43,6 @@ class Settings(BaseSettings):
 
     allowed_ips: str = ""
     network_restriction_enabled: str = "false"
-    network_restriction_enabled: str = "true"
 
     model_config = SettingsConfigDict(
         env_file=(str(_BACKEND_DIR.parent / ".env"), str(_BACKEND_DIR / ".env")),

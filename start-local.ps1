@@ -38,10 +38,13 @@ function Test-PortInUse {
 }
 
 function Start-ProcessWindow {
-    param([string]$Title, [string]$Command, [string]$Args)
+    param([string]$Title, [string]$Command)
+    $cmdText = "$host.UI.RawUI.WindowTitle = '$Title'; $Command"
+    $bytes = [System.Text.Encoding]::Unicode.GetBytes($cmdText)
+    $encoded = [System.Convert]::ToBase64String($bytes)
     $psi = New-Object System.Diagnostics.ProcessStartInfo
     $psi.FileName = "powershell.exe"
-    $psi.Arguments = "-NoExit -Command `"$Command $Args`""
+    $psi.Arguments = "-NoExit -EncodedCommand $encoded"
     $psi.WindowStyle = [System.Diagnostics.ProcessWindowStyle]::Normal
     $psi.UseShellExecute = $true
     $null = [System.Diagnostics.Process]::Start($psi)
