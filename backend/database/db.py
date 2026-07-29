@@ -34,7 +34,10 @@ def _make_config() -> dict:
 
 
 def _open() -> MySQLConnection:
-    return mysql.connector.connect(**_make_config())
+    config = _make_config()
+    config["connection_timeout"] = 10
+    config["pool_name"] = None
+    return mysql.connector.connect(**config)
 
 
 def _is_alive(conn: MySQLConnection) -> bool:

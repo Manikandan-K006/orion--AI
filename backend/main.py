@@ -21,9 +21,9 @@ app = FastAPI(title=settings.app_name, version="1.0.0")
 @app.on_event("startup")
 def _warm_pool_and_models():
     try:
-        from backend.database.db import get_connection
+        from backend.database.db import get_connection, _return
         conn = get_connection()
-        conn.close()
+        _return(conn)
         logger.info("DB connection pool warmed at startup")
     except Exception as exc:
         logger.warning("DB pool warm-up skipped: %s", exc)
@@ -89,13 +89,13 @@ def health_check() -> dict:
 @app.get("/health/database", tags=["System"])
 def health_database() -> dict:
     try:
-        from backend.database.db import get_connection
+        from backend.database.db import get_connection, _return
         conn = get_connection()
         cursor = conn.cursor()
         cursor.execute("SELECT 1")
         cursor.fetchone()
         cursor.close()
-        conn.close()
+        _return(conn)
         return {"status": "connected", "database": "mysql"}
     except Exception as exc:
         logger.error("Database health check failed: %s", exc)
