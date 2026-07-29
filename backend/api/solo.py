@@ -91,7 +91,7 @@ def submit_solo(
 
     queries.complete_solo_session(connection, session_id, transcript, overall,
                                   result.fluency_score, result.grammar_score,
-                                  result.pronunciation_score, delivery_score,
+                                  result.pronunciation_score, result.delivery_score,
                                   weakness_text, tips_text)
 
     # 1. Fetch current profile progress
@@ -116,7 +116,7 @@ def submit_solo(
         "fluency_score": result.fluency_score,
         "grammar_score": result.grammar_score,
         "accent_score": result.pronunciation_score,
-        "delivery_score": delivery_score,
+        "delivery_score": result.delivery_score,
         "weaknesses": weaknesses,
         "improvement_tips": tips,
         "last_session": last_session,
