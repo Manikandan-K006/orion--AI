@@ -76,12 +76,12 @@ if (-not (Test-Path $uvicornExe)) { throw "uvicorn not found at $uvicornExe. Run
 # ────────────────────────────────────────────────────────────
 # Port checks
 # ────────────────────────────────────────────────────────────
-$port3000 = Test-PortInUse -Port 3000
+$port3001 = Test-PortInUse -Port 3001
 $port8000 = Test-PortInUse -Port 8000
 
-if ($port3000) { Write-Host "WARNING: Port 3000 is already in use." -ForegroundColor Yellow }
+if ($port3001) { Write-Host "WARNING: Port 3001 is already in use." -ForegroundColor Yellow }
 if ($port8000) { Write-Host "WARNING: Port 8000 is already in use." -ForegroundColor Yellow }
-if ($port3000 -or $port8000) {
+if ($port3001 -or $port8000) {
     Write-Host ""
     $answer = Read-Host "Port(s) occupied. Continue anyway? (y/N)"
     if ($answer -ne "y") { Write-Host "Aborted."; exit 1 }
@@ -100,10 +100,10 @@ $envProdFile  = Join-Path $FrontendDir ".env.production"
 
 Write-Header
 Write-Host "  Host PC:" -ForegroundColor Green
-Write-Host "    http://localhost:3000" -ForegroundColor White
+Write-Host "    http://localhost:3001" -ForegroundColor White
 Write-Host ""
 Write-Host "  Student devices:" -ForegroundColor Green
-Write-Host "    http://$lanIp`:3000" -ForegroundColor White
+Write-Host "    http://$lanIp`:3001" -ForegroundColor White
 Write-Host ""
 Write-Host "  Backend:" -ForegroundColor Green
 Write-Host "    http://$lanIp`:8000" -ForegroundColor White
