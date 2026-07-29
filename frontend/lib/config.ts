@@ -12,9 +12,11 @@ const DEFAULT_API_PORT = "8000";
  */
 export function getApiUrl(): string {
   if (typeof window !== "undefined") {
-    return `${window.location.protocol}//${window.location.hostname}:${DEFAULT_API_PORT}`;
+    const hostname = window.location.hostname === "localhost" ? "127.0.0.1" : window.location.hostname;
+    return `${window.location.protocol}//${hostname}:${DEFAULT_API_PORT}`;
   }
-  return process.env.NEXT_PUBLIC_API_URL || `http://localhost:${DEFAULT_API_PORT}`;
+  const fallback = process.env.NEXT_PUBLIC_API_URL || `http://127.0.0.1:${DEFAULT_API_PORT}`;
+  return fallback.replace("localhost", "127.0.0.1");
 }
 
 /**
@@ -25,7 +27,10 @@ export function getApiUrl(): string {
 export function getWsBase(): string {
   if (typeof window !== "undefined") {
     const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    return `${wsProtocol}//${window.location.hostname}:${DEFAULT_API_PORT}`;
+    const hostname = window.location.hostname === "localhost" ? "127.0.0.1" : window.location.hostname;
+    return `${wsProtocol}//${hostname}:${DEFAULT_API_PORT}`;
   }
-  return process.env.NEXT_PUBLIC_WS_URL || `ws://localhost:${DEFAULT_API_PORT}`;
+  const fallback = process.env.NEXT_PUBLIC_WS_URL || `ws://127.0.0.1:${DEFAULT_API_PORT}`;
+  return fallback.replace("localhost", "127.0.0.1");
 }
+

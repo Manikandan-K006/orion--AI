@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS student_profile (
     user_id INT NOT NULL UNIQUE,
     department VARCHAR(100),
     year VARCHAR(30),
+    section VARCHAR(10),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );

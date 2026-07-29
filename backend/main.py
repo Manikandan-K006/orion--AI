@@ -4,7 +4,6 @@ import sys
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
-from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from backend.api import auth, gd, gd_live, interviews, progress, questions, reports, solo
@@ -21,42 +20,20 @@ app = FastAPI(title=settings.app_name, version="1.0.0")
 
 @app.on_event("startup")
 def _warm_pool_and_models():
-    # Open a pooled (warm) connection at startup so the first user request —
-    # especially the host "Start" action — doesn't pay the ~2s SSL handshake
-    # to the remote DB. This is what keeps the GD startup under 1 second.
     try:
         from backend.database.db import get_connection
         conn = get_connection()
         conn.close()
         logger.info("DB connection pool warmed at startup")
-    except Exception as exc:  # pragma: no cover - non-fatal
+    except Exception as exc:
         logger.warning("DB pool warm-up skipped: %s", exc)
-
-    # Pre-load Whisper model skipped due to Application Control policy restrictions on ctranslate2 DLL
-    # try:
-    #     from backend.ai.speech_recognition import warmup_model
-    #     warmup_model()
-    # except Exception as exc:
-    #     logger.warning("Whisper warm-up skipped: %s", exc)
-
-
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origin_regex=r"https?://.*",
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 
 class IPFilterMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
-        # Allow health checks and CORS preflight through
         if request.url.path == "/health" or request.method == "OPTIONS":
             return await call_next(request)
 
-        # Skip IP filter when network restriction is disabled
         if settings.network_restriction_enabled.strip().lower() != "true":
             return await call_next(request)
 
@@ -65,7 +42,6 @@ class IPFilterMiddleware(BaseHTTPMiddleware):
             forwarded = request.headers.get("x-forwarded-for", "")
             client_ip = forwarded.split(",")[0].strip() if forwarded else (request.client.host if request.client else "")
 
-            # Always allow local/loopback development access
             local_ips = {"127.0.0.1", "::1", "localhost", ""}
             allowed_list = {ip.strip() for ip in allowed.split(",") if ip.strip()}
             allowed_list |= local_ips
@@ -80,6 +56,18 @@ class IPFilterMiddleware(BaseHTTPMiddleware):
 
 
 app.add_middleware(IPFilterMiddleware)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://10.206.99.142:3000",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.exception_handler(Exception)
