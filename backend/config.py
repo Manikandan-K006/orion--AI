@@ -42,7 +42,7 @@ class Settings(BaseSettings):
     report_dir: str = "reports"
 
     allowed_ips: str = ""
-    network_restriction_enabled: str = "true"
+    network_restriction_enabled: str = "false"
 
     model_config = SettingsConfigDict(
         env_file=(str(_BACKEND_DIR.parent / ".env"), str(_BACKEND_DIR / ".env")),

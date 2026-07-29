@@ -21,9 +21,9 @@ app = FastAPI(title=settings.app_name, version="1.0.0")
 @app.on_event("startup")
 def _warm_pool_and_models():
     try:
-        from backend.database.db import get_connection
+        from backend.database.db import get_connection, _return
         conn = get_connection()
-        conn.close()
+        _return(conn)
         logger.info("DB connection pool warmed at startup")
     except Exception as exc:
         logger.warning("DB pool warm-up skipped: %s", exc)
@@ -59,8 +59,13 @@ app.add_middleware(IPFilterMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://10.206.99.142:3000",
+    ],
+    allow_origin_regex=r"https?://.*",
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -85,13 +90,13 @@ def health_check() -> dict:
 @app.get("/health/database", tags=["System"])
 def health_database() -> dict:
     try:
-        from backend.database.db import get_connection
+        from backend.database.db import get_connection, _return
         conn = get_connection()
         cursor = conn.cursor()
         cursor.execute("SELECT 1")
         cursor.fetchone()
         cursor.close()
-        conn.close()
+        _return(conn)
         return {"status": "connected", "database": "mysql"}
     except Exception as exc:
         logger.error("Database health check failed: %s", exc)

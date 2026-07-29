@@ -23,7 +23,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
 from mysql.connector import MySQLConnection
 
 from backend.database import queries
-from backend.database.db import _return, get_connection, get_db
+from backend.database.db import _return, get_connection
 from backend.ai.evaluation import evaluate_transcript_parallel, evaluate_transcript
 from backend.security import decode_token
 
@@ -553,23 +553,27 @@ async def gd_live_socket(
     name = user.get("name")
 
     # Determine team_number from DB
-    connection: MySQLConnection = next(get_db())
+    connection = None
     team_number = None
     try:
+        connection = get_connection()
         participants = queries.get_live_participants(connection, session_code)
         for p in participants:
             if p["user_id"] == user_id:
                 team_number = p.get("team_number")
                 break
+    except Exception as exc:
+        logger.warning("WS team_number lookup failed: %s", exc)
     finally:
-        _return(connection)
+        if connection: _return(connection)
 
     await manager.connect(session_code, websocket, user_id, role, name, team_number)
     logger.warning("WS CONNECT uid=%s room=%s team=%s", user_id, session_code, team_number)
 
     # Build/sync room state from the database.
-    connection = next(get_db())
+    connection = None
     try:
+        connection = get_connection()
         session = queries.get_live_session_by_code(connection, session_code)
         topic = queries.get_live_team_topic(connection, session_code)
         participants_list = _participant_snapshot(connection, session_code)
@@ -578,7 +582,7 @@ async def gd_live_socket(
         logger.warning("WS state build error: %s", repr(_exc))
         session, topic, participants_list, teams_from_db = None, None, [], []
     finally:
-        _return(connection)
+        if connection: _return(connection)
 
     state = manager.ensure_state(session_code, topic)
     state.ended = bool(session and session["status"] == "completed")
