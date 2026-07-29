@@ -103,10 +103,10 @@ $envProdFile  = Join-Path $FrontendDir ".env.production"
 
 Write-Header
 Write-Host "  Host PC:" -ForegroundColor Green
-Write-Host "    http://localhost:3001" -ForegroundColor White
+Write-Host "    http://localhost:3000" -ForegroundColor White
 Write-Host ""
 Write-Host "  Student devices:" -ForegroundColor Green
-Write-Host "    http://$lanIp`:3001" -ForegroundColor White
+Write-Host "    http://$lanIp`:3000" -ForegroundColor White
 Write-Host ""
 Write-Host "  Backend:" -ForegroundColor Green
 Write-Host "    http://$lanIp`:8000" -ForegroundColor White

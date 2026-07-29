@@ -82,7 +82,7 @@ export default function GdLiveRoom({
   const [discussionRound, setDiscussionRound] = useState<number>(1);
   const [liveSpeechText, setLiveSpeechText] = useState("");
   const [liveTranscripts, setLiveTranscripts] = useState<Record<number, string>>({});
-  const [liveScores, setLiveScores] = useState({ grammar: 85, fluency: 85, confidence: 85, vocabulary: 85, overall: 85 });
+  const [liveScores, setLiveScores] = useState<any>({ grammar: 85, fluency: 85, confidence: 85, vocabulary: 85, overall: 85, emotion: "Analytical", wpm: 135 });
   const [aiAlertsList, setAiAlertsList] = useState<any[]>([]);
   const [chatMessages, setChatMessages] = useState<any[]>([]);
   const recognitionRef = useRef<any>(null);
@@ -186,7 +186,10 @@ export default function GdLiveRoom({
   function startSpeechRecognition() {
     if (typeof window === "undefined") return;
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) return;
+    if (!SpeechRecognition) {
+      console.warn("WebSpeech API is not supported in this browser.");
+      return;
+    }
 
     if (recognitionRef.current) {
       try { recognitionRef.current.stop(); } catch (e) { }
@@ -198,20 +201,41 @@ export default function GdLiveRoom({
     rec.lang = "en-US";
 
     rec.onresult = (event: any) => {
-      let currentResult = "";
-      for (let i = event.resultIndex; i < event.results.length; ++i) {
-        currentResult += event.results[i][0].transcript;
+      let fullTranscript = "";
+      for (let i = 0; i < event.results.length; ++i) {
+        fullTranscript += event.results[i][0].transcript;
       }
-      setLiveSpeechText(currentResult);
-      send("LIVE_SPEECH", { text: currentResult });
+      if (fullTranscript.trim()) {
+        setLiveSpeechText(fullTranscript);
+        send("LIVE_SPEECH", { text: fullTranscript });
+      }
     };
 
     rec.onerror = (event: any) => {
-      console.error("Speech recognition error:", event.error);
+      console.warn("Speech recognition notice:", event.error);
+      if (event.error === "no-speech" || event.error === "network") {
+        setTimeout(() => {
+          if (!finishLockRef.current) {
+            try { rec.start(); } catch (e) { }
+          }
+        }, 400);
+      }
+    };
+
+    rec.onend = () => {
+      if (!finishLockRef.current) {
+        try {
+          rec.start();
+        } catch (e) { }
+      }
     };
 
     recognitionRef.current = rec;
-    rec.start();
+    try {
+      rec.start();
+    } catch (e) {
+      console.warn("Speech recognition start error:", e);
+    }
   }
 
   function stopSpeechRecognition() {
@@ -226,6 +250,10 @@ export default function GdLiveRoom({
   async function startRecording() {
     try {
       setAudioError("");
+      if (typeof window === "undefined" || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        console.warn("Microphone access requires HTTPS or localhost (or chrome://flags/#unsafely-treat-insecure-origin-as-secure).");
+        return;
+      }
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       audioStreamRef.current = stream;
       const ctx = new AudioContext();
@@ -314,6 +342,8 @@ export default function GdLiveRoom({
     setDiscussionStarted(true);
     setThinkingPhase(true);
     setThinkingSeconds(120);
+    startRecording();
+    startSpeechRecognition();
     voice.announceDiscussionStarted();
     setTimeout(() => voice.announceTopic(topic), 2000);
   }
@@ -324,6 +354,7 @@ export default function GdLiveRoom({
     setTimerRunning(true);
     startRecording();
     startChunkUpload();
+    startSpeechRecognition();
     proctoring.enable();
     voice.announceBeginSpeaking();
   }
@@ -494,14 +525,7 @@ export default function GdLiveRoom({
           setNextSpeakerId(next_speaker_id);
           setDiscussionRound(round || 1);
           if (topic) setTopic(topic);
-          setLiveSpeechText("");
-
-          if (current_speaker_id === userId) {
-            voice.announceYourTurn();
-            startSpeechRecognition();
-          } else {
-            stopSpeechRecognition();
-          }
+          startSpeechRecognition();
           break;
         }
         case "LIVE_SPEECH_BROADCAST": {
@@ -522,6 +546,9 @@ export default function GdLiveRoom({
         case "AI_ALERT": {
           const alert = msg.payload;
           setAiAlertsList(prev => [alert, ...prev].slice(0, 5));
+          if (alert.type === "repetition" && alert.user_id === userId) {
+            voice.speak("Please do not repeat the question. Provide your own points.");
+          }
           break;
         }
         case "CHAT_MESSAGE": {
@@ -1121,41 +1148,93 @@ export default function GdLiveRoom({
 
       <div className="relative z-10 flex-1 flex flex-col p-4 md:p-6">
         {warnModal}
-        <div className="max-w-6xl mx-auto w-full space-y-6 flex-1 flex flex-col justify-center animate-fade-up">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-            {/* Left Panel: Active Speakers Sidebar */}
+        <div className="max-w-7xl mx-auto w-full space-y-5 flex-1 flex flex-col justify-center animate-fade-up">
+
+          {/* ─── PHASE TIMELINE HEADER ─── */}
+          <div className="card p-4 bg-gradient-to-r from-slate-900/90 via-indigo-950/80 to-slate-900/90 border border-indigo-500/30 backdrop-blur-xl shadow-2xl">
+            <div className="flex items-center justify-between gap-2 overflow-x-auto pb-1 text-xs">
+              {[
+                { phase: 1, label: "1. Intro (Welcome & Topic)", active: discussionRound === 1 },
+                { phase: 2, label: "2. Opening Round (Turn Queue)", active: discussionRound === 2 },
+                { phase: 3, label: "3. Open Discussion (Free Interactive)", active: discussionRound === 3 },
+                { phase: 4, label: "4. Rapid Fire (Quick Q&A)", active: discussionRound === 4 },
+                { phase: 5, label: "5. Final Summary & Leaderboard", active: discussionRound === 5 },
+              ].map((p) => (
+                <div
+                  key={p.phase}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-xl transition-all shrink-0 font-bold ${
+                    p.active
+                      ? "bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-md shadow-indigo-500/30 border border-indigo-400/50 animate-pulse"
+                      : p.phase < discussionRound
+                      ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30"
+                      : "bg-slate-800/40 text-muted-soft border border-slate-700/40"
+                  }`}
+                >
+                  <span className={`w-2 h-2 rounded-full ${p.active ? "bg-white animate-ping" : p.phase < discussionRound ? "bg-emerald-400" : "bg-slate-500"}`} />
+                  <span>{p.label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+            {/* Left Panel: Active Speakers Sidebar & Live Metrics */}
             <div className="lg:col-span-4 space-y-4">
-              <div className="card p-4">
-                <h3 className="text-xs font-bold text-heading uppercase tracking-wider mb-4 flex items-center gap-1.5">
-                  <Users className="w-4 h-4 text-indigo-400" /> Active Speakers Sidebar
-                </h3>
-                <div className="space-y-3">
+              <div className="card p-4 bg-slate-900/80 backdrop-blur-lg border border-slate-800">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-xs font-bold text-heading uppercase tracking-wider flex items-center gap-1.5">
+                    <Users className="w-4 h-4 text-indigo-400" /> Participant Status ({members.length})
+                  </h3>
+                  <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full font-bold">
+                    Multi-Student Room
+                  </span>
+                </div>
+
+                <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
                   {members.map((m: any, i: number) => {
                     const label = m.label || m.anonymous_label || `Member ${i + 1}`;
                     const isMe = m.user_id === userId;
-                    const isCurrent = m.user_id === currentSpeakerId;
+                    const isSpeaking = (isMe && liveSpeechText.length > 0) || (liveTranscripts[m.user_id] && liveTranscripts[m.user_id].length > 0);
                     const done = finishedIds.has(m.user_id);
+
+                    const statusBadge = isSpeaking
+                      ? { label: "🟢 Speaking", color: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" }
+                      : discussionRound === 3
+                      ? { label: "🔵 Responding", color: "bg-cyan-500/15 text-cyan-400 border-cyan-500/30" }
+                      : done
+                      ? { label: "🔴 Time Over", color: "bg-rose-500/15 text-rose-400 border-rose-500/30" }
+                      : { label: "⚪ Waiting", color: "bg-slate-800 text-slate-400 border-slate-700" };
+
                     return (
-                      <div key={m.user_id} className={`p-3.5 rounded-2xl border transition-all duration-300 flex items-center justify-between gap-3 ${isCurrent ? "border-red-500/40 bg-red-500/5 shadow-md shadow-red-500/5 animate-pulse" : done ? "border-emerald-500/25 bg-emerald-500/5" : "border-slate-200/40 dark:border-slate-800/40 bg-white/40 dark:bg-slate-900/40"}`}>
+                      <div
+                        key={m.user_id}
+                        className={`p-3 rounded-2xl border transition-all duration-300 flex items-center justify-between gap-3 ${
+                          isSpeaking
+                            ? "border-emerald-500/50 bg-emerald-500/10 shadow-lg shadow-emerald-500/10"
+                            : done
+                            ? "border-slate-700/40 bg-slate-900/30"
+                            : "border-slate-800/60 bg-slate-900/50"
+                        }`}
+                      >
                         <div className="flex items-center gap-3 min-w-0">
-                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-white text-xs font-bold shadow-sm shrink-0 ${isCurrent ? "bg-red-500" : "bg-gradient-to-tr from-indigo-500 to-purple-600"}`}>
+                          <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-white text-xs font-black shadow-md shrink-0 ${isSpeaking ? "bg-emerald-500" : "bg-gradient-to-tr from-indigo-600 to-purple-600"}`}>
                             {label[0].toUpperCase()}
                           </div>
                           <div className="min-w-0">
                             <p className="text-xs font-bold text-heading truncate">{label} {isMe && "(You)"}</p>
-                            <p className={`text-[10px] ${isCurrent ? "text-red-500 font-bold" : done ? "text-emerald-500 font-semibold" : "text-muted-soft"}`}>
-                              {isCurrent ? "Speaking Turn" : done ? "Turn Complete" : "Waiting Turn"}
-                            </p>
+                            <span className={`inline-block mt-0.5 text-[9px] px-2 py-0.5 rounded-full border font-bold ${statusBadge.color}`}>
+                              {statusBadge.label}
+                            </span>
                           </div>
                         </div>
 
-                        {isCurrent && (
+                        {isSpeaking && (
                           <div className="flex items-center gap-1 shrink-0">
-                            <span className="w-2 h-2 rounded-full bg-red-500 animate-ping" />
+                            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
                             <div className="flex gap-0.5 items-end h-3">
-                              <span className="w-0.5 bg-red-500 rounded-full animate-bounce" style={{ height: "40%", animationDelay: "0.1s" }} />
-                              <span className="w-0.5 bg-red-500 rounded-full animate-bounce" style={{ height: "80%", animationDelay: "0.3s" }} />
-                              <span className="w-0.5 bg-red-500 rounded-full animate-bounce" style={{ height: "50%", animationDelay: "0.5s" }} />
+                              <span className="w-0.5 bg-emerald-500 rounded-full animate-bounce" style={{ height: "40%", animationDelay: "0.1s" }} />
+                              <span className="w-0.5 bg-emerald-500 rounded-full animate-bounce" style={{ height: "80%", animationDelay: "0.3s" }} />
+                              <span className="w-0.5 bg-emerald-500 rounded-full animate-bounce" style={{ height: "50%", animationDelay: "0.5s" }} />
                             </div>
                           </div>
                         )}
@@ -1165,34 +1244,41 @@ export default function GdLiveRoom({
                 </div>
               </div>
 
-              {/* Real-time scorecards and dials */}
-              <div className="card p-5 space-y-4">
-                <h3 className="text-xs font-bold text-heading uppercase tracking-wider flex items-center gap-1.5">
-                  <Activity className="w-4 h-4 text-emerald-400" /> Real-time Speech Metrics
+              {/* Real-time scorecards and speech analytics */}
+              <div className="card p-5 space-y-4 bg-slate-900/80 backdrop-blur-lg border border-slate-800">
+                <h3 className="text-xs font-bold text-heading uppercase tracking-wider flex items-center justify-between">
+                  <span className="flex items-center gap-1.5"><Activity className="w-4 h-4 text-emerald-400" /> Real-time Speech Analytics</span>
+                  <span className="text-[10px] text-indigo-400 font-mono font-bold">{liveScores.emotion || "Analytical"}</span>
                 </h3>
 
-                <div className="grid grid-cols-2 gap-3 text-center">
-                  <div className="p-3 rounded-xl bg-slate-900/50 border border-[var(--border)]">
-                    <p className="text-[10px] text-muted-soft uppercase font-bold">Grammar</p>
-                    <p className="text-xl font-extrabold text-heading mt-1">{liveScores.grammar}%</p>
+                <div className="grid grid-cols-2 gap-2.5 text-center">
+                  <div className="p-2.5 rounded-xl bg-slate-950/60 border border-slate-800">
+                    <p className="text-[9px] text-muted-soft uppercase font-bold">Grammar</p>
+                    <p className="text-lg font-extrabold text-heading mt-0.5">{liveScores.grammar}%</p>
                   </div>
-                  <div className="p-3 rounded-xl bg-slate-900/50 border border-[var(--border)]">
-                    <p className="text-[10px] text-muted-soft uppercase font-bold">Fluency</p>
-                    <p className="text-xl font-extrabold text-heading mt-1">{liveScores.fluency}%</p>
+                  <div className="p-2.5 rounded-xl bg-slate-950/60 border border-slate-800">
+                    <p className="text-[9px] text-muted-soft uppercase font-bold">Fluency</p>
+                    <p className="text-lg font-extrabold text-heading mt-0.5">{liveScores.fluency}%</p>
                   </div>
-                  <div className="p-3 rounded-xl bg-slate-900/50 border border-[var(--border)]">
-                    <p className="text-[10px] text-muted-soft uppercase font-bold">Confidence</p>
-                    <p className="text-xl font-extrabold text-heading mt-1">{liveScores.confidence}%</p>
+                  <div className="p-2.5 rounded-xl bg-slate-950/60 border border-slate-800">
+                    <p className="text-[9px] text-muted-soft uppercase font-bold">Confidence</p>
+                    <p className="text-lg font-extrabold text-heading mt-0.5">{liveScores.confidence}%</p>
                   </div>
-                  <div className="p-3 rounded-xl bg-slate-900/50 border border-[var(--border)]">
-                    <p className="text-[10px] text-muted-soft uppercase font-bold">Vocabulary</p>
-                    <p className="text-xl font-extrabold text-heading mt-1">{liveScores.vocabulary}%</p>
+                  <div className="p-2.5 rounded-xl bg-slate-950/60 border border-slate-800">
+                    <p className="text-[9px] text-muted-soft uppercase font-bold">Vocabulary</p>
+                    <p className="text-lg font-extrabold text-heading mt-0.5">{liveScores.vocabulary}%</p>
                   </div>
                 </div>
 
-                <div className="border-t border-[var(--border)] pt-3 text-center">
-                  <p className="text-[10px] text-muted-soft uppercase font-bold">Overall Performance Index</p>
-                  <p className="text-2xl font-black text-emerald-400 mt-1">{liveScores.overall}%</p>
+                <div className="border-t border-slate-800 pt-3 flex items-center justify-between">
+                  <div>
+                    <p className="text-[9px] text-muted-soft uppercase font-bold">Speech Speed</p>
+                    <p className="text-xs font-bold text-indigo-400 mt-0.5">{liveScores.wpm || 135} WPM</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[9px] text-muted-soft uppercase font-bold">Performance Index</p>
+                    <p className="text-xl font-black text-emerald-400">{liveScores.overall}%</p>
+                  </div>
                 </div>
               </div>
 
@@ -1204,23 +1290,24 @@ export default function GdLiveRoom({
                   </h4>
                   <div className="space-y-2">
                     {aiAlertsList.map((alert: any, idx: number) => (
-                      <p key={idx} className="text-[10px] text-body leading-normal">{alert.message}</p>
+                      <div key={idx} className={`p-2 rounded-xl text-[11px] font-medium leading-normal ${alert.type === "repetition" ? "bg-rose-500/10 text-rose-400 border border-rose-500/30" : "text-body"}`}>
+                        {alert.message}
+                      </div>
                     ))}
                   </div>
                 </div>
               )}
             </div>
 
-            {/* Middle & Right Column: Active Room and Log */}
-            <div className="lg:col-span-8 space-y-6">
+            {/* Middle & Right Column: Active Room & Live Transcript Monitor */}
+            <div className="lg:col-span-8 space-y-5">
               {/* Active Topic Banner */}
-              <div className="card p-6 bg-gradient-to-r from-indigo-500/5 to-purple-500/5 border-l-4 border-l-indigo-500 relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none" />
-                <div className="flex justify-between items-start gap-4 mb-3">
-                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/10 text-indigo-500 border border-indigo-500/20 uppercase tracking-wider">
-                    MZ ThinkCircle Discussion · Round {discussionRound}
+              <div className="card p-5 bg-gradient-to-r from-indigo-900/30 via-purple-900/20 to-slate-900/50 border-l-4 border-l-indigo-500 relative overflow-hidden">
+                <div className="flex justify-between items-start gap-4 mb-2">
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/15 text-indigo-400 border border-indigo-500/30 uppercase tracking-wider">
+                    Campus Placement GD Room · {discussionRound === 3 ? "Open Discussion Phase" : discussionRound === 4 ? "Rapid Fire Round" : "Opening Round"}
                   </span>
-                  <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-bold bg-slate-900 border border-indigo-500/30 text-heading`}>
+                  <div className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-bold bg-slate-950 border border-indigo-500/30 text-heading">
                     <Clock className="w-3.5 h-3.5 text-indigo-400" />
                     Remaining: {formatTime(timerSeconds)}
                   </div>
@@ -1228,68 +1315,109 @@ export default function GdLiveRoom({
                 <h2 className="text-base font-extrabold text-heading leading-snug">{topic}</h2>
               </div>
 
-              {/* Live speech transcription display */}
-              <div className="card p-6 space-y-4">
-                <div className="flex justify-between items-center">
+              {/* Rapid Fire Round Banner Prompt */}
+              {discussionRound === 4 && (
+                <div className="card p-4 bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-amber-500/15 border border-amber-500/40 animate-pulse text-center space-y-1">
+                  <span className="text-[10px] font-bold text-amber-400 uppercase tracking-widest flex items-center justify-center gap-1">
+                    <Sparkles className="w-3.5 h-3.5 text-amber-400" /> Rapid Fire Question (15s Response)
+                  </span>
+                  <p className="text-sm font-bold text-heading">"Can Artificial Intelligence completely replace human teachers in schools?"</p>
+                </div>
+              )}
+
+              {/* Rich Live Transcript Monitor */}
+              <div className="card p-5 space-y-3 bg-slate-900/90 border border-slate-800">
+                <div className="flex justify-between items-center border-b border-slate-800 pb-2.5">
                   <h3 className="text-xs font-bold text-heading uppercase tracking-wider flex items-center gap-1.5">
-                    <Mic className="w-4 h-4 text-indigo-400" /> Live Transcript Monitor
+                    <Mic className="w-4 h-4 text-indigo-400" /> Live Transcript Monitor Cards
                   </h3>
-                  <span className="text-[10px] font-mono font-bold text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded-full">
-                    Real-time WebSpeech API
+                  <span className="text-[10px] font-mono font-bold text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> Real-time Speech Stream
                   </span>
                 </div>
 
-                {currentSpeakerId === userId ? (
-                  <div className="p-4 rounded-2xl bg-indigo-500/5 border border-indigo-500/30 min-h-24">
-                    <p className="text-xs text-indigo-400 font-bold mb-1">Your Speaking Turn (Present Opinion):</p>
-                    <p className="text-sm text-heading italic whitespace-pre-wrap leading-relaxed">{liveSpeechText || "Start speaking into your mic..."}</p>
-                  </div>
-                ) : (
-                  <div className="p-4 rounded-2xl bg-slate-900/50 border border-[var(--border)] min-h-24">
-                    <p className="text-xs text-muted-soft font-bold mb-1">
-                      Active Speaker Transcript ({members.find(m => m.user_id === currentSpeakerId)?.label || "Teammate Speaking"}):
-                    </p>
-                    <p className="text-sm text-heading whitespace-pre-wrap leading-relaxed">
-                      {liveTranscripts[currentSpeakerId || 0] || "Waiting for teammate to start speaking..."}
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              {/* AI Moderator Chat Log */}
-              <div className="card p-6 flex flex-col justify-between">
-                <div>
-                  <h3 className="text-xs font-bold text-heading uppercase tracking-wider mb-4 flex items-center gap-1.5">
-                    <Brain className="w-4 h-4 text-indigo-400" /> AI Moderator Panel
-                  </h3>
-                  <div className="space-y-3 max-h-60 overflow-y-auto pr-2 text-xs flex flex-col">
-                    {/* Base Welcome Msg */}
-                    <div className="p-3.5 rounded-2xl bg-indigo-500/5 border border-indigo-500/10 self-start w-full">
-                      <p className="font-bold text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5">🤖 AI Moderator</p>
-                      <p className="text-muted-soft mt-1 leading-relaxed">Welcome everyone. Today's discussion topic is <strong>{topic}</strong>. Please structure your arguments carefully and await turn allocation prompts.</p>
+                <div className="space-y-3">
+                  {/* Your Live Speech */}
+                  <div className="p-3.5 rounded-2xl bg-indigo-500/10 border border-indigo-500/30">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-xs text-indigo-400 font-bold flex items-center gap-1.5">
+                        <Mic className="w-3.5 h-3.5 text-indigo-400" /> Your Live Speech:
+                      </span>
+                      <span className="text-[10px] font-mono font-bold text-indigo-300">Grammar: {liveScores.grammar}% · Emotion: {liveScores.emotion || "Analytical"}</span>
                     </div>
-                    {/* Dynamic Chat Messages */}
-                    {chatMessages.map((msg: any, idx: number) => {
-                      const isSystem = msg.user_id === 0;
-                      return (
-                        <div key={idx} className={`p-3.5 rounded-2xl self-start w-full transition-all ${isSystem ? "bg-indigo-500/5 border border-indigo-500/10" : "bg-slate-900/40 border border-[var(--border)]"}`}>
-                          <p className={`font-bold flex items-center gap-1.5 ${isSystem ? "text-indigo-400" : "text-heading"}`}>
-                            {isSystem ? (msg.label || "🤖 AI Moderator") : (msg.label || msg.name)}
-                          </p>
-                          <p className="text-muted-soft mt-1 leading-relaxed">{msg.text}</p>
-                        </div>
-                      );
-                    })}
+                    <p className="text-sm text-heading italic whitespace-pre-wrap leading-relaxed">
+                      {liveSpeechText || "Speak naturally into your microphone during the discussion..."}
+                    </p>
+                  </div>
+
+                  {/* Teammates Live Transcripts List */}
+                  <div className="pt-1">
+                    <p className="text-xs text-purple-400 font-bold mb-2 flex items-center gap-1.5">
+                      <Users className="w-3.5 h-3.5 text-purple-400" /> Active Team Speech Feed:
+                    </p>
+                    {Object.keys(liveTranscripts).length === 0 ? (
+                      <p className="text-xs text-muted-soft italic p-3 bg-slate-950/40 rounded-xl border border-slate-800">
+                        Waiting for team speech inputs... Each member can speak and defend points.
+                      </p>
+                    ) : (
+                      <div className="space-y-2.5 max-h-56 overflow-y-auto pr-1">
+                        {Object.entries(liveTranscripts).map(([uid, text]) => {
+                          const mUser = members.find((m: any) => m.user_id === Number(uid));
+                          const mLabel = mUser ? (mUser.label || mUser.anonymous_label || mUser.name) : `Member ${uid}`;
+                          const isSelf = Number(uid) === userId;
+                          return (
+                            <div key={uid} className={`p-3 rounded-2xl text-xs border ${isSelf ? "bg-indigo-500/10 border-indigo-500/30" : "bg-purple-500/10 border-purple-500/30"}`}>
+                              <div className="flex items-center justify-between mb-1.5">
+                                <span className={`font-bold flex items-center gap-1.5 ${isSelf ? "text-indigo-400" : "text-purple-400"}`}>
+                                  {mLabel} {isSelf && "(You)"}:
+                                </span>
+                                <div className="flex items-center gap-1 text-[9px] font-mono font-bold">
+                                  <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400">92% Confidence</span>
+                                  <span className="px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-400">135 WPM</span>
+                                </div>
+                              </div>
+                              <p className="text-heading italic leading-relaxed">{text}</p>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 </div>
+              </div>
 
-                {/* Speaker action buttons */}
-                {!myFinished && submitStep === "idle" && currentSpeakerId === userId && (
-                  <Button onClick={() => executeFinish()} className="w-full btn-primary h-12 text-sm mt-6 bg-gradient-to-r from-red-500 to-orange-600 hover:from-red-400 hover:to-orange-500 border-0 font-bold">
-                    Conclude Turn & Save
+              {/* AI Moderator Facilitator Panel */}
+              <div className="card p-5 bg-slate-900/90 border border-slate-800 space-y-3">
+                <h3 className="text-xs font-bold text-heading uppercase tracking-wider flex items-center gap-1.5">
+                  <Brain className="w-4 h-4 text-indigo-400" /> AI Moderator Facilitator Panel
+                </h3>
+                <div className="space-y-2 max-h-48 overflow-y-auto pr-1 text-xs flex flex-col">
+                  <div className="p-3 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 self-start w-full">
+                    <p className="font-bold text-indigo-400 flex items-center gap-1.5">🤖 AI Moderator</p>
+                    <p className="text-muted-soft mt-0.5 leading-relaxed">
+                      Welcome everyone. Today's discussion topic is <strong>{topic}</strong>. Take turns naturally, support or counter arguments, and keep the interaction engaging!
+                    </p>
+                  </div>
+                  {chatMessages.map((msg: any, idx: number) => {
+                    const isSystem = msg.user_id === 0;
+                    return (
+                      <div key={idx} className={`p-3 rounded-2xl self-start w-full transition-all ${isSystem ? "bg-indigo-500/10 border border-indigo-500/20" : "bg-slate-950/60 border border-slate-800"}`}>
+                        <p className={`font-bold flex items-center gap-1.5 ${isSystem ? "text-indigo-400" : "text-heading"}`}>
+                          {isSystem ? (msg.label || "🤖 AI Moderator") : (msg.label || msg.name)}
+                        </p>
+                        <p className="text-muted-soft mt-0.5 leading-relaxed">{msg.text}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {!myFinished && submitStep === "idle" && (
+                  <Button onClick={() => executeFinish()} className="w-full btn-primary h-11 text-xs mt-3 bg-gradient-to-r from-red-600 via-orange-600 to-red-600 hover:from-red-500 hover:to-orange-500 border-0 font-bold shadow-lg shadow-red-500/20">
+                    Conclude Participation & Save Discussion
                   </Button>
                 )}
               </div>
+
             </div>
           </div>
         </div>

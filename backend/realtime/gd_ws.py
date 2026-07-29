@@ -153,33 +153,54 @@ def generate_follow_up_question(name: str, transcript: str, topic: str) -> str:
 
 def check_ai_moderator_rules(user_id: int, name: str, text: str, topic: str) -> dict | None:
     words = re.findall(r'\b\w+\b', text.lower())
+    if not words or len(words) < 3:
+        return None
+
+    topic_words = set(re.findall(r'\b\w+\b', topic.lower()))
+    stop_words = {"should", "be", "in", "the", "a", "an", "is", "are", "and", "or", "of", "to", "for", "with", "on", "at", "by", "from", "my", "your", "what", "how", "why", "can", "do", "does"}
+    meaningful_topic_words = topic_words - stop_words
+    
+    # 1. Question Repetition Detection
     topic_cleaned = re.sub(r'[^\w\s]', '', topic.lower()).strip()
     text_cleaned = re.sub(r'[^\w\s]', '', text.lower()).strip()
     
-    if len(topic_cleaned) > 10 and topic_cleaned in text_cleaned:
-         return {
-             "user_id": user_id,
-             "type": "repetition",
-             "message": f"🤖 AI Moderator: Please explain your own ideas instead of repeating the topic title."
-         }
-         
+    matched_topic_words = [w for w in words if w in meaningful_topic_words]
+    unique_new_words = set(words) - stop_words - meaningful_topic_words
+
+    # Flag if user repeats main topic keywords without adding original thoughts
+    if len(meaningful_topic_words) >= 2 and len(matched_topic_words) >= max(2, int(len(meaningful_topic_words) * 0.5)) and len(unique_new_words) < 4:
+        return {
+            "user_id": user_id,
+            "type": "repetition",
+            "message": f"🤖 AI Moderator: {name}, please do not repeat the discussion question. Provide your own original points and arguments!"
+        }
+
+    if len(topic_cleaned) > 8 and topic_cleaned in text_cleaned and len(words) < len(re.findall(r'\b\w+\b', topic)) + 6:
+        return {
+            "user_id": user_id,
+            "type": "repetition",
+            "message": f"🤖 AI Moderator: {name}, please do not repeat the question! Explain your stance with your own supporting points."
+        }
+
+    # 2. Filler words detection
     filler_words = ["uh", "umm", "um", "like", "actually", "basically"]
     fillers = [w for w in words if w in filler_words]
-    if len(fillers) >= 4:
-         return {
-             "user_id": user_id,
-             "type": "filler",
-             "message": f"🤖 AI Moderator: {name}, try to reduce filler words like '{fillers[-1]}' to improve fluency."
-         }
-         
+    if len(fillers) >= 3:
+        return {
+            "user_id": user_id,
+            "type": "filler",
+            "message": f"🤖 AI Moderator: {name}, try to reduce filler words like '{fillers[-1]}' to improve your fluency."
+        }
+
+    # 3. Repeated words / grammar check
     double_words = re.search(r'\b(\w+)\s+\1\b', text.lower())
     if double_words:
-         return {
-             "user_id": user_id,
-             "type": "grammar",
-             "message": f"🤖 AI Moderator: Try using shorter sentences and improve grammatical accuracy."
-         }
-         
+        return {
+            "user_id": user_id,
+            "type": "grammar",
+            "message": f"🤖 AI Moderator: {name}, pay attention to sentence structure and avoid repeating words like '{double_words.group(1)}'."
+        }
+
     return None
 
 
@@ -188,23 +209,52 @@ def calculate_live_metrics(text: str) -> dict:
     total_words = len(words)
     unique_words = len(set(words))
     
-    grammar = max(65, 90 - (total_words // 20) * 2)
-    filler_words = ["uh", "umm", "um", "like", "actually", "basically"]
+    # Grammar & Double words check
+    double_words = re.findall(r'\b(\w+)\s+\1\b', text.lower())
+    grammar = max(55, min(96, 92 - len(double_words) * 6 - (total_words // 25) * 2))
+    
+    # Fluency & Filler words
+    filler_words = ["uh", "umm", "um", "like", "actually", "basically", "you know"]
     fillers = [w for w in words if w in filler_words]
-    fluency = max(60, 85 - len(fillers) * 4)
-    confidence = min(92, 70 + (total_words // 10) * 3)
-    vocab = min(95, 60 + (unique_words * 2))
-    quality = min(95, 65 + (total_words // 15) * 4)
+    fluency = max(50, min(98, 94 - len(fillers) * 5))
+    
+    # Confidence & Vocabulary
+    confidence = max(55, min(95, 72 + (total_words // 8) * 3))
+    vocab = max(50, min(96, 62 + (unique_words * 2.2)))
+    quality = max(55, min(96, 68 + (total_words // 12) * 3.5))
     
     overall = round((grammar + fluency + confidence + vocab + quality) / 5, 1)
     
+    # Emotion detection
+    if any(w in text.lower() for w in ["strongly", "definitely", "certainly", "clearly", "proven"]):
+        emotion = "Confident"
+    elif any(w in text.lower() for w in ["however", "whereas", "statistics", "data", "reason", "impact"]):
+        emotion = "Analytical"
+    elif any(w in text.lower() for w in ["great", "excited", "important", "vital", "transform"]):
+        emotion = "Enthusiastic"
+    else:
+        emotion = "Thoughtful"
+
+    # Interaction & Speech Markers
+    text_lower = text.lower()
+    agreements = len(re.findall(r'\b(agree|support|second|building on|aligned)\b', text_lower))
+    disagreements = len(re.findall(r'\b(disagree|however|oppose|counter|alternative|different view)\b', text_lower))
+    questions_asked = text.count("?") + len(re.findall(r'\b(what do you think|how can we|why should|do you agree)\b', text_lower))
+    wpm = min(180, max(90, total_words * 4))
+
     return {
-        "grammar": grammar,
-        "fluency": fluency,
-        "confidence": confidence,
-        "vocabulary": vocab,
-        "quality": quality,
-        "overall": overall
+        "grammar": round(grammar, 1),
+        "fluency": round(fluency, 1),
+        "confidence": round(confidence, 1),
+        "vocabulary": round(vocab, 1),
+        "quality": round(quality, 1),
+        "overall": round(overall, 1),
+        "emotion": emotion,
+        "wpm": wpm,
+        "filler_count": len(fillers),
+        "agreements": agreements,
+        "disagreements": disagreements,
+        "questions_asked": questions_asked,
     }
 
 

@@ -501,10 +501,10 @@ export default function Home() {
           return sessions;
         });
       } catch (err: any) {
-        if (err.message && err.message.includes("timed out")) {
-          console.warn("Polling live sessions timed out (backend may be restarting)");
+        if (err.message && (err.message.includes("timed out") || err.message.includes("Failed to fetch") || err.message.includes("Reconnecting"))) {
+          console.warn("Polling live sessions skipped (backend reconnecting)");
         } else {
-          console.error("Failed to poll live sessions for notifications:", err);
+          console.warn("Background notification poll issue:", err?.message || err);
         }
       }
     }, 10000);
@@ -1226,6 +1226,16 @@ export default function Home() {
     try {
       const parts = await apiRequest<any[]>(`/gd-live/sessions/${sessionCode}/participants`, {}, token).catch(() => []);
       setGdLiveParticipants(parts);
+
+      const sessions = await apiRequest<any[]>("/gd-live/sessions", {}, token).catch(() => []);
+      const curSession = sessions.find((s: any) => s.session_code === sessionCode);
+      if (curSession) {
+        const isLive = curSession.status === "active";
+        setGdLiveIsLiveMeeting(isLive);
+        if (!isLive) {
+          setGdLiveRoomActive(false);
+        }
+      }
     } catch { }
   }
 
@@ -3937,15 +3947,23 @@ export default function Home() {
                   </div>
                   <div className="flex gap-2 items-center">
                     {gdLiveIsLiveMeeting ? (
-                      <span className="flex items-center gap-1.5 text-xs font-semibold text-red-500 px-3 h-11 rounded-xl surface-2 border border-red-500/40">
-                        <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse" /> LIVE — Meeting in progress
-                      </span>
-                    ) : gdLiveParticipants.length >= 2 ? (
-                      <Button onClick={() => hostGdLiveRoom(gdLiveAdminViewCode)} disabled={loading} className="btn-primary h-11 text-sm font-semibold">
-                        <Radio className="w-4 h-4 mr-2" /> Host a Meeting
-                      </Button>
+                      <div className="flex items-center gap-2">
+                        <span className="flex items-center gap-1.5 text-xs font-semibold text-red-500 px-3 h-11 rounded-xl surface-2 border border-red-500/40">
+                          <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse" /> LIVE — Meeting in progress
+                        </span>
+                        <Button onClick={() => hostGdLiveRoom(gdLiveAdminViewCode)} disabled={loading} variant="secondary" className="h-11 text-xs">
+                          Re-Host / Re-assign Teams
+                        </Button>
+                      </div>
                     ) : (
-                      <span className="text-xs text-muted-soft flex items-center gap-1"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Waiting for participants...</span>
+                      <Button 
+                        onClick={() => hostGdLiveRoom(gdLiveAdminViewCode)} 
+                        disabled={loading || gdLiveParticipants.length < 2} 
+                        className="btn-primary h-11 text-sm font-bold shadow-lg flex items-center gap-2 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-500 hover:to-teal-600"
+                      >
+                        <Radio className="w-4 h-4 animate-pulse" /> 
+                        {loading ? "Allocating Teams..." : gdLiveParticipants.length < 2 ? "Waiting for Participants (Need 2+)" : "Host a Meeting"}
+                      </Button>
                     )}
                     <Button onClick={() => loadGdLiveParticipants(gdLiveAdminViewCode)} disabled={loading} variant="secondary" className="text-sm">
                       <RefreshCw className="w-4 h-4 mr-1" /> Refresh

@@ -24,6 +24,10 @@ function sayImmediate(text: string) {
   enqueue(text, 99);
 }
 
+export function speak(text: string) {
+  sayImmediate(text);
+}
+
 /* ── 1. Login Success ── */
 export function announceLogin() {
   say("Welcome to MZ Orator. Your AI Group Discussion platform is ready.");

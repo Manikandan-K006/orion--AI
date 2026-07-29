@@ -328,6 +328,9 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}, tok
     if (err.name === "AbortError") {
       throw new Error(`Request timed out: ${path}`);
     }
+    if (err.name === "TypeError" && err.message === "Failed to fetch") {
+      throw new Error(`Server connection lost. Reconnecting... (${path})`);
+    }
     throw err;
   }
 }
