@@ -117,12 +117,12 @@ Write-Host ""
 # ────────────────────────────────────────────────────────────
 # Start processes
 # ────────────────────────────────────────────────────────────
-$backendCommand = "cd '$ScriptRoot'; & '$uvicornExe' backend.main:app --host 0.0.0.0 --port 8000"
+$backendCommand = "& '$uvicornExe' backend.main:app --host 0.0.0.0 --port 8000"
 $frontendCommand = "npm run dev"
 
 if (-not $NoBackend) {
     Write-Host "Starting Backend..." -ForegroundColor Magenta
-    Start-ProcessWindow -Title "SpeakSense Backend" -Command "cd '$BackendDir'; $backendCommand"
+    Start-ProcessWindow -Title "SpeakSense Backend" -Command "cd '$ScriptRoot'; $backendCommand"
     Start-Sleep -Seconds 2
 }
 
