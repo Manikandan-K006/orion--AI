@@ -1,5 +1,5 @@
 /** Default backend port */
-const DEFAULT_API_PORT = "8000";
+const DEFAULT_API_PORT = "8001";
 
 /**
  * Get the backend API base URL.
