@@ -98,12 +98,12 @@ if ($port8000) {
 # ────────────────────────────────────────────────────────────
 $lanIp = Get-LanIPv4
 
-# Write .env.local with 127.0.0.1 so localhost:3000 (host PC) works without PNA block
-# Students accessing via LAN IP get the URL rewritten at runtime by the browser
+# Write .env.local with localhost so the host-PC browser doesn't hit PNA restrictions.
+# Students accessing via LAN IP get the host rewritten at runtime in config.ts.
 $envLocalFile = Join-Path $FrontendDir ".env.local"
 $envProdFile  = Join-Path $FrontendDir ".env.production"
-"NEXT_PUBLIC_API_URL=http://127.0.0.1:8000" | Out-File -FilePath $envLocalFile -Encoding utf8 -Force
-"NEXT_PUBLIC_API_URL=http://127.0.0.1:8000" | Out-File -FilePath $envProdFile  -Encoding utf8 -Force
+"NEXT_PUBLIC_API_URL=http://localhost:8000" | Out-File -FilePath $envLocalFile -Encoding utf8 -Force
+"NEXT_PUBLIC_API_URL=http://localhost:8000" | Out-File -FilePath $envProdFile  -Encoding utf8 -Force
 
 Write-Header
 Write-Host "  Host PC:" -ForegroundColor Green
