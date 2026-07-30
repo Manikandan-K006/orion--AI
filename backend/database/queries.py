@@ -609,18 +609,18 @@ def decline_invitation(connection: MySQLConnection, invitation_id: int, user_id:
 
 def generate_live_code(connection: MySQLConnection) -> str:
     import random, string
-    while True:
+    max_attempts = 100
+    for _ in range(max_attempts):
         code = "".join(random.choices(string.digits, k=4))
         if not fetch_one(connection, "SELECT id FROM gd_live_sessions WHERE session_code = %s AND status != 'completed'", (code,)):
             return code
+    raise RuntimeError("Unable to generate unique 4-digit session code after 100 attempts")
 
 
 def create_live_session(connection: MySQLConnection, created_by: int) -> dict[str, Any]:
     code = generate_live_code(connection)
     execute(connection, "INSERT INTO gd_live_sessions (session_code, created_by) VALUES (%s, %s)", (code, created_by))
     topics = fetch_all(connection, "SELECT topic FROM gd_easy_topics ORDER BY RAND() LIMIT 21")
-    # Pre-create the single discussion team + topic now (no participants yet) so the
-    # host "Start" action only flips status to live → instant student redirect (<1s).
     create_live_team_with_topic(connection, code)
     return {"session_code": code, "topics_available": len(topics)}
 
@@ -629,7 +629,7 @@ def list_live_sessions(connection: MySQLConnection) -> list[dict[str, Any]]:
     return fetch_all(connection,
         "SELECT ls.*, (SELECT COUNT(*) FROM gd_live_participants WHERE session_code = ls.session_code) AS participant_count, "
         "(SELECT COUNT(*) FROM gd_live_teams WHERE session_code = ls.session_code) AS team_count "
-        "FROM gd_live_sessions ls ORDER BY ls.created_at DESC")
+        "FROM gd_live_sessions ls ORDER BY ls.created_at DESC LIMIT 50")
 
 
 def join_live_session(connection: MySQLConnection, session_code: str, user_id: int) -> str:

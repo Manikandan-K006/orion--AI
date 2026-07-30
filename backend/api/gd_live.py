@@ -35,13 +35,21 @@ def list_easy_topics(
 
 
 def _create_live_session_db(user_id: int, topic_id: int, team_size: int, department: str | None, year: str | None, section: str | None, speaking_time: int, student_ids: list[int] | None) -> dict:
-    from backend.database.db import get_connection
+    import time
+    import logging
+    logger = logging.getLogger("speaksense")
+    t0 = time.perf_counter()
+    from backend.database.db import get_connection, _return
     conn = get_connection()
+    t_conn = time.perf_counter()
     try:
         code = queries.generate_live_code(conn)
+        t_code = time.perf_counter()
+
         queries.execute(conn, 
             "INSERT INTO gd_live_sessions (session_code, status, total_participants, created_by, department, year, section, team_size, speaking_time) VALUES (%s, 'waiting', 0, %s, %s, %s, %s, %s, %s)", 
             (code, user_id, department, year, section, team_size, speaking_time))
+        t_sess = time.perf_counter()
         
         # Fetch the selected topic
         topic_row = queries.fetch_one(conn, "SELECT topic FROM gd_easy_topics WHERE id = %s", (topic_id,))
@@ -57,14 +65,15 @@ def _create_live_session_db(user_id: int, topic_id: int, team_size: int, departm
                 queries.execute(conn,
                     "INSERT INTO gd_live_participants (session_code, user_id) VALUES (%s, %s)",
                     (code, s_id))
-            
+        t_end = time.perf_counter()
+        
+        logger.info(f"[GD CREATE] session={code} total={(t_end-t0)*1000:.1f}ms (conn={(t_conn-t0)*1000:.1f}ms, code={(t_code-t_conn)*1000:.1f}ms, db={(t_end-t_code)*1000:.1f}ms)")
         return {"session_code": code, "topic": topic}
     except Exception as e:
-        import logging
-        logging.getLogger("speaksense.api").error(f"Failed to create session: {e}")
+        logger.error(f"[GD CREATE] Failed to create session: {e}")
         raise e
     finally:
-        conn.close()
+        _return(conn)
 
 
 @router.post("/sessions")
@@ -228,7 +237,7 @@ def _host_meeting_db_work(session_code: str):
         queries.set_live_session_status(conn, session_code, "active")
         return {"topic": topic, "members": members, "teams": teams}
     finally:
-        conn.close()
+        _return(conn)
 
 
 async def host_gd_live_meeting(
@@ -858,7 +867,7 @@ async def _save_evaluation_bg(
         except Exception as exc:
             logger.warning("save_live_evaluation background failed: %s", exc)
         finally:
-            conn.close()
+            _return(conn)
 
     _save_evaluation_bg._t0 = __import__("time").time()
     try:
