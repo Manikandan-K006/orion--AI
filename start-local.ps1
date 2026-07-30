@@ -82,12 +82,15 @@ if (-not (Test-Path $uvicornExe)) { throw "uvicorn not found at $uvicornExe. Run
 $port3000 = Test-PortInUse -Port 3000
 $port8000 = Test-PortInUse -Port 8000
 
-if ($port3000) { Write-Host "WARNING: Port 3000 is already in use." -ForegroundColor Yellow }
-if ($port8000) { Write-Host "WARNING: Port 8000 is already in use." -ForegroundColor Yellow }
-if ($port3000 -or $port8000) {
-    Write-Host ""
-    $answer = Read-Host "Port(s) occupied. Continue anyway? (y/N)"
-    if ($answer -ne "y") { Write-Host "Aborted."; exit 1 }
+if ($port3000) {
+    Write-Host "Port 3000 in use - killing old frontend process..." -ForegroundColor Yellow
+    Get-NetTCPConnection -LocalPort 3000 -ErrorAction SilentlyContinue | ForEach-Object {
+        Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue
+    }
+    Start-Sleep -Seconds 1
+}
+if ($port8000) {
+    Write-Host "Port 8000 in use - backend already running, will reuse it." -ForegroundColor Yellow
 }
 
 # ────────────────────────────────────────────────────────────
@@ -95,11 +98,12 @@ if ($port3000 -or $port8000) {
 # ────────────────────────────────────────────────────────────
 $lanIp = Get-LanIPv4
 
-# Dynamically write backend API URL using detected LAN IP address
+# Write .env.local with 127.0.0.1 so localhost:3000 (host PC) works without PNA block
+# Students accessing via LAN IP get the URL rewritten at runtime by the browser
 $envLocalFile = Join-Path $FrontendDir ".env.local"
 $envProdFile  = Join-Path $FrontendDir ".env.production"
-"NEXT_PUBLIC_API_URL=http://$lanIp`:8000" | Out-File -FilePath $envLocalFile -Encoding utf8 -Force
-"NEXT_PUBLIC_API_URL=http://$lanIp`:8000" | Out-File -FilePath $envProdFile  -Encoding utf8 -Force
+"NEXT_PUBLIC_API_URL=http://127.0.0.1:8000" | Out-File -FilePath $envLocalFile -Encoding utf8 -Force
+"NEXT_PUBLIC_API_URL=http://127.0.0.1:8000" | Out-File -FilePath $envProdFile  -Encoding utf8 -Force
 
 Write-Header
 Write-Host "  Host PC:" -ForegroundColor Green
