@@ -341,9 +341,7 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}, tok
     if (err.name === "TypeError" && (err.message === "Failed to fetch" || err.message?.includes("Failed to fetch"))) {
       const apiBase = getApiUrl();
       console.error(`[API] Network error: ${method} ${url}`);
-      console.error(`[API] Possible causes: backend not running, CORS block, or browser Private Network Access (PNA) restriction.`);
-      console.error(`[API] Backend target: ${apiBase} | Check: ${apiBase}/health`);
-      throw new Error(`Cannot reach backend at ${apiBase}. Check: (1) backend is running on port 8000, (2) no firewall blocking, (3) open ${apiBase}/docs in a new tab to verify.`);
+      throw new Error(`Backend unavailable at ${apiBase}. Is the server running?`);
     }
     throw err;
   }

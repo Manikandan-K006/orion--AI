@@ -77,7 +77,7 @@ app.add_middleware(
 # short-circuits OPTIONS without calling call_next, so BaseHTTPMiddleware cannot
 # intercept its response. This raw ASGI wrapper intercepts send() directly.
 class _PNAMiddleware:
-    """Inject Access-Control-Allow-Private-Network header on every response."""
+    """Inject Access-Control-Allow-Private-Network header on HTTP responses for browser PNA compatibility."""
     def __init__(self, app):
         self.app = app
 
@@ -88,9 +88,9 @@ class _PNAMiddleware:
 
         async def send_with_pna(message):
             if message["type"] == "http.response.start":
-                headers = dict(message.get("headers", []))
-                headers[b"access-control-allow-private-network"] = b"true"
-                message = {**message, "headers": list(headers.items())}
+                headers = list(message.get("headers", []))
+                headers.append((b"access-control-allow-private-network", b"true"))
+                message = {**message, "headers": headers}
             await send(message)
 
         await self.app(scope, receive, send_with_pna)
