@@ -39,7 +39,7 @@ function Test-PortInUse {
 
 function Start-ProcessWindow {
     param([string]$Title, [string]$Command)
-    $cmdText = "$host.UI.RawUI.WindowTitle = '$Title'; $Command"
+    $cmdText = "[Console]::Title = '$Title'; $Command"
     $bytes = [System.Text.Encoding]::Unicode.GetBytes($cmdText)
     $encoded = [System.Convert]::ToBase64String($bytes)
     $psi = New-Object System.Diagnostics.ProcessStartInfo
@@ -79,12 +79,12 @@ if (-not (Test-Path $uvicornExe)) { throw "uvicorn not found at $uvicornExe. Run
 # ────────────────────────────────────────────────────────────
 # Port checks
 # ────────────────────────────────────────────────────────────
-$port3001 = Test-PortInUse -Port 3001
+$port3000 = Test-PortInUse -Port 3000
 $port8001 = Test-PortInUse -Port 8001
 
-if ($port3001) { Write-Host "WARNING: Port 3001 is already in use." -ForegroundColor Yellow }
+if ($port3000) { Write-Host "WARNING: Port 3000 is already in use." -ForegroundColor Yellow }
 if ($port8001) { Write-Host "WARNING: Port 8001 is already in use." -ForegroundColor Yellow }
-if ($port3001 -or $port8001) {
+if ($port3000 -or $port8001) {
     Write-Host ""
     $answer = Read-Host "Port(s) occupied. Continue anyway? (y/N)"
     if ($answer -ne "y") { Write-Host "Aborted."; exit 1 }
@@ -98,8 +98,8 @@ $lanIp = Get-LanIPv4
 # Dynamically write backend API URL using detected LAN IP address
 $envLocalFile = Join-Path $FrontendDir ".env.local"
 $envProdFile  = Join-Path $FrontendDir ".env.production"
-"NEXT_PUBLIC_API_URL=http://${lanIp}:8000" | Out-File -FilePath $envLocalFile -Encoding utf8 -Force
-"NEXT_PUBLIC_API_URL=http://${lanIp}:8000" | Out-File -FilePath $envProdFile  -Encoding utf8 -Force
+"NEXT_PUBLIC_API_URL=http://${lanIp}:8001" | Out-File -FilePath $envLocalFile -Encoding utf8 -Force
+"NEXT_PUBLIC_API_URL=http://${lanIp}:8001" | Out-File -FilePath $envProdFile  -Encoding utf8 -Force
 
 Write-Header
 Write-Host "  Host PC:" -ForegroundColor Green
