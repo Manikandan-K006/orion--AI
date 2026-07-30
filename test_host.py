@@ -1,8 +1,8 @@
-﻿import os
+import os
 import requests
 import mysql.connector
 
-api_url = os.environ.get("API_URL", "http://127.0.0.1:8001")
+api_url = os.environ.get("API_URL", "http://127.0.0.1:8000")
 db_host = os.environ.get("DB_HOST", "127.0.0.1")
 db_user = os.environ.get("DB_USER", "root")
 db_password = os.environ.get("DB_PASSWORD", "")
