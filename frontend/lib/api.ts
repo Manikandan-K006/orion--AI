@@ -297,10 +297,16 @@ export async function getGdLiveState(sessionCode: string, token: string) {
 
 export async function apiRequest<T>(path: string, options: RequestInit = {}, token?: string): Promise<T> {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 30000); // 30-second max timeout
+  const timeoutId = setTimeout(() => controller.abort(), 30000);
+  const url = `${getApiUrl()}${path}`;
+  const method = options.method || "GET";
+
+  if (typeof window !== "undefined") {
+    console.log(`[API] ${method} ${url}`);
+  }
 
   try {
-    const response = await fetch(`${getApiUrl()}${path}`, {
+    const response = await fetch(url, {
       ...options,
       signal: controller.signal,
       headers: {
@@ -311,6 +317,10 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}, tok
     });
 
     clearTimeout(timeoutId);
+
+    if (typeof window !== "undefined") {
+      console.log(`[API] ${method} ${url} -> ${response.status}`);
+    }
 
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
@@ -326,10 +336,11 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}, tok
   } catch (err: any) {
     clearTimeout(timeoutId);
     if (err.name === "AbortError") {
-      throw new Error(`Request timed out: ${path}`);
+      throw new Error(`Request timed out: ${method} ${path}`);
     }
     if (err.name === "TypeError" && err.message === "Failed to fetch") {
-      throw new Error(`Server connection lost. Reconnecting... (${path})`);
+      console.error(`[API] Network error: ${method} ${url} - backend unreachable`);
+      throw new Error(`Backend unavailable at ${getApiUrl()}. Is the server running?`);
     }
     throw err;
   }
