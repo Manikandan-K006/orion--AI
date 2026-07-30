@@ -1736,6 +1736,39 @@ export default function Home() {
         </div>
 
         <div className="p-4 md:p-6 max-w-6xl mx-auto animate-fade-up">
+          {gdLiveCreatedCode && (
+            <div className="mb-6 p-6 rounded-2xl bg-gradient-to-r from-indigo-500/20 via-purple-500/20 to-pink-500/20 border-2 border-indigo-500/40 backdrop-blur-xl flex flex-col md:flex-row items-center justify-between gap-4 animate-fade-up shadow-xl">
+              <div className="flex items-center gap-4">
+                <div className="w-14 h-14 rounded-2xl bg-indigo-600 text-white flex items-center justify-center font-black text-2xl shadow-lg shrink-0">
+                  <Sparkles className="w-7 h-7" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-extrabold text-heading">GD Session Created Successfully!</h3>
+                  <p className="text-xs text-muted-soft">Share this 4-digit room code with students to let them join:</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <code className="text-3xl font-black font-mono tracking-widest text-indigo-500 dark:text-indigo-400 bg-white/80 dark:bg-slate-900/80 px-6 py-2 rounded-xl border-2 border-indigo-500/30 shadow-inner select-all">
+                  {gdLiveCreatedCode}
+                </code>
+                <Button
+                  onClick={() => {
+                    navigator.clipboard.writeText(gdLiveCreatedCode);
+                    setSuccess(`Code ${gdLiveCreatedCode} copied to clipboard!`);
+                  }}
+                  className="btn-primary h-12 px-4 flex items-center gap-2"
+                >
+                  <Copy className="w-4 h-4" /> Copy Code
+                </Button>
+                <button
+                  onClick={() => setGdLiveCreatedCode("")}
+                  className="p-2 text-muted-soft hover:text-heading rounded-lg"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+          )}
           {(success || message) && (
             <div className={`mb-4 flex items-center gap-2 rounded-xl p-4 text-sm transition-colors duration-500 ${success ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300 border border-emerald-500/30" : "bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-300 border border-red-500/30"}`}>
               {success ? <Zap className="h-4 w-4 shrink-0" /> : <AlertCircle className="h-4 w-4 shrink-0" />}
