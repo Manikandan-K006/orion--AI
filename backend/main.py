@@ -62,6 +62,7 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:3000",
         "http://127.0.0.1:3000",
+        "http://10.201.160.151:3000",
         "http://10.206.99.142:3000",
     ],
     allow_origin_regex=r"https?://.*",

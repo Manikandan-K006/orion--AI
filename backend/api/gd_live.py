@@ -158,6 +158,11 @@ def join_live_session(
             detail=f"Academic Year mismatch. This session is for '{session.get('year')}', but you are in '{profile.get('year')}'."
         )
     if sess_sec and sess_sec != stud_sec:
+        if not stud_sec:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Your profile is missing a Section. Please update your profile before joining a session restricted to Section '{session.get('section')}'."
+            )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, 
             detail=f"Section mismatch. This session is for Section '{session.get('section')}', but you are in Section '{profile.get('section')}'."
