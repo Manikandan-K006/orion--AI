@@ -367,7 +367,19 @@ export default function GdLiveRoom({
         console.warn("Microphone access requires HTTPS or localhost (or chrome://flags/#unsafely-treat-insecure-origin-as-secure).");
         return;
       }
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      } catch (e: any) {
+        if (e.name === "NotFoundError" || e.message.includes("not found")) {
+          console.warn("No microphone found. Using a silent dummy audio stream for testing.");
+          const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+          const dest = ctx.createMediaStreamDestination();
+          stream = dest.stream;
+        } else {
+          throw e;
+        }
+      }
       audioStreamRef.current = stream;
       const ctx = new AudioContext();
       audioContextRef.current = ctx;
