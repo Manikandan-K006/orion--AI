@@ -1105,7 +1105,8 @@ export default function Home() {
           team_size: teamSize || 4,
           department: selectedDept === "ALL" ? null : selectedDept,
           year: selectedYear === "ALL" ? null : selectedYear,
-          section: selectedSection === "ALL" || !selectedSection ? null : selectedSection
+          section: selectedSection === "ALL" || !selectedSection ? null : selectedSection,
+          student_ids: selectedStudentIds.length > 0 ? selectedStudentIds : null
         })
       }, token);
       setGdLiveCreatedCode(res.session_code);
