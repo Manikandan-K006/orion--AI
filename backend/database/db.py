@@ -75,10 +75,8 @@ def get_connection() -> MySQLConnection:
     try:
         conn = pool.get_nowait()
     except Empty:
-        # Pool exhausted — open a fresh one-off connection
-        return _open()
+        conn = _open()
 
-    # Validate the connection is still alive before handing it to the caller
     if not _is_alive(conn):
         logger.warning("Stale pooled connection detected — reconnecting")
         _safe_close(conn)
@@ -87,6 +85,12 @@ def get_connection() -> MySQLConnection:
         except Exception as exc:
             logger.error("Failed to open replacement connection: %s", exc)
             raise
+
+    # Safety wrapper: if caller invokes conn.close(), route to _return(conn)
+    # so connection is returned to pool instead of being destroyed
+    def _pooled_close():
+        _return(conn)
+    conn.close = _pooled_close
     return conn
 
 
