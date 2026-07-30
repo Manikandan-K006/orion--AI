@@ -249,4 +249,5 @@ def import_students_from_excel(filepath: str) -> dict:
         conn.rollback()
         raise
     finally:
-        conn.close()
+        from backend.database.db import _return
+        _return(conn)
