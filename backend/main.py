@@ -4,7 +4,6 @@ import sys
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
-from starlette.middleware.base import BaseHTTPMiddleware
 
 from backend.api import auth, gd, gd_live, interviews, progress, questions, reports, solo
 from backend.realtime import gd_ws
