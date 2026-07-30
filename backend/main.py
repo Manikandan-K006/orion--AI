@@ -57,14 +57,15 @@ class IPFilterMiddleware(BaseHTTPMiddleware):
 
 app.add_middleware(IPFilterMiddleware)
 
-# Private Network Access (PNA) middleware - Chrome/Edge require this header when
-# a web page (even on localhost) makes requests to localhost/127.0.0.1 backends.
-# Without it, the browser blocks the preflight and all API calls silently fail.
+# Private Network Access (PNA) middleware - Chrome/Edge send this header when
+# a page on any origin (including localhost) tries to access localhost/127.0.0.1.
+# Without responding with Access-Control-Allow-Private-Network: true, the browser
+# silently blocks the request before it even reaches the server, causing "Failed to fetch".
 class PrivateNetworkAccessMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         response = await call_next(request)
-        if request.headers.get("access-control-request-private-network"):
-            response.headers["access-control-allow-private-network"] = "true"
+        # Always add the PNA allow header so browsers don't block loopback requests
+        response.headers["access-control-allow-private-network"] = "true"
         return response
 
 app.add_middleware(PrivateNetworkAccessMiddleware)
