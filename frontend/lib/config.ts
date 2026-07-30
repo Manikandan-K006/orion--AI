@@ -5,17 +5,17 @@ const DEFAULT_API_URL = "http://127.0.0.1:8000";
  */
 export function getApiUrl(): string {
   let url = process.env.NEXT_PUBLIC_API_URL || DEFAULT_API_URL;
-  // When a student opens the frontend via LAN IP (e.g. http://10.x.x.x:3000),
+  // When a student/admin opens the frontend via LAN IP (e.g. http://10.x.x.x:3000),
   // rewrite the API base URL to use the same hostname so the backend is reachable.
-  // This avoids Private Network Access (PNA) blocks that occur when mixing
-  // localhost frontend with a LAN-IP backend.
+  // This is needed because 127.0.0.1/localhost only resolves on the server machine,
+  // not on the student's phone/laptop connecting over LAN.
   if (typeof window !== "undefined") {
     const hostname = window.location.hostname;
-    if (
+    const isLanAccess =
       hostname !== "localhost" &&
-      hostname !== "127.0.0.1" &&
-      (url.includes("127.0.0.1") || url.includes("localhost"))
-    ) {
+      hostname !== "127.0.0.1";
+    if (isLanAccess) {
+      // Replace the loopback address with the actual LAN hostname
       url = url.replace(/127\.0\.0\.1|localhost/, hostname);
     }
   }
