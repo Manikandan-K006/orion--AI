@@ -57,19 +57,6 @@ class IPFilterMiddleware(BaseHTTPMiddleware):
 
 app.add_middleware(IPFilterMiddleware)
 
-# Private Network Access (PNA) middleware - Chrome/Edge send this header when
-# a page on any origin (including localhost) tries to access localhost/127.0.0.1.
-# Without responding with Access-Control-Allow-Private-Network: true, the browser
-# silently blocks the request before it even reaches the server, causing "Failed to fetch".
-class PrivateNetworkAccessMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next):
-        response = await call_next(request)
-        # Always add the PNA allow header so browsers don't block loopback requests
-        response.headers["access-control-allow-private-network"] = "true"
-        return response
-
-app.add_middleware(PrivateNetworkAccessMiddleware)
-
 app.add_middleware(
     CORSMiddleware,
     # Explicit localhost origins for development (host PC access)
@@ -83,6 +70,34 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# Raw ASGI middleware for Private Network Access (PNA) — must be added LAST so it
+# wraps outermost around CORSMiddleware. CORSMiddleware is a raw ASGI handler that
+# short-circuits OPTIONS without calling call_next, so BaseHTTPMiddleware cannot
+# intercept its response. This raw ASGI wrapper intercepts send() directly.
+class _PNAMiddleware:
+    """Inject Access-Control-Allow-Private-Network header on every response."""
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        async def send_with_pna(message):
+            if message["type"] == "http.response.start":
+                headers = dict(message.get("headers", []))
+                headers[b"access-control-allow-private-network"] = b"true"
+                message = {**message, "headers": list(headers.items())}
+            await send(message)
+
+        await self.app(scope, receive, send_with_pna)
+
+
+app.add_middleware(_PNAMiddleware)
+
 
 
 @app.exception_handler(Exception)
