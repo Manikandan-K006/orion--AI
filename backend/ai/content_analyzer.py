@@ -104,7 +104,7 @@ def analyze_content_and_repetition(transcript: str, topic: str = "") -> dict[str
 
     other_transcripts = []
     try:
-        from backend.database.db import get_connection
+        from backend.database.db import get_connection, _return
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
         cursor.execute("SELECT transcript FROM gd_live_evaluations WHERE evaluated_at >= NOW() - INTERVAL 4 HOUR")
@@ -113,7 +113,7 @@ def analyze_content_and_repetition(transcript: str, topic: str = "") -> dict[str
             if t and t.lower() != text.lower():
                 other_transcripts.append(t)
         cursor.close()
-        conn.close()
+        _return(conn)
     except Exception:
         pass
 
