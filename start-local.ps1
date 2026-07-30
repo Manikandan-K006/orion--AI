@@ -98,8 +98,8 @@ $lanIp = Get-LanIPv4
 # Dynamically write backend API URL using detected LAN IP address
 $envLocalFile = Join-Path $FrontendDir ".env.local"
 $envProdFile  = Join-Path $FrontendDir ".env.production"
-"NEXT_PUBLIC_API_URL=http://127.0.0.1:8000" | Out-File -FilePath $envLocalFile -Encoding utf8 -Force
-"NEXT_PUBLIC_API_URL=http://127.0.0.1:8000" | Out-File -FilePath $envProdFile  -Encoding utf8 -Force
+"NEXT_PUBLIC_API_URL=http://$lanIp`:8000" | Out-File -FilePath $envLocalFile -Encoding utf8 -Force
+"NEXT_PUBLIC_API_URL=http://$lanIp`:8000" | Out-File -FilePath $envProdFile  -Encoding utf8 -Force
 
 Write-Header
 Write-Host "  Host PC:" -ForegroundColor Green
@@ -109,10 +109,10 @@ Write-Host "  Student devices:" -ForegroundColor Green
 Write-Host "    http://$lanIp`:3000" -ForegroundColor White
 Write-Host ""
 Write-Host "  Backend:" -ForegroundColor Green
-Write-Host "    http://127.0.0.1:8000" -ForegroundColor White
+Write-Host "    http://$lanIp`:8000" -ForegroundColor White
 Write-Host ""
 Write-Host "  API Docs:" -ForegroundColor Green
-Write-Host "    http://127.0.0.1:8000/docs" -ForegroundColor White
+Write-Host "    http://$lanIp`:8000/docs" -ForegroundColor White
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
