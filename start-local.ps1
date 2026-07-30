@@ -80,11 +80,11 @@ if (-not (Test-Path $uvicornExe)) { throw "uvicorn not found at $uvicornExe. Run
 # Port checks
 # ────────────────────────────────────────────────────────────
 $port3000 = Test-PortInUse -Port 3000
-$port8001 = Test-PortInUse -Port 8001
+$port8000 = Test-PortInUse -Port 8000
 
 if ($port3000) { Write-Host "WARNING: Port 3000 is already in use." -ForegroundColor Yellow }
-if ($port8001) { Write-Host "WARNING: Port 8001 is already in use." -ForegroundColor Yellow }
-if ($port3000 -or $port8001) {
+if ($port8000) { Write-Host "WARNING: Port 8000 is already in use." -ForegroundColor Yellow }
+if ($port3000 -or $port8000) {
     Write-Host ""
     $answer = Read-Host "Port(s) occupied. Continue anyway? (y/N)"
     if ($answer -ne "y") { Write-Host "Aborted."; exit 1 }
@@ -98,8 +98,8 @@ $lanIp = Get-LanIPv4
 # Dynamically write backend API URL using detected LAN IP address
 $envLocalFile = Join-Path $FrontendDir ".env.local"
 $envProdFile  = Join-Path $FrontendDir ".env.production"
-"NEXT_PUBLIC_API_URL=http://${lanIp}:8001" | Out-File -FilePath $envLocalFile -Encoding utf8 -Force
-"NEXT_PUBLIC_API_URL=http://${lanIp}:8001" | Out-File -FilePath $envProdFile  -Encoding utf8 -Force
+"NEXT_PUBLIC_API_URL=http://127.0.0.1:8000" | Out-File -FilePath $envLocalFile -Encoding utf8 -Force
+"NEXT_PUBLIC_API_URL=http://127.0.0.1:8000" | Out-File -FilePath $envProdFile  -Encoding utf8 -Force
 
 Write-Header
 Write-Host "  Host PC:" -ForegroundColor Green
@@ -109,10 +109,10 @@ Write-Host "  Student devices:" -ForegroundColor Green
 Write-Host "    http://$lanIp`:3000" -ForegroundColor White
 Write-Host ""
 Write-Host "  Backend:" -ForegroundColor Green
-Write-Host "    http://$lanIp`:8001" -ForegroundColor White
+Write-Host "    http://127.0.0.1:8000" -ForegroundColor White
 Write-Host ""
 Write-Host "  API Docs:" -ForegroundColor Green
-Write-Host "    http://$lanIp`:8001/docs" -ForegroundColor White
+Write-Host "    http://127.0.0.1:8000/docs" -ForegroundColor White
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
@@ -120,7 +120,7 @@ Write-Host ""
 # ────────────────────────────────────────────────────────────
 # Start processes
 # ────────────────────────────────────────────────────────────
-$backendCommand = "& '$uvicornExe' backend.main:app --host 0.0.0.0 --port 8001"
+$backendCommand = "& '$uvicornExe' backend.main:app --host 0.0.0.0 --port 8000"
 $frontendCommand = "npm run dev"
 
 if (-not $NoBackend) {
