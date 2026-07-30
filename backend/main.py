@@ -57,6 +57,18 @@ class IPFilterMiddleware(BaseHTTPMiddleware):
 
 app.add_middleware(IPFilterMiddleware)
 
+# Private Network Access (PNA) middleware - Chrome/Edge require this header when
+# a web page (even on localhost) makes requests to localhost/127.0.0.1 backends.
+# Without it, the browser blocks the preflight and all API calls silently fail.
+class PrivateNetworkAccessMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        if request.headers.get("access-control-request-private-network"):
+            response.headers["access-control-allow-private-network"] = "true"
+        return response
+
+app.add_middleware(PrivateNetworkAccessMiddleware)
+
 app.add_middleware(
     CORSMiddleware,
     # Explicit localhost origins for development (host PC access)
