@@ -17,3 +17,5 @@ backend/venv/
 backend/venv_safe/
 database/data/
 database/data_safe/
+mysql_data/
+
