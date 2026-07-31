@@ -102,8 +102,8 @@ $lanIp = Get-LanIPv4
 # Students accessing via LAN IP get the host rewritten at runtime in config.ts.
 $envLocalFile = Join-Path $FrontendDir ".env.local"
 $envProdFile  = Join-Path $FrontendDir ".env.production"
-"NEXT_PUBLIC_API_URL=http://localhost:8000" | Out-File -FilePath $envLocalFile -Encoding utf8 -Force
-"NEXT_PUBLIC_API_URL=http://localhost:8000" | Out-File -FilePath $envProdFile  -Encoding utf8 -Force
+"NEXT_PUBLIC_API_URL=http://127.0.0.1:8000" | Out-File -FilePath $envLocalFile -Encoding utf8 -Force
+"NEXT_PUBLIC_API_URL=http://127.0.0.1:8000" | Out-File -FilePath $envProdFile  -Encoding utf8 -Force
 
 Write-Header
 Write-Host "  Host PC:" -ForegroundColor Green
