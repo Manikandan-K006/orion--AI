@@ -2462,11 +2462,11 @@ export default function Home() {
                         <h3 className="text-base font-bold text-heading mb-1.5 flex items-center gap-2">
                           <Zap className="w-4 h-4 text-indigo-500 animate-bounce" /> Join GD Live Session
                         </h3>
-                        <p className="text-xs text-muted-soft mb-4">Enter the 4-digit code provided by your administrator to join the live session.</p>
+                        <p className="text-xs text-muted-soft mb-4">Enter the 6-digit code provided by your administrator to join the live session.</p>
                         <div className="flex gap-2">
                           <Input
-                            placeholder="e.g. A3C9"
-                            maxLength={4}
+                            placeholder="e.g. 458921"
+                            maxLength={6}
                             value={gdLiveCode}
                             onChange={(e) => setGdLiveCode(e.target.value)}
                             className="inp flex-1 font-mono uppercase tracking-wider h-11 text-center text-lg focus:ring-indigo-500/20 focus:border-indigo-500/50"
@@ -3435,16 +3435,16 @@ export default function Home() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="card p-6">
                 <h2 className="text-lg font-semibold text-heading mb-4 flex items-center gap-2"><Zap className="w-5 h-5 text-amber-400" /> Join GD Session</h2>
-                <p className="text-xs text-muted-soft mb-4">Enter the 4-digit session code shared by your admin to join an anonymous group discussion.</p>
+                <p className="text-xs text-muted-soft mb-4">Enter the 6-digit session code shared by your admin to join an anonymous group discussion.</p>
                 <div className="space-y-3">
                   <Input
-                    placeholder="Enter 4-digit code (e.g. 1234)"
+                    placeholder="Enter 6-digit OTP code (e.g. 458921)"
                     value={gdLiveCode}
-                    onChange={(e) => setGdLiveCode(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                    onChange={(e) => setGdLiveCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
                     className="inp font-mono text-2xl tracking-[0.5em] text-center"
-                    maxLength={4}
+                    maxLength={6}
                   />
-                  <Button onClick={() => setGdRulesOpen(true)} disabled={loading || gdLiveCode.length !== 4} className="w-full bg-gradient-to-r from-amber-500 to-orange-600 border-0 h-12 text-lg">
+                  <Button onClick={() => setGdRulesOpen(true)} disabled={loading || gdLiveCode.length !== 6} className="w-full bg-gradient-to-r from-amber-500 to-orange-600 border-0 h-12 text-lg">
                     {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Users className="h-5 w-5" />} Join Session
                   </Button>
                 </div>

@@ -611,10 +611,10 @@ def generate_live_code(connection: MySQLConnection) -> str:
     import random, string
     max_attempts = 100
     for _ in range(max_attempts):
-        code = "".join(random.choices(string.digits, k=4))
+        code = "".join(random.choices(string.digits, k=6))
         if not fetch_one(connection, "SELECT id FROM gd_live_sessions WHERE session_code = %s AND status != 'completed'", (code,)):
             return code
-    raise RuntimeError("Unable to generate unique 4-digit session code after 100 attempts")
+    raise RuntimeError("Unable to generate unique 6-digit session code after 100 attempts")
 
 
 def create_live_session(connection: MySQLConnection, created_by: int) -> dict[str, Any]:
@@ -636,7 +636,7 @@ def join_live_session(connection: MySQLConnection, session_code: str, user_id: i
     existing = fetch_one(connection, "SELECT id, status FROM gd_live_participants WHERE session_code = %s AND user_id = %s",
                          (session_code, user_id))
     if existing:
-        if existing.get("status") == "invited":
+        if existing.get("status") in ("invited", None, ""):
             execute(connection, "UPDATE gd_live_participants SET status = 'joined' WHERE session_code = %s AND user_id = %s",
                     (session_code, user_id))
             execute(connection, "UPDATE gd_live_sessions SET total_participants = total_participants + 1 WHERE session_code = %s",
@@ -653,7 +653,7 @@ def join_live_session(connection: MySQLConnection, session_code: str, user_id: i
                         (session_code,))
     if not session:
         return "invalid"
-    execute(connection, "INSERT IGNORE INTO gd_live_participants (session_code, user_id) VALUES (%s, %s)",
+    execute(connection, "INSERT IGNORE INTO gd_live_participants (session_code, user_id, status) VALUES (%s, %s, 'joined')",
             (session_code, user_id))
     execute(connection, "UPDATE gd_live_sessions SET total_participants = total_participants + 1 WHERE session_code = %s",
             (session_code,))

@@ -63,7 +63,7 @@ def _create_live_session_db(user_id: int, topic_id: int, team_size: int, departm
         if student_ids:
             for s_id in student_ids:
                 queries.execute(conn,
-                    "INSERT INTO gd_live_participants (session_code, user_id) VALUES (%s, %s)",
+                    "INSERT INTO gd_live_participants (session_code, user_id, status) VALUES (%s, %s, 'invited')",
                     (code, s_id))
         t_end = time.perf_counter()
         

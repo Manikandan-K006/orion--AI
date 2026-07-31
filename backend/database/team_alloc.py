@@ -62,7 +62,7 @@ def assign_live_teams(
         "SELECT lp.*, u.name, u.register_number, sp.department, sp.year, sp.section FROM gd_live_participants lp "
         "JOIN users u ON lp.user_id = u.id "
         "LEFT JOIN student_profile sp ON sp.user_id = u.id "
-        "WHERE lp.session_code = %s ORDER BY lp.id",
+        "WHERE lp.session_code = %s AND lp.status = 'joined' ORDER BY lp.id",
         (session_code,))
     if not participants:
         return []
