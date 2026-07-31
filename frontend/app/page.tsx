@@ -540,6 +540,12 @@ export default function Home() {
     return () => clearInterval(interval);
   }, [token, user, view]);
 
+  // Derived states for live room participants
+  const joinedParticipants = gdLiveParticipants.filter((p: any) => p.status !== "invited");
+  const curSession = gdLiveSessions.find((s: any) => s.session_code === gdLiveAdminViewCode);
+  const totalAssignedCount = curSession?.total_assigned_count || 0;
+  const notJoinedCount = Math.max(0, totalAssignedCount - joinedParticipants.length);
+
   // Track WebSocket connection status for student waiting screen
   const gdLiveWsHook = useGdLiveWs(
     view === "gd-live-session" && gdLiveSession ? gdLiveSession.session_code : null,
@@ -567,6 +573,16 @@ export default function Home() {
           voice.announceParticipantJoined();
         }
         setGdLiveParticipants(newParts);
+        if (msg.payload.counts) {
+          const { total_assigned, joined, not_joined } = msg.payload.counts;
+          setGdLiveSessions((prev) => 
+            prev.map((s) => 
+              s.session_code === gdLiveAdminViewCode 
+                ? { ...s, total_assigned_count: total_assigned, joined_count: joined, not_joined_count: not_joined }
+                : s
+            )
+          );
+        }
       } else if (msg.event === "TEAMS_ASSIGNED" && Array.isArray(msg.payload?.teams)) {
         setGdLiveTeams(msg.payload.teams);
         voice.announceTeamsAssigned();
@@ -3988,8 +4004,15 @@ export default function Home() {
               <div className="card p-6">
                 <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
                   <div>
-                    <h2 className="text-xl font-bold text-heading flex items-center gap-2"><Users className="w-6 h-6 text-amber-400" /> Session Participants</h2>
-                    <p className="text-sm text-muted-soft mt-1">Code <code className="font-mono text-amber-300">{gdLiveAdminViewCode}</code> · {gdLiveParticipants.length} participant(s)</p>
+                    <h2 className="text-xl font-bold text-heading flex items-center gap-2"><Users className="w-6 h-6 text-amber-400" /> Waiting Room</h2>
+                    <div className="flex flex-col sm:flex-row gap-x-4 gap-y-1 mt-1.5 text-xs text-muted-soft">
+                      <p>OTP : <code className="font-mono font-bold text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded text-sm tracking-wider">{gdLiveAdminViewCode}</code></p>
+                      <p className="flex items-center gap-3">
+                        <span className="text-emerald-400 font-bold">Joined : {joinedParticipants.length}</span>
+                        <span className="text-slate-600">•</span>
+                        <span className="text-slate-400 font-bold">Not Joined : {notJoinedCount}</span>
+                      </p>
+                    </div>
                   </div>
                   <div className="flex gap-2 items-center">
                     {gdLiveIsLiveMeeting ? (
@@ -4004,11 +4027,11 @@ export default function Home() {
                     ) : (
                       <Button 
                         onClick={() => hostGdLiveRoom(gdLiveAdminViewCode)} 
-                        disabled={loading || gdLiveParticipants.length < 2} 
+                        disabled={loading || joinedParticipants.length < 2} 
                         className="btn-primary h-11 text-sm font-bold shadow-lg flex items-center gap-2 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-500 hover:to-teal-600"
                       >
                         <Radio className="w-4 h-4 animate-pulse" /> 
-                        {loading ? "Allocating Teams..." : gdLiveParticipants.length < 2 ? "Waiting for Participants (Need 2+)" : "Host a Meeting"}
+                        {loading ? "Allocating Teams..." : joinedParticipants.length < 2 ? "Waiting for Participants (Need 2+)" : "Start GD"}
                       </Button>
                     )}
                     <Button onClick={() => loadGdLiveParticipants(gdLiveAdminViewCode)} disabled={loading} variant="secondary" className="text-sm">
@@ -4020,14 +4043,15 @@ export default function Home() {
                   </div>
                 </div>
 
-                {gdLiveParticipants.length === 0 ? (
+                {joinedParticipants.length === 0 ? (
                   <div className="text-center py-12">
-                    <p className="text-muted-soft text-sm">No participants have joined this session yet.</p>
+                    <p className="text-muted-soft text-sm font-semibold">No participants have joined yet.</p>
+                    <p className="text-muted-soft text-xs mt-1">Waiting for students to enter the OTP...</p>
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {gdLiveParticipants.map((p: any) => (
-                      <div key={p.id} className="card p-5 hover:card-hover">
+                    {joinedParticipants.map((p: any) => (
+                      <div key={p.user_id} className="card p-5 hover:card-hover">
                         <div className="flex items-center justify-between mb-3">
                           <div className="flex items-center gap-3">
                             <div className="w-11 h-11 rounded-full bg-gradient-to-br from-purple-500 to-blue-600 flex items-center justify-center text-white font-bold text-sm shrink-0">
@@ -4038,21 +4062,29 @@ export default function Home() {
                               <p className="text-xs text-muted-soft truncate">{p.department || "-"} · {p.year || "-"}</p>
                             </div>
                           </div>
-                          <span className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${p.status === "completed" ? "bg-emerald-500/20 text-emerald-300" : p.status === "assigned" ? "bg-blue-500/20 text-blue-300" : "bg-amber-500/20 text-amber-300"}`}>{p.status}</span>
+                          <span className={`text-xs px-2.5 py-0.5 rounded-full shrink-0 font-bold ${
+                            p.status === "completed" 
+                              ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30" 
+                              : p.status === "assigned" 
+                              ? "bg-indigo-500/20 text-indigo-300 border border-indigo-500/30" 
+                              : "bg-teal-500/20 text-teal-300 border border-teal-500/30"
+                          }`}>
+                            {p.status === "joined" ? "Joined" : p.status === "assigned" ? "Assigned" : p.status}
+                          </span>
                         </div>
                         <div className="space-y-2 text-sm">
-                          <div className="flex items-center justify-between">
-                            <span className="text-muted-soft">Register No.</span>
-                            <span className="text-heading font-mono">{p.register_number}</span>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-muted-soft">Team</span>
-                            <span className="text-amber-300 font-mono">{p.team_number || "-"}</span>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-muted-soft">Label</span>
-                            <span className="text-purple-300">{p.anonymous_label || "-"}</span>
-                          </div>
+                           <div className="flex items-center justify-between">
+                             <span className="text-muted-soft">Register No.</span>
+                             <span className="text-heading font-mono">{p.register_number}</span>
+                           </div>
+                           <div className="flex items-center justify-between">
+                             <span className="text-muted-soft">Team</span>
+                             <span className="text-amber-300 font-mono">{p.team_number || "-"}</span>
+                           </div>
+                           <div className="flex items-center justify-between">
+                             <span className="text-muted-soft">Label</span>
+                             <span className="text-purple-300">{p.anonymous_label || "-"}</span>
+                           </div>
                         </div>
                       </div>
                     ))}

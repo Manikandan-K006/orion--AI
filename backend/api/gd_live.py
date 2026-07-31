@@ -204,7 +204,7 @@ def get_live_participants(
 def _host_meeting_db_work(session_code: str):
     """All blocking DB work for hosting, run in a thread so the event loop stays
     free and the WebSocket broadcast reaches students without delay."""
-    from backend.database.db import get_connection
+    from backend.database.db import get_connection, _return
     conn = get_connection()
     try:
         session = queries.get_live_session_by_code(conn, session_code)
@@ -212,7 +212,12 @@ def _host_meeting_db_work(session_code: str):
             return {"error": "not_found"}
         if session["status"] == "completed":
             return {"error": "completed"}
+        from backend.realtime.gd_ws import manager
+        room_clients = manager._rooms.get(session_code, {})
+        active_user_ids = list(set(ci.user_id for ci in room_clients.values() if ci.role == "student"))
+
         participants = queries.get_live_participants(conn, session_code)
+        participants = [p for p in participants if p["user_id"] in active_user_ids]
         if len(participants) < 2:
             return {"error": "too_few"}
         topic = queries.get_live_team_topic(conn, session_code)
@@ -222,10 +227,11 @@ def _host_meeting_db_work(session_code: str):
         # ── Automatic team allocation: shuffle everyone and pack into teams of
         #    at most 3 (everyone assigned, none left out). Persists team_number
         #    on each participant and (re)creates one row per team. ──
-        teams = team_alloc.assign_live_teams(conn, session_code, max_team_size=3)
+        teams = team_alloc.assign_live_teams(conn, session_code, max_team_size=3, active_user_ids=active_user_ids)
         # Refresh member snapshot so team_number/labels are included for the
         # student redirect payload.
         participants = queries.get_live_participants(conn, session_code)
+        participants = [p for p in participants if p["user_id"] in active_user_ids]
         members = [{"user_id": p["user_id"], "name": p["name"], "label": p["anonymous_label"],
                     "team_number": p.get("team_number"), "department": p.get("department"),
                     "year": p.get("year"), "status": p["status"]}

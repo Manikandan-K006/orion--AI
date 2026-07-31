@@ -627,7 +627,10 @@ def create_live_session(connection: MySQLConnection, created_by: int) -> dict[st
 
 def list_live_sessions(connection: MySQLConnection) -> list[dict[str, Any]]:
     return fetch_all(connection,
-        "SELECT ls.*, (SELECT COUNT(*) FROM gd_live_participants WHERE session_code = ls.session_code) AS participant_count, "
+        "SELECT ls.*, "
+        "(SELECT COUNT(*) FROM gd_live_participants WHERE session_code = ls.session_code) AS total_assigned_count, "
+        "(SELECT COUNT(*) FROM gd_live_participants WHERE session_code = ls.session_code AND status != 'invited') AS joined_count, "
+        "(SELECT COUNT(*) FROM gd_live_participants WHERE session_code = ls.session_code AND status = 'invited') AS not_joined_count, "
         "(SELECT COUNT(*) FROM gd_live_teams WHERE session_code = ls.session_code) AS team_count "
         "FROM gd_live_sessions ls ORDER BY ls.created_at DESC LIMIT 50")
 
@@ -855,7 +858,7 @@ def get_live_participants(connection: MySQLConnection, session_code: str) -> lis
         "SELECT lp.*, u.name, u.register_number, sp.department, sp.year, sp.section FROM gd_live_participants lp "
         "JOIN users u ON lp.user_id = u.id "
         "LEFT JOIN student_profile sp ON sp.user_id = u.id "
-        "WHERE lp.session_code = %s ORDER BY lp.team_number, lp.id",
+        "WHERE lp.session_code = %s AND lp.status != 'invited' ORDER BY lp.team_number, lp.id",
         (session_code,))
 
 
