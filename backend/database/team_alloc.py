@@ -70,7 +70,10 @@ def assign_live_teams(
     # Wipe any previous assignment
     queries.execute(connection, "DELETE FROM gd_live_teams WHERE session_code = %s", (session_code,))
     queries.execute(connection,
-        "UPDATE gd_live_participants SET team_number = NULL, status = 'joined' WHERE session_code = %s",
+        "UPDATE gd_live_participants SET team_number = NULL, status = 'joined' WHERE session_code = %s AND status = 'assigned'",
+        (session_code,))
+    queries.execute(connection,
+        "UPDATE gd_live_participants SET team_number = NULL WHERE session_code = %s AND status = 'invited'",
         (session_code,))
 
     user_ids = [p["user_id"] for p in participants]

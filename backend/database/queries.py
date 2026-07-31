@@ -723,7 +723,10 @@ def assign_live_teams(
     # Wipe any previous assignment so re-hosting reshuffles cleanly.
     execute(connection, "DELETE FROM gd_live_teams WHERE session_code = %s", (session_code,))
     execute(connection,
-        "UPDATE gd_live_participants SET team_number = NULL, status = 'joined' WHERE session_code = %s",
+        "UPDATE gd_live_participants SET team_number = NULL, status = 'joined' WHERE session_code = %s AND status = 'assigned'",
+        (session_code,))
+    execute(connection,
+        "UPDATE gd_live_participants SET team_number = NULL WHERE session_code = %s AND status = 'invited'",
         (session_code,))
 
     rng = random.Random(seed)
