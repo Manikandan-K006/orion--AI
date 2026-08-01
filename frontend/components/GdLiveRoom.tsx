@@ -212,8 +212,8 @@ export default function GdLiveRoom({
   const joinedMembers = members.filter((m: any) => m.status !== "invited");
   const [finishedIds, setFinishedIds] = useState<Set<number>>(new Set());
   const [allFinished, setAllFinished] = useState(false);
-  const [timerSeconds, setTimerSeconds] = useState(300);
-  const [defaultSpeakingTime, setDefaultSpeakingTime] = useState(300);
+  const [timerSeconds, setTimerSeconds] = useState(600);
+  const [defaultSpeakingTime, setDefaultSpeakingTime] = useState(600);
   const [prepNotes, setPrepNotes] = useState("");
   const [timerRunning, setTimerRunning] = useState(false);
   const [discussionStarted, setDiscussionStarted] = useState(false);
@@ -265,7 +265,7 @@ export default function GdLiveRoom({
   const [discussionRound, setDiscussionRound] = useState<number>(1);
   const [liveSpeechText, setLiveSpeechText] = useState("");
   const [liveTranscripts, setLiveTranscripts] = useState<Record<number, string>>({});
-  const [liveScores, setLiveScores] = useState<any>({ grammar: 85, fluency: 85, confidence: 85, vocabulary: 85, overall: 85, emotion: "Analytical", wpm: 135 });
+  const [liveScores, setLiveScores] = useState<any>(null);
   const [aiAlertsList, setAiAlertsList] = useState<any[]>([]);
   const [chatMessages, setChatMessages] = useState<any[]>([]);
   const [speakingHistory, setSpeakingHistory] = useState<any[]>([]);
@@ -837,9 +837,19 @@ export default function GdLiveRoom({
           break;
         }
         case "LIVE_EVALUATION_UPDATE": {
-          const { user_id, grammar, fluency, confidence, vocabulary, quality, overall } = msg.payload;
+          const { user_id, grammar, fluency, confidence, vocabulary, quality, overall, pronunciation, relevance, emotion, wpm } = msg.payload;
           if (user_id === userId) {
-            setLiveScores({ grammar, fluency, confidence, vocabulary: vocabulary || quality, overall });
+            setLiveScores({
+              grammar,
+              fluency,
+              confidence,
+              vocabulary: vocabulary || quality,
+              pronunciation,
+              relevance,
+              overall,
+              emotion,
+              wpm
+            });
           }
           break;
         }
@@ -1426,7 +1436,7 @@ export default function GdLiveRoom({
               </span>
               <div className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-bold bg-slate-950 border border-slate-800 text-heading">
                 <Clock className="w-3.5 h-3.5 text-indigo-400" />
-                <span>{timerSeconds < 10 ? `00:0${timerSeconds}` : `00:${timerSeconds}`}</span>
+                <span>{formatTime(timerSeconds)}</span>
               </div>
             </div>
           </div>
@@ -1484,8 +1494,7 @@ export default function GdLiveRoom({
                             className="w-1 bg-gradient-to-t from-indigo-500 to-purple-650 rounded-full"
                             style={{ 
                               height: isRecording && currentSpeakerId === userId ? `${h}%` : '20%',
-                              animation: isRecording && currentSpeakerId === userId ? `bounce 1s ease-in-out infinite alternate` : 'none',
-                              animationDelay: `${i * 0.1}s`
+                              animation: isRecording && currentSpeakerId === userId ? `bounce 1s ease-in-out ${i * 0.1}s infinite alternate` : 'none'
                             }}
                           />
                         ))}
@@ -1494,7 +1503,7 @@ export default function GdLiveRoom({
                       {/* Circular countdown dial */}
                       <CircularTimer 
                         seconds={timerSeconds} 
-                        maxSeconds={discussionRound === 3 ? 30 : discussionRound === 5 ? 25 : 45} 
+                        maxSeconds={discussionRound === 3 ? 600 : discussionRound === 5 ? 25 : 45} 
                       />
 
                       {/* Agree/Disagree feedback buttons */}
@@ -1746,12 +1755,12 @@ export default function GdLiveRoom({
               <div className="card p-4 bg-slate-900/80 backdrop-blur-lg border border-slate-800 space-y-3">
                 <h3 className="text-xs font-bold text-heading uppercase tracking-wider border-b border-slate-850 pb-2">Round Score Evaluator</h3>
                 <div className="grid grid-cols-3 gap-y-3 gap-x-1.5 justify-items-center">
-                  <CircularProgress percent={liveScores.grammar || 85} size={56} strokeWidth={4.5} color="#2dd4bf" label="Grammar" />
-                  <CircularProgress percent={liveScores.fluency || 85} size={56} strokeWidth={4.5} color="#3b82f6" label="Fluency" />
-                  <CircularProgress percent={liveScores.pronunciation || 87} size={56} strokeWidth={4.5} color="#06b6d4" label="Accent" />
-                  <CircularProgress percent={liveScores.vocabulary || 85} size={56} strokeWidth={4.5} color="#ec4899" label="Vocabulary" />
-                  <CircularProgress percent={liveScores.confidence || 85} size={56} strokeWidth={4.5} color="#eab308" label="Confidence" />
-                  <CircularProgress percent={liveScores.relevance || 91} size={56} strokeWidth={4.5} color="#22c55e" label="Relevance" />
+                  <CircularProgress percent={liveScores?.grammar ?? 0} size={56} strokeWidth={4.5} color="#2dd4bf" label="Grammar" />
+                  <CircularProgress percent={liveScores?.fluency ?? 0} size={56} strokeWidth={4.5} color="#3b82f6" label="Fluency" />
+                  <CircularProgress percent={liveScores?.pronunciation ?? 0} size={56} strokeWidth={4.5} color="#06b6d4" label="Accent" />
+                  <CircularProgress percent={liveScores?.vocabulary ?? 0} size={56} strokeWidth={4.5} color="#ec4899" label="Vocabulary" />
+                  <CircularProgress percent={liveScores?.confidence ?? 0} size={56} strokeWidth={4.5} color="#eab308" label="Confidence" />
+                  <CircularProgress percent={liveScores?.relevance ?? 0} size={56} strokeWidth={4.5} color="#22c55e" label="Relevance" />
                 </div>
               </div>
 

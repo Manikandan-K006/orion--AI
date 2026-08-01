@@ -469,12 +469,22 @@ def calculate_live_metrics(text: str) -> dict:
     questions_asked = text.count("?") + len(re.findall(r'\b(what do you think|how can we|why should|do you agree)\b', text_lower))
     wpm = min(180, max(90, total_words * 4))
 
+    # Pronunciation proxy: clear delivery is penalized by double words & fillers
+    pronunciation = max(55, min(96, 90 - len(double_words) * 4 - len(fillers) * 3))
+
+    # Relevance: reward reasoning & topic-marker words that stay on-topic
+    reasoning_words = ["because", "therefore", "however", "example", "for instance", "data", "statistics", "impact", "reason", "result", "benefit", "solution", "conclusion"]
+    reasoning_hits = sum(1 for w in reasoning_words if w in text_lower)
+    relevance = max(55, min(96, 66 + reasoning_hits * 6))
+
     return {
         "grammar": round(grammar, 1),
         "fluency": round(fluency, 1),
         "confidence": round(confidence, 1),
         "vocabulary": round(vocab, 1),
         "quality": round(quality, 1),
+        "pronunciation": round(pronunciation, 1),
+        "relevance": round(relevance, 1),
         "overall": round(overall, 1),
         "emotion": emotion,
         "wpm": wpm,
@@ -1572,7 +1582,7 @@ async def gd_live_socket(
                                                 random.shuffle(ts_local.speaking_order)
                                                 ts_local.current_speaker_idx = 0
                                                 ts_local.round = 3
-                                                ts_local.timer_seconds = 30
+                                                ts_local.timer_seconds = 600
                                                 ts_local.timer_running = True
                                                 import time
                                                 ts_local.last_activity_time = time.time()
@@ -1585,9 +1595,9 @@ async def gd_live_socket(
                                                     "next_speaker_id": ts_local.speaking_order[1] if len(ts_local.speaking_order) > 1 else None,
                                                     "round": 3,
                                                     "topic": ts_local.topic,
-                                                    "speaking_time": 30
+                                                    "speaking_time": 600
                                                 })
-                                                opening_msg = f"🤖 AI Moderator: Let's begin Stage 3: Opening Round. {first_name}, you have 30 seconds. State your opinion."
+                                                opening_msg = f"🤖 AI Moderator: Let's begin Stage 3: Opening Round. {first_name}, you have up to 10 minutes. State your opinion. Click 'Conclude Turn' when you are done."
                                                 await manager.broadcast_to_team(session_code_local, tn_local, "CHAT_MESSAGE", {
                                                     "user_id": 0, "name": "AI Moderator", "label": "🤖 Moderator", "text": opening_msg
                                                 })
@@ -1825,7 +1835,7 @@ async def _handle_admin_event(
                     random.shuffle(ts_local.speaking_order)
                     ts_local.current_speaker_idx = 0
                     ts_local.round = 3  # Stage 3: Opening Round
-                    ts_local.timer_seconds = 30
+                    ts_local.timer_seconds = 600
                     ts_local.timer_running = True
                     import time
                     ts_local.last_activity_time = time.time()
@@ -1838,10 +1848,10 @@ async def _handle_admin_event(
                         "next_speaker_id": ts_local.speaking_order[1] if len(ts_local.speaking_order) > 1 else None,
                         "round": 3,
                         "topic": ts_local.topic,
-                        "speaking_time": 30
+                        "speaking_time": 600
                     })
                     
-                    opening_msg = f"🤖 AI Moderator: Let's begin Stage 3: Opening Round. {first_name}, you have 30 seconds. State your opinion."
+                    opening_msg = f"🤖 AI Moderator: Let's begin Stage 3: Opening Round. {first_name}, you have up to 10 minutes. State your opinion. Click 'Conclude Turn' when you are done."
                     await mgr.broadcast_to_team(session_code_local, tn_local, "CHAT_MESSAGE", {
                         "user_id": 0,
                         "name": "AI Moderator",
