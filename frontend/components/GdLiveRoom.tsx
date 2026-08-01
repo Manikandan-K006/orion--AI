@@ -202,7 +202,7 @@ export default function GdLiveRoom({
   sessionCode: string; token: string; user: any; theme: string; initialTopic: string;
   initialMembers: any[]; initialTeams?: any[];
   showCountdown?: boolean; onCountdownDone?: () => void;
-  onLeave: () => void;
+  onLeave: (finished?: boolean) => void;
 }) {
   const { connected, send, subscribe } = useGdLiveWs(sessionCode, token);
   const [countdown, setCountdown] = useState<number | null>(showCountdown ? 3 : null);
@@ -903,7 +903,7 @@ export default function GdLiveRoom({
           break;
         case "SESSION_ENDED":
           stopSpeechRecognition();
-          onLeave();
+          onLeave(myFinished);
           break;
       }
     });
@@ -1112,7 +1112,7 @@ export default function GdLiveRoom({
           </div>
 
           <div className="flex flex-col sm:flex-row gap-4 mt-4">
-            <Button onClick={onLeave} className="flex-1 btn-primary bg-slate-800 hover:bg-slate-700 h-12 text-sm">
+            <Button onClick={() => onLeave(myFinished)} className="flex-1 btn-primary bg-slate-800 hover:bg-slate-700 h-12 text-sm">
               Back to Dashboard
             </Button>
             <Button
@@ -1908,7 +1908,7 @@ export default function GdLiveRoom({
             )}
             
             <Button 
-              onClick={onLeave} 
+              onClick={() => onLeave(myFinished)} 
               className="btn-secondary h-9 px-3 rounded-xl font-bold border-slate-800 hover:bg-slate-800 text-xs flex items-center gap-1 shrink-0"
             >
               Leave Room

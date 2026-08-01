@@ -385,6 +385,9 @@ export default function Home() {
   const [gdLiveIsLiveMeeting, setGdLiveIsLiveMeeting] = useState(false);
   const [gdLiveShowCountdown, setGdLiveShowCountdown] = useState(false);
   const [gdLivePerf, setGdLivePerf] = useState<Record<string, number>>({});
+  const [gdLivePendingFinish, setGdLivePendingFinish] = useState<any>(null);
+  const [gdLiveResultData, setGdLiveResultData] = useState<any>(null);
+  const [gdLiveFinishing, setGdLiveFinishing] = useState(false);
 
   // Group Discussion system extension states
   const [selectedTopicId, setSelectedTopicId] = useState<number>(1);
@@ -1187,15 +1190,74 @@ export default function Home() {
     setRoomTimerRunning(false);
   }
 
-  function leaveGdLiveRoom() {
+  function leaveGdLiveRoom(finished: boolean = false) {
     setGdLiveIsLiveMeeting(false);
     if (user?.role === "admin" && gdLiveRoomActive) {
       setView("gd-live-admin-view");
       if (gdLiveAdminViewCode) loadGdLiveParticipants(gdLiveAdminViewCode);
     } else {
+      if (user?.role === "student" && !finished && gdLiveRoomCode) {
+        setGdLivePendingFinish({
+          code: gdLiveRoomCode,
+          topic: gdLiveRoomTopic,
+          members: gdLiveRoomMembers,
+          teams: gdLiveRoomTeams,
+        });
+      }
       setView("dashboard");
       loadDashboardData(token, user);
       if (typeof loadGdLiveSessions === "function") loadGdLiveSessions();
+    }
+  }
+
+  async function finishGdLiveSpeech() {
+    if (!gdLivePendingFinish || gdLiveFinishing) return;
+    const code = gdLivePendingFinish.code;
+    setGdLiveFinishing(true);
+    try {
+      // 1. Pull whatever transcript was captured before leaving the room.
+      let transcript = "";
+      try {
+        const finRes = await fetch(apiUrl + "/gd-live/sessions/" + code + "/finalize-transcript", {
+          method: "POST",
+          headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
+        });
+        const finData = await finRes.json();
+        transcript = finData.transcript || "";
+      } catch (err) {
+        console.warn("Finalize transcript failed:", err);
+      }
+
+      // 2. If there is almost nothing captured, send the student back to the room
+      //    to actually speak, then they can finish with the Conclude Turn button.
+      if (!transcript || transcript.length < 10) {
+        setMessage("Not enough speech captured yet. Returning to the room to continue speaking.");
+        setView("gd-live-room");
+        return;
+      }
+
+      // 3. Evaluate the finished speech and save the overall result.
+      const res = await fetch(apiUrl + "/gd-live/sessions/" + code + "/submit-and-evaluate", {
+        method: "POST",
+        headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
+        body: JSON.stringify({ transcript }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Failed to finish speech");
+      setGdLiveResultData({
+        code,
+        topic: gdLivePendingFinish.topic || "",
+        transcript,
+        evaluation: data.evaluation,
+        allCompleted: !!data.all_completed,
+      });
+      setGdLivePendingFinish(null);
+      setView("gd-live-results");
+      await loadDashboardData(token, user);
+    } catch (err: any) {
+      setMessage(err.message || "Failed to finish speech");
+    } finally {
+      setGdLiveFinishing(false);
     }
   }
 
