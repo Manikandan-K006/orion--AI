@@ -1501,19 +1501,9 @@ async def gd_live_socket(
                             break
                     
                     if all_students_ready:
-                        connection = None
-                        session_waiting = False
-                        try:
-                            connection = get_connection()
-                            session = queries.get_live_session_by_code(connection, session_code)
-                            if session and session["status"] == "waiting":
-                                session_waiting = True
-                        except Exception as exc:
-                            logger.warning("Auto-start session lookup failed: %s", exc)
-                        finally:
-                            if connection: _return(connection)
-                        
-                        if session_waiting:
+                        already_started = any(ts.round >= 2 for ts in state.team_states.values())
+
+                        if not already_started and not state.team_states:
                             try:
                                 from backend.api.gd_live import _host_meeting_db_work
                                 res = await asyncio.to_thread(_host_meeting_db_work, session_code)
@@ -1608,6 +1598,12 @@ async def gd_live_socket(
                                     await manager.broadcast(session_code, "SESSION_STARTED", {"status": "active"})
                             except Exception as auto_err:
                                 logger.error("Auto-start hosting failed: %s", auto_err)
+                        elif not already_started:
+                            # Teams were seeded in memory already; just kick off Stage 2.
+                            try:
+                                await _handle_admin_event(manager, state, session_code, "START_GD", {})
+                            except Exception as auto_err:
+                                logger.error("Auto-start (active) failed: %s", auto_err)
 
                 continue
 

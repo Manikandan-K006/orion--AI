@@ -689,10 +689,12 @@ export default function GdLiveRoom({
         setTimerSeconds(ts.timer_seconds);
         setFinishedIds(new Set(ts.finished_user_ids || []));
         setAllFinished(ts.all_finished || false);
-        if (ts.speaking_order) {
-          setSpeakingOrder(ts.speaking_order || []);
-          setCurrentSpeakerId(ts.speaking_order[ts.current_speaker_idx] ?? null);
-          setNextSpeakerId(ts.speaking_order[ts.current_speaker_idx + 1] ?? null);
+        if (ts.round !== undefined) {
+          if (ts.speaking_order) {
+            setSpeakingOrder(ts.speaking_order || []);
+            setCurrentSpeakerId(ts.speaking_order[ts.current_speaker_idx] ?? null);
+            setNextSpeakerId(ts.speaking_order[ts.current_speaker_idx + 1] ?? null);
+          }
           setDiscussionRound(ts.round || 1);
         }
         setReadyUsers(ts.ready_users || []);
@@ -1343,6 +1345,24 @@ export default function GdLiveRoom({
   }
 
   // ─── MAIN WORKSPACE (STAGES 3, 4, 5, 6) ───
+  const warnModal = showWarning ? (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
+      <div className="w-full max-w-sm rounded-2xl border border-amber-500/40 bg-slate-900 p-6 text-center shadow-2xl">
+        <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-amber-500/15 text-amber-400">
+          <AlertCircle className="h-6 w-6" />
+        </div>
+        <h3 className="mb-2 text-lg font-bold text-heading">Stay Focused!</h3>
+        <p className="mb-4 text-sm text-body">
+          {showWarning}
+          {warningEvent ? ` — ${warningEvent}` : ""}
+        </p>
+        <Button onClick={() => setShowWarning(null)} className="w-full bg-gradient-to-r from-amber-500 to-orange-600 border-0">
+          I'm back, continue
+        </Button>
+      </div>
+    </div>
+  ) : null;
+
   return (
     <div className={`min-h-screen flex flex-col relative overflow-hidden ${theme === "dark" ? "dark" : ""}`}>
       <div className="fixed inset-0 z-0">
