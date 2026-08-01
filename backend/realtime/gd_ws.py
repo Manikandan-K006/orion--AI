@@ -822,6 +822,14 @@ class GDLiveConnectionManager:
         for ci in room.values():
             if ci.user_id in team_by_user:
                 ci.team_number = team_by_user[ci.user_id]
+        # Keep the in-memory participant registry in sync too: REST-only host
+        # flows (host-meeting without the ready auto-start) never update it.
+        state = self._state.get(session_code)
+        if state:
+            for uid, tn in team_by_user.items():
+                p = state.participants.get(uid)
+                if p is not None:
+                    p["team_number"] = tn
 
     def ensure_state(self, session_code: str, topic: str | None = None) -> RoomState:
         state = self._state.get(session_code)
@@ -1006,6 +1014,16 @@ async def gd_live_socket(
             data = await websocket.receive_json()
             event = data.get("event")
             payload = data.get("payload", {}) or {}
+
+            # Teams are assigned AFTER students connect (host-meeting / ready
+            # flow), so the connect-time team_number is stale (None). Re-resolve
+            # from the in-memory participant registry on every event so
+            # team-scoped handlers (LIVE_SPEECH, SPEAKER_FINISHED, AUDIO_CHUNK)
+            # find the correct TeamState for pre-assignment connections.
+            _pinfo = state.participants.get(user_id)
+            _resolved_team = _pinfo.get("team_number") if _pinfo else None
+            if _resolved_team is not None:
+                team_number = _resolved_team
 
             # Handle binary audio chunks
             if event == "AUDIO_CHUNK":
