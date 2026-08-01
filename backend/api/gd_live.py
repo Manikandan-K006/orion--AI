@@ -61,10 +61,14 @@ def _create_live_session_db(user_id: int, topic_id: int, team_size: int, departm
             (code, 1, topic))
             
         if student_ids:
+            placeholders = ",".join(["(%s, %s, 'invited')"] * len(student_ids))
+            params: list = []
             for s_id in student_ids:
-                queries.execute(conn,
-                    "INSERT INTO gd_live_participants (session_code, user_id, status) VALUES (%s, %s, 'invited')",
-                    (code, s_id))
+                params.extend([code, s_id])
+            queries.execute(conn,
+                f"INSERT INTO gd_live_participants (session_code, user_id, status) VALUES {placeholders} "
+                "ON DUPLICATE KEY UPDATE status = 'invited'",
+                tuple(params))
         t_end = time.perf_counter()
         
         logger.info(f"[GD CREATE] session={code} total={(t_end-t0)*1000:.1f}ms (conn={(t_conn-t0)*1000:.1f}ms, code={(t_code-t_conn)*1000:.1f}ms, db={(t_end-t_code)*1000:.1f}ms)")
@@ -969,12 +973,50 @@ def list_years(connection: MySQLConnection = Depends(get_db), current_user: dict
 
 
 @router.get("/students")
-def list_students(connection: MySQLConnection = Depends(get_db), current_user: dict = Depends(get_current_user)):
+def list_students(
+    department: str = "",
+    year: str = "",
+    section: str = "",
+    connection: MySQLConnection = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
     if current_user.get("role") != "admin":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only admins can list students")
-    return queries.fetch_all(connection, 
+
+    def _normalize_year(y: str) -> str:
+        if not y: return ""
+        v = y.lower().strip()
+        if "1" in v or "first" in v: return "1"
+        if "2" in v or "second" in v: return "2"
+        if "3" in v or "third" in v: return "3"
+        if "4" in v or "fourth" in v or "final" in v: return "4"
+        return v
+
+    def _normalize_dept(d: str) -> str:
+        if not d: return ""
+        return "".join(c for c in d.lower() if c.isalnum())
+
+    rows = queries.fetch_all(connection,
         "SELECT u.id, u.name, u.email, u.register_number, sp.department, sp.year, sp.section "
         "FROM users u JOIN student_profile sp ON u.id = sp.user_id WHERE u.role = 'student' ORDER BY u.name")
+
+    filter_dept = _normalize_dept(department)
+    filter_year = _normalize_year(year)
+    filter_sec = section.strip().lower()
+
+    if not filter_dept and not filter_year and not filter_sec:
+        return rows
+
+    out = []
+    for r in rows:
+        if filter_dept and _normalize_dept(r.get("department") or "") != filter_dept:
+            continue
+        if filter_year and _normalize_year(r.get("year") or "") != filter_year:
+            continue
+        if filter_sec and (r.get("section") or "").strip().lower() != filter_sec:
+            continue
+        out.append(r)
+    return out
 
 
 @router.post("/students")

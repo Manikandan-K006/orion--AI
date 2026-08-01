@@ -609,12 +609,12 @@ def decline_invitation(connection: MySQLConnection, invitation_id: int, user_id:
 
 def generate_live_code(connection: MySQLConnection) -> str:
     import random, string
-    max_attempts = 100
+    max_attempts = 1000
     for _ in range(max_attempts):
-        code = "".join(random.choices(string.digits, k=6))
+        code = "".join(random.choices(string.digits, k=4))
         if not fetch_one(connection, "SELECT id FROM gd_live_sessions WHERE session_code = %s AND status != 'completed'", (code,)):
             return code
-    raise RuntimeError("Unable to generate unique 6-digit session code after 100 attempts")
+    raise RuntimeError("Unable to generate unique 4-digit session code after 1000 attempts")
 
 
 def create_live_session(connection: MySQLConnection, created_by: int) -> dict[str, Any]:
