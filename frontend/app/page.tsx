@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { AlertCircle, Award, Clock, LogOut, MessageSquare, Mic, MicOff, Trophy, Users, User as UserIcon, Lock, Zap, Loader2, Copy, Check, Target, TrendingUp, ArrowUp, ArrowDown, Sparkles, Menu, X, Shield, Sun, Moon, RefreshCw, Video, VideoOff, Hand, MessageCircle, Maximize, PhoneOff, Radio, CheckCircle2, Mail, Phone, Globe, Eye, EyeOff, VolumeX, Volume2, Bell, Settings, Search, BookOpen, ShieldAlert, Calendar, Upload } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -117,7 +117,7 @@ function StudentLivePoller({
   return null;
 }
 
-/** Inline admin control panel shown AFTER hosting — keeps the participant cards on
+/** Inline admin control panel shown AFTER hosting â€” keeps the participant cards on
  *  the page and adds realtime live controls + a live activity feed. No camera. */
 function GdLiveAdminPanel({ code, token, topic, onOpenRoom, onEnd }: {
   code: string;
@@ -175,7 +175,7 @@ function GdLiveAdminPanel({ code, token, topic, onOpenRoom, onEnd }: {
           <span className="flex items-center gap-1.5 text-xs font-semibold text-red-500">
             <span className={`w-2.5 h-2.5 rounded-full bg-red-500 ${paused ? "" : "animate-pulse"}`} /> {paused ? "PAUSED" : "LIVE"}
           </span>
-          <span className="text-sm text-heading font-semibold">{topic || "—"}</span>
+          <span className="text-sm text-heading font-semibold">{topic || "â€”"}</span>
           {timerRunning && <span className="text-sm font-mono text-heading">{Math.floor(timerSeconds / 60).toString().padStart(2, "0")}:{(timerSeconds % 60).toString().padStart(2, "0")}</span>}
           <span className="text-xs text-muted-soft">Round {round}</span>
         </div>
@@ -195,7 +195,7 @@ function GdLiveAdminPanel({ code, token, topic, onOpenRoom, onEnd }: {
       <div className="card p-4">
         <p className="text-xs uppercase tracking-wide text-muted-soft mb-2">Live Activity</p>
         <div className="space-y-1.5 max-h-48 overflow-y-auto text-sm">
-          {activity.length === 0 && <p className="text-muted-soft text-xs">Waiting for activity…</p>}
+          {activity.length === 0 && <p className="text-muted-soft text-xs">Waiting for activityâ€¦</p>}
           {activity.map((a) => (
             <div key={a.id} className="text-xs text-muted-soft">
               <span className="opacity-60 mr-1">{new Date(a.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>{a.text}
@@ -405,7 +405,7 @@ export default function Home() {
   const [adminSubTab, setAdminSubTab] = useState<"sessions" | "students" | "analytics">("sessions");
   const [studentModalOpen, setStudentModalOpen] = useState(false);
   const [editingStudent, setEditingStudent] = useState<any | null>(null);
-  const [studentForm, setStudentForm] = useState({ name: "", email: "", password: "", register_number: "", department: "IT", year: "First Year", section: "A" });
+  const [studentForm, setStudentForm] = useState({ name: "", email: "", password: "", register_number: "", department: "IT", year: "2nd Year", section: "A" });
   const [roomMicOn, setRoomMicOn] = useState(true);
   const [roomCamOn, setRoomCamOn] = useState(false);
   const [roomHandRaised, setRoomHandRaised] = useState(false);
@@ -540,6 +540,12 @@ export default function Home() {
     return () => clearInterval(interval);
   }, [token, user, view]);
 
+  // Derived states for live room participants
+  const joinedParticipants = gdLiveParticipants.filter((p: any) => p.status !== "invited");
+  const curSession = gdLiveSessions.find((s: any) => s.session_code === gdLiveAdminViewCode);
+  const totalAssignedCount = curSession?.total_assigned_count || 0;
+  const notJoinedCount = Math.max(0, totalAssignedCount - joinedParticipants.length);
+
   // Track WebSocket connection status for student waiting screen
   const gdLiveWsHook = useGdLiveWs(
     view === "gd-live-session" && gdLiveSession ? gdLiveSession.session_code : null,
@@ -567,6 +573,16 @@ export default function Home() {
           voice.announceParticipantJoined();
         }
         setGdLiveParticipants(newParts);
+        if (msg.payload.counts) {
+          const { total_assigned, joined, not_joined } = msg.payload.counts;
+          setGdLiveSessions((prev) => 
+            prev.map((s) => 
+              s.session_code === gdLiveAdminViewCode 
+                ? { ...s, total_assigned_count: total_assigned, joined_count: joined, not_joined_count: not_joined }
+                : s
+            )
+          );
+        }
       } else if (msg.event === "TEAMS_ASSIGNED" && Array.isArray(msg.payload?.teams)) {
         setGdLiveTeams(msg.payload.teams);
         voice.announceTeamsAssigned();
@@ -873,7 +889,7 @@ export default function Home() {
       setSoloResult(res);
       setSoloState("RESULT");
       setView("solo-result");
-      setSuccess(`${res.message} — Score: ${res.overall_score}`);
+      setSuccess(`${res.message} â€” Score: ${res.overall_score}`);
       
       const phrase = MOTIVATIONAL_PHRASES[Math.floor(Math.random() * MOTIVATIONAL_PHRASES.length)];
       speak(phrase);
@@ -982,7 +998,7 @@ export default function Home() {
     return () => clearInterval(interval);
   }, [view, lbDepartment, lbYear, lbTimeframe, token]);
 
-  // ─── GD Live Functions ───
+  // â”€â”€â”€ GD Live Functions â”€â”€â”€
 
   async function loadGdLiveSessions() {
     try {
@@ -1077,7 +1093,7 @@ export default function Home() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || "Failed to import excel");
-      setSuccess(`Excel import complete! Created: ${data.created_count}, Skipped: ${data.skipped_count}`);
+      setSuccess(`Excel import complete! Imported: ${data.imported ?? 0}, Updated: ${data.updated ?? 0}${data.errors?.length ? `, Errors: ${data.errors.length}` : ""}`);
       await loadAdminDetails();
     } catch (err: any) { setMessage(err.message); }
     finally { setLoading(false); }
@@ -1144,7 +1160,7 @@ export default function Home() {
     finally { setLoading(false); }
   }
 
-  // ─── Live GD Room helpers ───
+  // â”€â”€â”€ Live GD Room helpers â”€â”€â”€
   function openGdLiveRoom() {
     if (!gdLiveAdminViewCode) return;
     setGdLiveRoomCode(gdLiveAdminViewCode);
@@ -1191,9 +1207,9 @@ export default function Home() {
       setGdLivePerf((p) => ({ ...p, hostClickedToResponse: performance.now() - t0 }));
       console.timeStamp?.("admin:hostGdLiveRoom:response");
       // Keep the admin on the participant page: cards stay visible + live controls appear.
-      // Do NOT reload participants here — the broadcast (SESSION_STARTED) drives clients,
+      // Do NOT reload participants here â€” the broadcast (SESSION_STARTED) drives clients,
       // and the admin's live controls are shown via gdLiveRoomActive. This keeps the host
-      // click→student-screen path under 1s.
+      // clickâ†’student-screen path under 1s.
       setGdLiveRoomActive(true);
       setGdLiveIsLiveMeeting(true);
       setGdLiveRoomTopic(res.topic || "");
@@ -1286,7 +1302,7 @@ export default function Home() {
 
 
 
-  // ─── Solo Practice Functions ───
+  // â”€â”€â”€ Solo Practice Functions â”€â”€â”€
 
   async function startSoloPractice() {
     setLoading(true);
@@ -1368,7 +1384,7 @@ export default function Home() {
       setIsSpeakingPhase(false);
       setIsSessionLocked(false);
       setView("solo-result");
-      setSuccess(`${res.message} — Score: ${res.overall_score}`);
+      setSuccess(`${res.message} â€” Score: ${res.overall_score}`);
       // Fetch history
       const history = await apiRequest<SoloSubmitResponse["last_session"][]>("/solo/history", {}, token).catch(() => []);
       setSoloHistory(history);
@@ -1396,7 +1412,7 @@ export default function Home() {
     );
   }
 
-  // ─── Full-screen GD Live Admin Monitor ───
+  // â”€â”€â”€ Full-screen GD Live Admin Monitor â”€â”€â”€
   if (view === "gd-live-monitor" && gdLiveAdminViewCode && user) {
     return (
       <GdLiveAdminMonitor
@@ -1407,7 +1423,7 @@ export default function Home() {
     );
   }
 
-  // ─── Full-screen GD Live Room (authenticated) ───
+  // â”€â”€â”€ Full-screen GD Live Room (authenticated) â”€â”€â”€
   if (view === "gd-live-room" && gdLiveRoomCode && user) {
     return (
       <GdLiveRoom
@@ -1423,8 +1439,8 @@ export default function Home() {
           setGdLiveShowCountdown(false);
           setGdLivePerf((p) => {
             const entryToReady = p.studentReceivedStart ? performance.now() - p.studentReceivedStart : 0;
-            console.log("[GD-Live perf] host→response(ms):", Math.round(p.hostClickedToResponse || 0),
-              "| student entry→room-ready(ms):", Math.round(entryToReady));
+            console.log("[GD-Live perf] hostâ†’response(ms):", Math.round(p.hostClickedToResponse || 0),
+              "| student entryâ†’room-ready(ms):", Math.round(entryToReady));
             return { ...p, studentEntryToReady: entryToReady };
           });
         }}
@@ -1533,9 +1549,9 @@ export default function Home() {
             <p className="font-medium text-heading">Mount Zion College of Engineering and Technology</p>
             <p>
               <span className="inline-flex items-center gap-1"><Mail className="w-3.5 h-3.5" /> info@mzcet.in</span>
-              {"  ·  "}
+              {"  Â·  "}
               <span className="inline-flex items-center gap-1"><Phone className="w-3.5 h-3.5" /> 04333 294400</span>
-              {"  ·  "}
+              {"  Â·  "}
               <span className="inline-flex items-center gap-1"><Phone className="w-3.5 h-3.5" /> 73733 44444</span>
 
             </p>
@@ -1900,7 +1916,7 @@ export default function Home() {
                           value={currentPassword}
                           onChange={e => setCurrentPassword(e.target.value)}
                           required
-                          placeholder="••••••••"
+                          placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
                           className="w-full pl-11 pr-11 bg-[var(--bg)] border-[var(--border)] focus:border-indigo-500/50 focus:ring-2 focus:ring-indigo-500/10 rounded-2xl h-12"
                         />
                         <button
@@ -1923,7 +1939,7 @@ export default function Home() {
                           onChange={e => setNewPassword(e.target.value)}
                           required
                           minLength={8}
-                          placeholder="••••••••"
+                          placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
                           className="w-full pl-11 pr-11 bg-[var(--bg)] border-[var(--border)] focus:border-indigo-500/50 focus:ring-2 focus:ring-indigo-500/10 rounded-2xl h-12"
                         />
                         <button
@@ -1947,7 +1963,7 @@ export default function Home() {
                           onChange={e => setConfirmPassword(e.target.value)}
                           required
                           minLength={8}
-                          placeholder="••••••••"
+                          placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
                           className="w-full pl-11 pr-11 bg-[var(--bg)] border-[var(--border)] focus:border-indigo-500/50 focus:ring-2 focus:ring-indigo-500/10 rounded-2xl h-12"
                         />
                         <button
@@ -2078,11 +2094,11 @@ export default function Home() {
                 </h4>
                 <div className="space-y-4 text-xs">
                   <div className="p-4 rounded-2xl bg-indigo-500/5 border border-indigo-500/10">
-                    <h5 className="font-bold text-heading text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5">🚀 Delivery & Pitch Modulation</h5>
+                    <h5 className="font-bold text-heading text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5">ðŸš€ Delivery & Pitch Modulation</h5>
                     <p className="text-muted-soft mt-1 leading-relaxed">Your pitch delivery displays strong speaker authority. Try to reduce speed pauses between sentences by 5-10% to achieve maximum conversational fluency scores.</p>
                   </div>
                   <div className="p-4 rounded-2xl bg-emerald-500/5 border border-emerald-500/10">
-                    <h5 className="font-bold text-heading text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">🗣️ Accent Clarity & Pronunciation</h5>
+                    <h5 className="font-bold text-heading text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">ðŸ—£ï¸ Accent Clarity & Pronunciation</h5>
                     <p className="text-muted-soft mt-1 leading-relaxed">Pronunciation of complex consonant grids is highly accurate. Focus on matching standard vowel lengths to align perfectly with AI assessment markers.</p>
                   </div>
                 </div>
@@ -2462,11 +2478,11 @@ export default function Home() {
                         <h3 className="text-base font-bold text-heading mb-1.5 flex items-center gap-2">
                           <Zap className="w-4 h-4 text-indigo-500 animate-bounce" /> Join GD Live Session
                         </h3>
-                        <p className="text-xs text-muted-soft mb-4">Enter the 6-digit code provided by your administrator to join the live session.</p>
+                        <p className="text-xs text-muted-soft mb-4">Enter the 4-digit code provided by your administrator to join the live session.</p>
                         <div className="flex gap-2">
                           <Input
-                            placeholder="e.g. 458921"
-                            maxLength={6}
+                            placeholder="e.g. 4589"
+                            maxLength={4}
                             value={gdLiveCode}
                             onChange={(e) => setGdLiveCode(e.target.value)}
                             className="inp flex-1 font-mono uppercase tracking-wider h-11 text-center text-lg focus:ring-indigo-500/20 focus:border-indigo-500/50"
@@ -2582,12 +2598,12 @@ export default function Home() {
                       {soloQuote && (
                         <div className="card p-5 bg-indigo-500/5 dark:bg-indigo-500/10 border border-indigo-500/20 italic relative overflow-hidden group hover:border-indigo-500/40 transition-colors shadow-sm">
                           <div className="absolute -right-6 -bottom-6 w-20 h-20 bg-indigo-500/5 rounded-full blur-xl pointer-events-none" />
-                          <div className="absolute top-2 left-3 text-4xl text-slate-700/40 dark:text-slate-500/20 select-none font-serif">“</div>
+                          <div className="absolute top-2 left-3 text-4xl text-slate-700/40 dark:text-slate-500/20 select-none font-serif">â€œ</div>
                           <p className="text-xs text-body leading-relaxed pl-4 pr-2 font-medium z-10 relative">
                             {soloQuote.quote}
                           </p>
                           <p className="text-right text-[10px] font-bold text-muted-soft mt-2 tracking-wide uppercase">
-                            — {soloQuote.author}
+                            â€” {soloQuote.author}
                           </p>
                         </div>
                       )}
@@ -2639,10 +2655,10 @@ export default function Home() {
                               </div>
 
                               {[
-                                { label: "Grammar & Structure", val: soloHistory[0]?.grammar_score, icon: "📝", color: "bg-indigo-500", text: "text-indigo-400" },
-                                { label: "Fluency & Speech Rate", val: soloHistory[0]?.fluency_score, icon: "⚡", color: "bg-purple-500", text: "text-purple-400" },
-                                { label: "Pronunciation & Clarity", val: soloHistory[0]?.accent_score, icon: "🗣️", color: "bg-cyan-500", text: "text-cyan-400" },
-                                { label: "Confidence & Delivery", val: soloHistory[0]?.delivery_score, icon: "🚀", color: "bg-emerald-500", text: "text-emerald-400" },
+                                { label: "Grammar & Structure", val: soloHistory[0]?.grammar_score, icon: "ðŸ“", color: "bg-indigo-500", text: "text-indigo-400" },
+                                { label: "Fluency & Speech Rate", val: soloHistory[0]?.fluency_score, icon: "âš¡", color: "bg-purple-500", text: "text-purple-400" },
+                                { label: "Pronunciation & Clarity", val: soloHistory[0]?.accent_score, icon: "ðŸ—£ï¸", color: "bg-cyan-500", text: "text-cyan-400" },
+                                { label: "Confidence & Delivery", val: soloHistory[0]?.delivery_score, icon: "ðŸš€", color: "bg-emerald-500", text: "text-emerald-400" },
                               ].map((skill) => (
                                 <div key={skill.label} className="space-y-1.5">
                                   <div className="flex items-center justify-between text-[11px]">
@@ -2877,7 +2893,7 @@ export default function Home() {
                                 </span>
                               </div>
                               <p className="text-xs text-muted-soft mt-1">
-                                {s.participant_count || 0} participants joined · {s.team_count || 0} teams active
+                                {s.participant_count || 0} participants joined Â· {s.team_count || 0} teams active
                               </p>
                             </div>
                             <div className="flex items-center gap-2">
@@ -2916,7 +2932,7 @@ export default function Home() {
                     <h2 className="text-base font-bold text-heading flex items-center gap-2"><Trophy className="w-5 h-5 text-amber-500" /> Leaderboard</h2>
                     <span className="flex items-center gap-1.5 text-[10px] font-bold text-emerald-500 bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20 shadow-sm">
                       <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-                      LIVE REAL-TIME {lbLastUpdated ? `• ${lbLastUpdated}` : ""}
+                      LIVE REAL-TIME {lbLastUpdated ? `â€¢ ${lbLastUpdated}` : ""}
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
@@ -3066,7 +3082,7 @@ export default function Home() {
                         <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${a.rank === 1 ? "bg-amber-500 text-slate-950" : a.rank === 2 ? "bg-slate-400 text-slate-950" : a.rank === 3 ? "bg-orange-500 text-slate-950" : "surface-2 text-body"}`}>{a.rank}</div>
                         <div className="flex-1 min-w-0">
                           <p className="text-xs font-bold text-heading truncate">{a.name}</p>
-                          <p className="text-[10px] text-muted-soft">{a.department} · {a.year}</p>
+                          <p className="text-[10px] text-muted-soft">{a.department} Â· {a.year}</p>
                         </div>
                         <div className="text-right shrink-0">
                           <p className="text-xs font-bold text-emerald-500">{a.total_credits}</p>
@@ -3080,7 +3096,7 @@ export default function Home() {
             </div>
           )}
 
-          {/* ─── Solo Practice ─── */}
+          {/* â”€â”€â”€ Solo Practice â”€â”€â”€ */}
           {view === "solo-practice" && !soloSession && (
             <div className="card p-8 text-center max-w-md mx-auto my-12 border-dashed">
               <Loader2 className="h-8 w-8 animate-spin mx-auto text-indigo-500 mb-3" />
@@ -3169,14 +3185,14 @@ export default function Home() {
             </div>
           )}
 
-          {/* ─── Solo Session (Prep + Speaking) ─── */}
+          {/* â”€â”€â”€ Solo Session (Prep + Speaking) â”€â”€â”€ */}
           {view === "solo-session" && soloSession && (
             <div className="max-w-3xl mx-auto space-y-4">
               <div className="card p-6">
                 <div className="flex items-center justify-between mb-4">
                   <div>
                     <h2 className="text-xl font-bold text-heading">{soloSession.topic}</h2>
-                    <p className="text-sm text-muted-soft">Session #{soloSession.session_number} · Solo Practice</p>
+                    <p className="text-sm text-muted-soft">Session #{soloSession.session_number} Â· Solo Practice</p>
                   </div>
                   <div className="flex gap-2">
                     {soloState === "RECORDING" && (
@@ -3198,9 +3214,9 @@ export default function Home() {
                   }`}>
                     <p className="text-sm font-semibold text-body mb-2">
                       {soloState === "PREPARING"
-                        ? (prepSeconds > 0 ? "Preparation Phase — Think & Take Notes" : "Preparation Complete!")
+                        ? (prepSeconds > 0 ? "Preparation Phase â€” Think & Take Notes" : "Preparation Complete!")
                         : soloState === "RECORDING"
-                        ? "Speaking Phase — Deliver Your Thoughts"
+                        ? "Speaking Phase â€” Deliver Your Thoughts"
                         : soloState === "FINALIZING"
                         ? "Finalizing transcript..."
                         : "Evaluating performance..."}
@@ -3309,14 +3325,14 @@ export default function Home() {
             </div>
           )}
 
-          {/* ─── Solo Result ─── */}
+          {/* â”€â”€â”€ Solo Result â”€â”€â”€ */}
           {view === "solo-result" && soloResult && soloSession && (
             <div className="space-y-6 animate-in fade-in duration-300">
               {/* Quote */}
               {soloQuote && (
                 <div className="card border-purple-500/30 p-4 text-center">
                   <p className="text-sm text-heading/80 italic">"{soloQuote.quote}"</p>
-                  <p className="text-xs text-purple-300/60 mt-1">— {soloQuote.author}</p>
+                  <p className="text-xs text-purple-300/60 mt-1">â€” {soloQuote.author}</p>
                 </div>
               )}
 
@@ -3325,7 +3341,7 @@ export default function Home() {
                 <div className="flex items-center justify-between mb-4">
                   <div>
                     <h2 className="text-xl font-bold text-heading flex items-center gap-2"><Target className="w-6 h-6 text-amber-400" /> Practice Results</h2>
-                    <p className="text-sm text-muted-soft">{soloSession.topic} · Session #{soloSession.session_number}</p>
+                    <p className="text-sm text-muted-soft">{soloSession.topic} Â· Session #{soloSession.session_number}</p>
                   </div>
                   <div className="text-right">
                     <p className="text-3xl font-bold text-amber-300">{soloResult.overall_score}</p>
@@ -3430,21 +3446,21 @@ export default function Home() {
             </div>
           )}
 
-          {/* ─── GD Live (Join) ─── */}
+          {/* â”€â”€â”€ GD Live (Join) â”€â”€â”€ */}
           {view === "gd-live" && user?.role !== "admin" && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="card p-6">
                 <h2 className="text-lg font-semibold text-heading mb-4 flex items-center gap-2"><Zap className="w-5 h-5 text-amber-400" /> Join GD Session</h2>
-                <p className="text-xs text-muted-soft mb-4">Enter the 6-digit session code shared by your admin to join an anonymous group discussion.</p>
+                <p className="text-xs text-muted-soft mb-4">Enter the 4-digit session code shared by your admin to join an anonymous group discussion.</p>
                 <div className="space-y-3">
                   <Input
-                    placeholder="Enter 6-digit OTP code (e.g. 458921)"
+                    placeholder="Enter 4-digit code (e.g. 4589)"
                     value={gdLiveCode}
-                    onChange={(e) => setGdLiveCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                    onChange={(e) => setGdLiveCode(e.target.value.replace(/\D/g, "").slice(0, 4))}
                     className="inp font-mono text-2xl tracking-[0.5em] text-center"
-                    maxLength={6}
+                    maxLength={4}
                   />
-                  <Button onClick={() => setGdRulesOpen(true)} disabled={loading || gdLiveCode.length !== 6} className="w-full bg-gradient-to-r from-amber-500 to-orange-600 border-0 h-12 text-lg">
+                  <Button onClick={() => setGdRulesOpen(true)} disabled={loading || gdLiveCode.length !== 4} className="w-full bg-gradient-to-r from-amber-500 to-orange-600 border-0 h-12 text-lg">
                     {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Users className="h-5 w-5" />} Join Session
                   </Button>
                 </div>
@@ -3459,16 +3475,16 @@ export default function Home() {
               <div className="card border-amber-500/30 p-6">
                 <h2 className="text-lg font-semibold text-heading mb-4 flex items-center gap-2"><Shield className="w-5 h-5 text-amber-400" /> Anonymous & Private</h2>
                 <ul className="space-y-3 text-sm text-body">
-                  <li className="flex items-start gap-2">✓ Your name and email are hidden from other participants</li>
-                  <li className="flex items-start gap-2">✓ Everyone joins one shared discussion hosted by your admin</li>
-                  <li className="flex items-start gap-2">✓ Only admins can view your identity, department, and year</li>
-                  <li className="flex items-start gap-2">✓ Topics are basic opinion/debate subjects everyone can talk about</li>
+                  <li className="flex items-start gap-2">âœ“ Your name and email are hidden from other participants</li>
+                  <li className="flex items-start gap-2">âœ“ Everyone joins one shared discussion hosted by your admin</li>
+                  <li className="flex items-start gap-2">âœ“ Only admins can view your identity, department, and year</li>
+                  <li className="flex items-start gap-2">âœ“ Topics are basic opinion/debate subjects everyone can talk about</li>
                 </ul>
               </div>
             </div>
           )}
 
-          {/* ─── GD Live Admin ─── */}
+          {/* â”€â”€â”€ GD Live Admin â”€â”€â”€ */}
           {view === "gd-live-admin" && user?.role === "admin" && (
             <div className="space-y-6">
               {/* Sub Navigation */}
@@ -3534,39 +3550,42 @@ export default function Home() {
                           className="w-full h-11 px-4 rounded-xl border border-[var(--border)] text-heading text-sm focus:outline-none focus:border-amber-500/60 focus:ring-2 focus:ring-amber-400/20 transition-all inp"
                         >
                           <option value="ALL">All Years</option>
-                          <option value="First Year">First Year</option>
-                          <option value="Second Year">Second Year</option>
-                          <option value="Third Year">Third Year</option>
-                          <option value="Final Year">Final Year</option>
+                          <option value="2nd Year">2nd Year</option>
+                          <option value="3rd Year">3rd Year</option>
+                          <option value="4th Year">4th Year</option>
                         </select>
                       </div>
                       <div className="space-y-1.5">
                         <label className="text-xs font-semibold text-muted-soft">Department Filter</label>
                         <select
                           value={selectedDept}
-                          onChange={(e) => setSelectedDept(e.target.value)}
+                          onChange={(e) => { const v = e.target.value; setSelectedDept(v); if (v !== "CSE") setSelectedSection("ALL"); }}
                           className="w-full h-11 px-4 rounded-xl border border-[var(--border)] text-heading text-sm focus:outline-none focus:border-amber-500/60 focus:ring-2 focus:ring-amber-400/20 transition-all inp"
                         >
                           <option value="ALL">All Departments</option>
                           <option value="IT">IT</option>
                           <option value="CSE">CSE</option>
-                          <option value="AIDS">AIDS</option>
+                          <option value="AI&DS">AI&DS</option>
+                          <option value="MECH">MECH</option>
+                          <option value="CIVIL">CIVIL</option>
                           <option value="ECE">ECE</option>
+                          <option value="EEE">EEE</option>
                         </select>
                       </div>
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-semibold text-muted-soft">Section Filter (Optional)</label>
-                        <select
-                          value={selectedSection}
-                          onChange={(e) => setSelectedSection(e.target.value)}
-                          className="w-full h-11 px-4 rounded-xl border border-[var(--border)] text-heading text-sm focus:outline-none focus:border-amber-500/60 focus:ring-2 focus:ring-amber-400/20 transition-all inp"
-                        >
-                          <option value="ALL">All Sections</option>
-                          <option value="A">Section A</option>
-                          <option value="B">Section B</option>
-                          <option value="C">Section C</option>
-                        </select>
-                      </div>
+                      {selectedDept === "CSE" && (
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-semibold text-muted-soft">Section Filter</label>
+                          <select
+                            value={selectedSection}
+                            onChange={(e) => setSelectedSection(e.target.value)}
+                            className="w-full h-11 px-4 rounded-xl border border-[var(--border)] text-heading text-sm focus:outline-none focus:border-amber-500/60 focus:ring-2 focus:ring-amber-400/20 transition-all inp"
+                          >
+                            <option value="ALL">All Sections</option>
+                            <option value="A">Section A</option>
+                            <option value="B">Section B</option>
+                          </select>
+                        </div>
+                      )}
                     </div>
 
                     <div className="flex items-center gap-3 mb-4">
@@ -3593,9 +3612,9 @@ export default function Home() {
                       <div className="flex items-center justify-between mb-4">
                         <div>
                           <h3 className="text-lg font-semibold text-heading">Session <code className="font-mono text-amber-300">{sess.session_code}</code></h3>
-                          <p className="text-xs text-muted-soft">Status: {sess.status} · {sess.participant_count || 0} participants · {sess.team_count || 0} teams</p>
+                          <p className="text-xs text-muted-soft">Status: {sess.status} Â· {sess.participant_count || 0} participants Â· {sess.team_count || 0} teams</p>
                           {(sess.department || sess.year) && (
-                            <p className="text-xs text-amber-400 mt-1">Filters: {sess.year || "All Years"} · {sess.department || "All Depts"} {sess.section ? `· Sec ${sess.section}` : ""}</p>
+                            <p className="text-xs text-amber-400 mt-1">Filters: {sess.year || "All Years"} Â· {sess.department || "All Depts"} {sess.section ? `Â· Sec ${sess.section}` : ""}</p>
                           )}
                         </div>
                         <div className="flex gap-2">
@@ -3630,7 +3649,7 @@ export default function Home() {
                       {gdLiveLeaderboard.length > 0 && gdLiveLeaderboardViewCode === sess.session_code && (
                         <div className="mt-6">
                           <h4 className="text-sm font-semibold text-heading mb-3 flex items-center gap-2">
-                            <Trophy className="w-4 h-4 text-amber-400" /> Leaderboard — Session {sess.session_code}
+                            <Trophy className="w-4 h-4 text-amber-400" /> Leaderboard â€” Session {sess.session_code}
                           </h4>
                           <table className="ent-table">
                             <thead>
@@ -3712,7 +3731,7 @@ export default function Home() {
                       </label>
                       <Button onClick={() => {
                         setEditingStudent(null);
-                        setStudentForm({ name: "", email: "", password: "Password123", register_number: "", department: "IT", year: "First Year", section: "A" });
+                        setStudentForm({ name: "", email: "", password: "Password123", register_number: "", department: "IT", year: "2nd Year", section: "A" });
                         setStudentModalOpen(true);
                       }} variant="secondary" className="text-sm">
                         Add Single Student
@@ -3754,7 +3773,7 @@ export default function Home() {
                           <option value="1">1st Year</option>
                           <option value="2">2nd Year</option>
                           <option value="3">3rd Year</option>
-                          <option value="4">Final Year</option>
+                          <option value="4">4th Year</option>
                         </select>
                       </div>
 
@@ -3762,7 +3781,7 @@ export default function Home() {
                         <label className="block text-xs font-semibold text-muted-soft mb-1">Department</label>
                         <select
                           value={optDirDept}
-                          onChange={(e) => setOptDirDept(e.target.value)}
+                          onChange={(e) => { const v = e.target.value; setOptDirDept(v); if (v !== "CSE") setOptDirSec("ALL"); }}
                           className="w-full h-10 px-3 rounded-lg bg-[var(--background)] border border-[var(--border)]/30 text-heading text-sm focus:border-indigo-500 focus:outline-none"
                         >
                           <option value="ALL">All Departments</option>
@@ -3776,20 +3795,20 @@ export default function Home() {
                         </select>
                       </div>
 
-                      <div>
-                        <label className="block text-xs font-semibold text-muted-soft mb-1">Section</label>
-                        <select
-                          value={optDirSec}
-                          onChange={(e) => setOptDirSec(e.target.value)}
-                          className="w-full h-10 px-3 rounded-lg bg-[var(--background)] border border-[var(--border)]/30 text-heading text-sm focus:border-indigo-500 focus:outline-none"
-                        >
-                          <option value="ALL">All Sections</option>
-                          <option value="A">Section A</option>
-                          <option value="B">Section B</option>
-                          <option value="C">Section C</option>
-                          <option value="D">Section D</option>
-                        </select>
-                      </div>
+                      {optDirDept === "CSE" && (
+                        <div>
+                          <label className="block text-xs font-semibold text-muted-soft mb-1">Section</label>
+                          <select
+                            value={optDirSec}
+                            onChange={(e) => setOptDirSec(e.target.value)}
+                            className="w-full h-10 px-3 rounded-lg bg-[var(--background)] border border-[var(--border)]/30 text-heading text-sm focus:border-indigo-500 focus:outline-none"
+                          >
+                            <option value="ALL">All Sections</option>
+                            <option value="A">Section A</option>
+                            <option value="B">Section B</option>
+                          </select>
+                        </div>
+                      )}
                     </div>
 
                     <div className="overflow-x-auto">
@@ -3834,7 +3853,7 @@ export default function Home() {
                                         password: "",
                                         register_number: stud.register_number,
                                         department: stud.department || "IT",
-                                        year: stud.year || "First Year",
+                                        year: stud.year || "2nd Year",
                                         section: stud.section || "A"
                                       });
                                       setStudentModalOpen(true);
@@ -3937,13 +3956,16 @@ export default function Home() {
                           <label className="text-xs font-semibold text-muted-soft">Dept</label>
                           <select
                             value={studentForm.department}
-                            onChange={(e) => setStudentForm({ ...studentForm, department: e.target.value })}
+                            onChange={(e) => { const v = e.target.value; setStudentForm({ ...studentForm, department: v, ...(v !== "CSE" ? { section: "A" } : {}) }); }}
                             className="w-full h-10 px-2 rounded-lg border border-[var(--border)] text-heading text-xs focus:outline-none transition-all inp"
                           >
                             <option value="IT">IT</option>
                             <option value="CSE">CSE</option>
-                            <option value="AIDS">AIDS</option>
+                            <option value="AI&DS">AI&DS</option>
+                            <option value="MECH">MECH</option>
+                            <option value="CIVIL">CIVIL</option>
                             <option value="ECE">ECE</option>
+                            <option value="EEE">EEE</option>
                           </select>
                         </div>
                         <div className="space-y-1">
@@ -3953,24 +3975,24 @@ export default function Home() {
                             onChange={(e) => setStudentForm({ ...studentForm, year: e.target.value })}
                             className="w-full h-10 px-2 rounded-lg border border-[var(--border)] text-heading text-xs focus:outline-none transition-all inp"
                           >
-                            <option value="First Year">First Year</option>
-                            <option value="Second Year">Second Year</option>
-                            <option value="Third Year">Third Year</option>
-                            <option value="Final Year">Final Year</option>
+                            <option value="2nd Year">2nd Year</option>
+                            <option value="3rd Year">3rd Year</option>
+                            <option value="4th Year">4th Year</option>
                           </select>
                         </div>
-                        <div className="space-y-1">
-                          <label className="text-xs font-semibold text-muted-soft">Section</label>
-                          <select
-                            value={studentForm.section}
-                            onChange={(e) => setStudentForm({ ...studentForm, section: e.target.value })}
-                            className="w-full h-10 px-2 rounded-lg border border-[var(--border)] text-heading text-xs focus:outline-none transition-all inp"
-                          >
-                            <option value="A">Sec A</option>
-                            <option value="B">Sec B</option>
-                            <option value="C">Sec C</option>
-                          </select>
-                        </div>
+                        {studentForm.department === "CSE" && (
+                          <div className="space-y-1">
+                            <label className="text-xs font-semibold text-muted-soft">Section</label>
+                            <select
+                              value={studentForm.section}
+                              onChange={(e) => setStudentForm({ ...studentForm, section: e.target.value })}
+                              className="w-full h-10 px-2 rounded-lg border border-[var(--border)] text-heading text-xs focus:outline-none transition-all inp"
+                            >
+                              <option value="A">Sec A</option>
+                              <option value="B">Sec B</option>
+                            </select>
+                          </div>
+                        )}
                       </div>
                     </div>
                     <div className="flex justify-end gap-3 mt-6">
@@ -3982,20 +4004,27 @@ export default function Home() {
               )}
             </div>
           )}
-          {/* ─── GD Live Admin — Full Page Participant View ─── */}
+          {/* â”€â”€â”€ GD Live Admin â€” Full Page Participant View â”€â”€â”€ */}
           {view === "gd-live-admin-view" && user?.role === "admin" && (
             <div className="space-y-6">
               <div className="card p-6">
                 <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
                   <div>
-                    <h2 className="text-xl font-bold text-heading flex items-center gap-2"><Users className="w-6 h-6 text-amber-400" /> Session Participants</h2>
-                    <p className="text-sm text-muted-soft mt-1">Code <code className="font-mono text-amber-300">{gdLiveAdminViewCode}</code> · {gdLiveParticipants.length} participant(s)</p>
+                    <h2 className="text-xl font-bold text-heading flex items-center gap-2"><Users className="w-6 h-6 text-amber-400" /> Waiting Room</h2>
+                    <div className="flex flex-col sm:flex-row gap-x-4 gap-y-1 mt-1.5 text-xs text-muted-soft">
+                      <p>OTP : <code className="font-mono font-bold text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded text-sm tracking-wider">{gdLiveAdminViewCode}</code></p>
+                      <p className="flex items-center gap-3">
+                        <span className="text-emerald-400 font-bold">Joined : {joinedParticipants.length}</span>
+                        <span className="text-slate-600">â€¢</span>
+                        <span className="text-slate-400 font-bold">Not Joined : {notJoinedCount}</span>
+                      </p>
+                    </div>
                   </div>
                   <div className="flex gap-2 items-center">
                     {gdLiveIsLiveMeeting ? (
                       <div className="flex items-center gap-2">
                         <span className="flex items-center gap-1.5 text-xs font-semibold text-red-500 px-3 h-11 rounded-xl surface-2 border border-red-500/40">
-                          <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse" /> LIVE — Meeting in progress
+                          <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse" /> LIVE â€” Meeting in progress
                         </span>
                         <Button onClick={() => hostGdLiveRoom(gdLiveAdminViewCode)} disabled={loading} variant="secondary" className="h-11 text-xs">
                           Re-Host / Re-assign Teams
@@ -4004,11 +4033,11 @@ export default function Home() {
                     ) : (
                       <Button 
                         onClick={() => hostGdLiveRoom(gdLiveAdminViewCode)} 
-                        disabled={loading || gdLiveParticipants.length < 2} 
+                        disabled={loading || joinedParticipants.length < 2} 
                         className="btn-primary h-11 text-sm font-bold shadow-lg flex items-center gap-2 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-500 hover:to-teal-600"
                       >
                         <Radio className="w-4 h-4 animate-pulse" /> 
-                        {loading ? "Allocating Teams..." : gdLiveParticipants.length < 2 ? "Waiting for Participants (Need 2+)" : "Host a Meeting"}
+                        {loading ? "Allocating Teams..." : joinedParticipants.length < 2 ? "Waiting for Participants (Need 2+)" : "Start GD"}
                       </Button>
                     )}
                     <Button onClick={() => loadGdLiveParticipants(gdLiveAdminViewCode)} disabled={loading} variant="secondary" className="text-sm">
@@ -4020,14 +4049,15 @@ export default function Home() {
                   </div>
                 </div>
 
-                {gdLiveParticipants.length === 0 ? (
+                {joinedParticipants.length === 0 ? (
                   <div className="text-center py-12">
-                    <p className="text-muted-soft text-sm">No participants have joined this session yet.</p>
+                    <p className="text-muted-soft text-sm font-semibold">No participants have joined yet.</p>
+                    <p className="text-muted-soft text-xs mt-1">Waiting for students to enter the OTP...</p>
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {gdLiveParticipants.map((p: any) => (
-                      <div key={p.id} className="card p-5 hover:card-hover">
+                    {joinedParticipants.map((p: any) => (
+                      <div key={p.user_id} className="card p-5 hover:card-hover">
                         <div className="flex items-center justify-between mb-3">
                           <div className="flex items-center gap-3">
                             <div className="w-11 h-11 rounded-full bg-gradient-to-br from-purple-500 to-blue-600 flex items-center justify-center text-white font-bold text-sm shrink-0">
@@ -4035,24 +4065,32 @@ export default function Home() {
                             </div>
                             <div className="min-w-0">
                               <p className="text-sm font-semibold text-heading truncate">{p.name}</p>
-                              <p className="text-xs text-muted-soft truncate">{p.department || "-"} · {p.year || "-"}</p>
+                              <p className="text-xs text-muted-soft truncate">{p.department || "-"} Â· {p.year || "-"}</p>
                             </div>
                           </div>
-                          <span className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${p.status === "completed" ? "bg-emerald-500/20 text-emerald-300" : p.status === "assigned" ? "bg-blue-500/20 text-blue-300" : "bg-amber-500/20 text-amber-300"}`}>{p.status}</span>
+                          <span className={`text-xs px-2.5 py-0.5 rounded-full shrink-0 font-bold ${
+                            p.status === "completed" 
+                              ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30" 
+                              : p.status === "assigned" 
+                              ? "bg-indigo-500/20 text-indigo-300 border border-indigo-500/30" 
+                              : "bg-teal-500/20 text-teal-300 border border-teal-500/30"
+                          }`}>
+                            {p.status === "joined" ? "Joined" : p.status === "assigned" ? "Assigned" : p.status}
+                          </span>
                         </div>
                         <div className="space-y-2 text-sm">
-                          <div className="flex items-center justify-between">
-                            <span className="text-muted-soft">Register No.</span>
-                            <span className="text-heading font-mono">{p.register_number}</span>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-muted-soft">Team</span>
-                            <span className="text-amber-300 font-mono">{p.team_number || "-"}</span>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-muted-soft">Label</span>
-                            <span className="text-purple-300">{p.anonymous_label || "-"}</span>
-                          </div>
+                           <div className="flex items-center justify-between">
+                             <span className="text-muted-soft">Register No.</span>
+                             <span className="text-heading font-mono">{p.register_number}</span>
+                           </div>
+                           <div className="flex items-center justify-between">
+                             <span className="text-muted-soft">Team</span>
+                             <span className="text-amber-300 font-mono">{p.team_number || "-"}</span>
+                           </div>
+                           <div className="flex items-center justify-between">
+                             <span className="text-muted-soft">Label</span>
+                             <span className="text-purple-300">{p.anonymous_label || "-"}</span>
+                           </div>
                         </div>
                       </div>
                     ))}
@@ -4100,14 +4138,14 @@ export default function Home() {
             </div>
           )}
 
-          {/* ─── GD Live Student View ─── */}
+          {/* â”€â”€â”€ GD Live Student View â”€â”€â”€ */}
           {view === "gd-live" && user?.role === "admin" && (
             <div className="card p-6 text-center">
               <p className="text-muted-soft text-sm">Use the Admin portal to manage GD Live sessions.</p>
             </div>
           )}
 
-          {/* ─── GD Live Session (Waiting for Host) ─── */}
+          {/* â”€â”€â”€ GD Live Session (Waiting for Host) â”€â”€â”€ */}
           {view === "gd-live-session" && gdLiveSession && (
             <div className="max-w-3xl mx-auto">
               <StudentLiveWaiter
@@ -4156,7 +4194,7 @@ export default function Home() {
                           </div>
                           <div className="flex-1 min-w-0">
                             <p className="text-xs font-bold text-heading truncate">{p.name}</p>
-                            <p className="text-[10px] text-muted-soft truncate">{p.department || "-"} · {p.year || "-"}</p>
+                            <p className="text-[10px] text-muted-soft truncate">{p.department || "-"} Â· {p.year || "-"}</p>
                           </div>
                           <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" title="Joined" />
                         </div>
@@ -4170,7 +4208,7 @@ export default function Home() {
                 )}
 
                 <p className="text-xs text-muted-soft mt-6">
-                  The discussion room opens automatically the moment the host starts — no refresh needed.
+                  The discussion room opens automatically the moment the host starts â€” no refresh needed.
                 </p>
               </div>
             </div>
@@ -4189,7 +4227,7 @@ export default function Home() {
             </div>
           )}
 
-          {/* ─── Solo Practice Rules Modal ─── */}
+          {/* â”€â”€â”€ Solo Practice Rules Modal â”€â”€â”€ */}
           {soloRulesOpen && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => setSoloRulesOpen(false)}>
               <div className="card w-full max-w-lg max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
@@ -4210,7 +4248,7 @@ export default function Home() {
                     "Do not interrupt the recording once it has started.",
                     "Review your AI feedback after completing the session.",
                   ].map((rule, i) => (
-                    <p key={i} className="flex items-start gap-2"><span className="text-amber-400 shrink-0">•</span> {rule}</p>
+                    <p key={i} className="flex items-start gap-2"><span className="text-amber-400 shrink-0">â€¢</span> {rule}</p>
                   ))}
                 </div>
                 <div className="flex justify-end gap-3">
@@ -4223,7 +4261,7 @@ export default function Home() {
             </div>
           )}
 
-          {/* ─── GD Live Rules Modal ─── */}
+          {/* â”€â”€â”€ GD Live Rules Modal â”€â”€â”€ */}
           {gdRulesOpen && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => setGdRulesOpen(false)}>
               <div className="card w-full max-w-lg max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
@@ -4245,7 +4283,7 @@ export default function Home() {
                     "Follow the moderator's instructions.",
                     "Complete the discussion within the allotted time.",
                   ].map((rule, i) => (
-                    <p key={i} className="flex items-start gap-2"><span className="text-amber-400 shrink-0">•</span> {rule}</p>
+                    <p key={i} className="flex items-start gap-2"><span className="text-amber-400 shrink-0">â€¢</span> {rule}</p>
                   ))}
                 </div>
                 <div className="flex justify-end gap-3">

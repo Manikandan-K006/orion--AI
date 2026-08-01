@@ -209,6 +209,7 @@ export default function GdLiveRoom({
   const [topic, setTopic] = useState(initialTopic);
   const [teamNumber, setTeamNumber] = useState<number | null>(null);
   const [members, setMembers] = useState<any[]>(initialMembers || []);
+  const joinedMembers = members.filter((m: any) => m.status !== "invited");
   const [finishedIds, setFinishedIds] = useState<Set<number>>(new Set());
   const [allFinished, setAllFinished] = useState(false);
   const [timerSeconds, setTimerSeconds] = useState(300);
@@ -1247,25 +1248,32 @@ export default function GdLiveRoom({
               {/* Joined participants ready checklists */}
               <div className="card p-5 bg-slate-900/80 backdrop-blur-xl border border-slate-800 space-y-3">
                 <h4 className="text-xs font-bold text-heading uppercase tracking-wider flex items-center justify-between">
-                  <span>Joined Teammates ({members.length})</span>
+                  <span>Joined Teammates ({joinedMembers.length})</span>
                   <span className="text-[10px] text-indigo-400 font-mono">Waiting Room</span>
                 </h4>
-                <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
-                  {members.map((m: any, idx: number) => {
-                    const isUserReady = readyUsers.includes(m.user_id);
-                    const label = m.label || m.anonymous_label || m.name || `Member ${idx + 1}`;
-                    return (
-                      <div key={m.user_id} className="p-2.5 rounded-lg bg-slate-950/40 border border-slate-850 flex items-center justify-between text-xs">
-                        <span className="font-bold text-heading truncate">{label}</span>
-                        <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded ${
-                          isUserReady ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" : "bg-amber-500/10 text-amber-400 border border-amber-500/20"
-                        }`}>
-                          {isUserReady ? "Ready" : "Waiting"}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
+                {joinedMembers.length === 0 ? (
+                  <div className="text-center py-6 text-xs text-muted-soft bg-slate-950/40 border border-slate-850 rounded-xl">
+                    <p className="font-semibold">No participants have joined yet.</p>
+                    <p className="text-[10px] mt-1">Waiting for students to enter the OTP...</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
+                    {joinedMembers.map((m: any, idx: number) => {
+                      const isUserReady = readyUsers.includes(m.user_id);
+                      const label = m.label || m.anonymous_label || m.name || `Member ${idx + 1}`;
+                      return (
+                        <div key={m.user_id} className="p-2.5 rounded-lg bg-slate-950/40 border border-slate-850 flex items-center justify-between text-xs animate-fade-in">
+                          <span className="font-bold text-heading truncate">{label}</span>
+                          <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded ${
+                            isUserReady ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" : "bg-amber-500/10 text-amber-400 border border-amber-500/20"
+                          }`}>
+                            {isUserReady ? "Ready" : "Waiting"}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
 
                 {/* Admin controls to start */}
                 {user?.role === "admin" && (

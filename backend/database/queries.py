@@ -609,12 +609,12 @@ def decline_invitation(connection: MySQLConnection, invitation_id: int, user_id:
 
 def generate_live_code(connection: MySQLConnection) -> str:
     import random, string
-    max_attempts = 100
+    max_attempts = 1000
     for _ in range(max_attempts):
-        code = "".join(random.choices(string.digits, k=6))
+        code = "".join(random.choices(string.digits, k=4))
         if not fetch_one(connection, "SELECT id FROM gd_live_sessions WHERE session_code = %s AND status != 'completed'", (code,)):
             return code
-    raise RuntimeError("Unable to generate unique 6-digit session code after 100 attempts")
+    raise RuntimeError("Unable to generate unique 4-digit session code after 1000 attempts")
 
 
 def create_live_session(connection: MySQLConnection, created_by: int) -> dict[str, Any]:
@@ -627,7 +627,10 @@ def create_live_session(connection: MySQLConnection, created_by: int) -> dict[st
 
 def list_live_sessions(connection: MySQLConnection) -> list[dict[str, Any]]:
     return fetch_all(connection,
-        "SELECT ls.*, (SELECT COUNT(*) FROM gd_live_participants WHERE session_code = ls.session_code) AS participant_count, "
+        "SELECT ls.*, "
+        "(SELECT COUNT(*) FROM gd_live_participants WHERE session_code = ls.session_code) AS total_assigned_count, "
+        "(SELECT COUNT(*) FROM gd_live_participants WHERE session_code = ls.session_code AND status != 'invited') AS joined_count, "
+        "(SELECT COUNT(*) FROM gd_live_participants WHERE session_code = ls.session_code AND status = 'invited') AS not_joined_count, "
         "(SELECT COUNT(*) FROM gd_live_teams WHERE session_code = ls.session_code) AS team_count "
         "FROM gd_live_sessions ls ORDER BY ls.created_at DESC LIMIT 50")
 
@@ -723,7 +726,10 @@ def assign_live_teams(
     # Wipe any previous assignment so re-hosting reshuffles cleanly.
     execute(connection, "DELETE FROM gd_live_teams WHERE session_code = %s", (session_code,))
     execute(connection,
-        "UPDATE gd_live_participants SET team_number = NULL, status = 'joined' WHERE session_code = %s",
+        "UPDATE gd_live_participants SET team_number = NULL, status = 'joined' WHERE session_code = %s AND status = 'assigned'",
+        (session_code,))
+    execute(connection,
+        "UPDATE gd_live_participants SET team_number = NULL WHERE session_code = %s AND status = 'invited'",
         (session_code,))
 
     rng = random.Random(seed)
@@ -852,7 +858,7 @@ def get_live_participants(connection: MySQLConnection, session_code: str) -> lis
         "SELECT lp.*, u.name, u.register_number, sp.department, sp.year, sp.section FROM gd_live_participants lp "
         "JOIN users u ON lp.user_id = u.id "
         "LEFT JOIN student_profile sp ON sp.user_id = u.id "
-        "WHERE lp.session_code = %s ORDER BY lp.team_number, lp.id",
+        "WHERE lp.session_code = %s AND lp.status != 'invited' ORDER BY lp.team_number, lp.id",
         (session_code,))
 
 

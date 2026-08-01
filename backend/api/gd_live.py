@@ -61,10 +61,14 @@ def _create_live_session_db(user_id: int, topic_id: int, team_size: int, departm
             (code, 1, topic))
             
         if student_ids:
+            placeholders = ",".join(["(%s, %s, 'invited')"] * len(student_ids))
+            params: list = []
             for s_id in student_ids:
-                queries.execute(conn,
-                    "INSERT INTO gd_live_participants (session_code, user_id, status) VALUES (%s, %s, 'invited')",
-                    (code, s_id))
+                params.extend([code, s_id])
+            queries.execute(conn,
+                f"INSERT INTO gd_live_participants (session_code, user_id, status) VALUES {placeholders} "
+                "ON DUPLICATE KEY UPDATE status = 'invited'",
+                tuple(params))
         t_end = time.perf_counter()
         
         logger.info(f"[GD CREATE] session={code} total={(t_end-t0)*1000:.1f}ms (conn={(t_conn-t0)*1000:.1f}ms, code={(t_code-t_conn)*1000:.1f}ms, db={(t_end-t_code)*1000:.1f}ms)")
@@ -204,7 +208,7 @@ def get_live_participants(
 def _host_meeting_db_work(session_code: str):
     """All blocking DB work for hosting, run in a thread so the event loop stays
     free and the WebSocket broadcast reaches students without delay."""
-    from backend.database.db import get_connection
+    from backend.database.db import get_connection, _return
     conn = get_connection()
     try:
         session = queries.get_live_session_by_code(conn, session_code)
@@ -212,7 +216,12 @@ def _host_meeting_db_work(session_code: str):
             return {"error": "not_found"}
         if session["status"] == "completed":
             return {"error": "completed"}
+        from backend.realtime.gd_ws import manager
+        room_clients = manager._rooms.get(session_code, {})
+        active_user_ids = list(set(ci.user_id for ci in room_clients.values() if ci.role == "student"))
+
         participants = queries.get_live_participants(conn, session_code)
+        participants = [p for p in participants if p["user_id"] in active_user_ids]
         if len(participants) < 2:
             return {"error": "too_few"}
         topic = queries.get_live_team_topic(conn, session_code)
@@ -222,14 +231,18 @@ def _host_meeting_db_work(session_code: str):
         # ── Automatic team allocation: shuffle everyone and pack into teams of
         #    at most 3 (everyone assigned, none left out). Persists team_number
         #    on each participant and (re)creates one row per team. ──
-        teams = team_alloc.assign_live_teams(conn, session_code, max_team_size=3)
+        teams = team_alloc.assign_live_teams(conn, session_code, max_team_size=3, active_user_ids=active_user_ids)
         # Refresh member snapshot so team_number/labels are included for the
         # student redirect payload.
         participants = queries.get_live_participants(conn, session_code)
+        participants = [p for p in participants if p["user_id"] in active_user_ids]
         members = [{"user_id": p["user_id"], "name": p["name"], "label": p["anonymous_label"],
                     "team_number": p.get("team_number"), "department": p.get("department"),
                     "year": p.get("year"), "status": p["status"]}
                    for p in participants]
+        # Propagate the newly assigned teams to every connected client so
+        # team-scoped broadcasts reach the students immediately.
+        manager.set_client_teams(session_code, {p["user_id"]: p["team_number"] for p in participants if p.get("team_number")})
         # Persist live status now (cheap; happens before broadcast returns to client).
         queries.execute(conn,
             "UPDATE gd_live_teams SET status = 'active' WHERE session_code = %s AND status = 'waiting'",
@@ -963,12 +976,50 @@ def list_years(connection: MySQLConnection = Depends(get_db), current_user: dict
 
 
 @router.get("/students")
-def list_students(connection: MySQLConnection = Depends(get_db), current_user: dict = Depends(get_current_user)):
+def list_students(
+    department: str = "",
+    year: str = "",
+    section: str = "",
+    connection: MySQLConnection = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
     if current_user.get("role") != "admin":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only admins can list students")
-    return queries.fetch_all(connection, 
+
+    def _normalize_year(y: str) -> str:
+        if not y: return ""
+        v = y.lower().strip()
+        if "1" in v or "first" in v: return "1"
+        if "2" in v or "second" in v: return "2"
+        if "3" in v or "third" in v: return "3"
+        if "4" in v or "fourth" in v or "final" in v: return "4"
+        return v
+
+    def _normalize_dept(d: str) -> str:
+        if not d: return ""
+        return "".join(c for c in d.lower() if c.isalnum())
+
+    rows = queries.fetch_all(connection,
         "SELECT u.id, u.name, u.email, u.register_number, sp.department, sp.year, sp.section "
         "FROM users u JOIN student_profile sp ON u.id = sp.user_id WHERE u.role = 'student' ORDER BY u.name")
+
+    filter_dept = _normalize_dept(department)
+    filter_year = _normalize_year(year)
+    filter_sec = section.strip().lower()
+
+    if not filter_dept and not filter_year and not filter_sec:
+        return rows
+
+    out = []
+    for r in rows:
+        if filter_dept and _normalize_dept(r.get("department") or "") != filter_dept:
+            continue
+        if filter_year and _normalize_year(r.get("year") or "") != filter_year:
+            continue
+        if filter_sec and (r.get("section") or "").strip().lower() != filter_sec:
+            continue
+        out.append(r)
+    return out
 
 
 @router.post("/students")

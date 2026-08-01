@@ -469,7 +469,7 @@ CREATE TABLE IF NOT EXISTS gd_live_participants (
     team_number INT,
     anonymous_label VARCHAR(20),
     transcript TEXT,
-    status ENUM('joined', 'assigned', 'completed') NOT NULL DEFAULT 'joined',
+    status ENUM('joined', 'assigned', 'completed', 'invited') NOT NULL DEFAULT 'joined',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE KEY (session_code, user_id),
     FOREIGN KEY (session_code) REFERENCES gd_live_sessions(session_code) ON DELETE CASCADE,

@@ -52,6 +52,7 @@ def assign_live_teams(
     session_code: str,
     max_team_size: int = MAX_TEAM_SIZE,
     seed: int | None = None,
+    active_user_ids: list[int] | None = None,
 ) -> list[dict[str, Any]]:
     # Retrieve the session to find its team_size
     session_row = queries.fetch_one(connection, "SELECT team_size FROM gd_live_sessions WHERE session_code = %s", (session_code,))
@@ -64,13 +65,20 @@ def assign_live_teams(
         "LEFT JOIN student_profile sp ON sp.user_id = u.id "
         "WHERE lp.session_code = %s AND lp.status = 'joined' ORDER BY lp.id",
         (session_code,))
+        
+    if active_user_ids is not None:
+        participants = [p for p in participants if p["user_id"] in active_user_ids]
+
     if not participants:
         return []
 
     # Wipe any previous assignment
     queries.execute(connection, "DELETE FROM gd_live_teams WHERE session_code = %s", (session_code,))
     queries.execute(connection,
-        "UPDATE gd_live_participants SET team_number = NULL, status = 'joined' WHERE session_code = %s",
+        "UPDATE gd_live_participants SET team_number = NULL, status = 'joined' WHERE session_code = %s AND status = 'assigned'",
+        (session_code,))
+    queries.execute(connection,
+        "UPDATE gd_live_participants SET team_number = NULL WHERE session_code = %s AND status = 'invited'",
         (session_code,))
 
     user_ids = [p["user_id"] for p in participants]

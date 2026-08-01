@@ -54,32 +54,41 @@ def _auth_user(token: str | None) -> dict | None:
         _return(connection)
 
 
-def _participant_snapshot(connection: MySQLConnection, session_code: str) -> list[dict]:
-    return queries.get_live_participants(connection, session_code)
-
-
-def _fetch_participants(session_code: str) -> list[dict]:
+def _fetch_participants_and_counts(session_code: str) -> tuple[list[dict], dict]:
     conn = get_connection()
     try:
-        return queries.get_live_participants(conn, session_code)
+        # 1. Fetch joined participants (status != 'invited')
+        joined = queries.get_live_participants(conn, session_code)
+        
+        # 2. Fetch total and not_joined counts by scanning gd_live_participants table
+        row = queries.fetch_one(conn,
+            "SELECT "
+            "  COUNT(*) AS total_assigned, "
+            "  SUM(CASE WHEN status = 'invited' THEN 1 ELSE 0 END) AS not_joined "
+            "FROM gd_live_participants WHERE session_code = %s",
+            (session_code,))
+        if row:
+            total_assigned = int(row["total_assigned"] or 0)
+            not_joined = int(row["not_joined"] or 0)
+        else:
+            total_assigned = len(joined)
+            not_joined = 0
+            
+        counts = {
+            "total_assigned": total_assigned,
+            "joined": len(joined),
+            "not_joined": not_joined
+        }
+        return joined, counts
     finally:
         _return(conn)
 
 
-async def broadcast_participants(session_code: str) -> None:
-    try:
-        participants = await asyncio.to_thread(_fetch_participants, session_code)
-    except Exception as exc:
-        logger.warning("broadcast_participants failed: %s", exc)
-        return
-    await manager.broadcast(session_code, "PARTICIPANTS_UPDATED", {"participants": participants})
-
-
 async def broadcast_participants_with_checks(session_code: str, state: RoomState) -> None:
     try:
-        participants_list = await asyncio.to_thread(_fetch_participants, session_code)
+        joined_list, counts = await asyncio.to_thread(_fetch_participants_and_counts, session_code)
         participants_snapshot = []
-        for p in participants_list:
+        for p in joined_list:
             uid = p["user_id"]
             transient_p = state.participants.get(uid, {})
             participants_snapshot.append({
@@ -92,9 +101,19 @@ async def broadcast_participants_with_checks(session_code: str, state: RoomState
                 "mic": transient_p.get("mic", True),
                 "network": transient_p.get("network", "Good")
             })
-        await manager.broadcast(session_code, "PARTICIPANTS_UPDATED", {"participants": participants_snapshot})
+        await manager.broadcast(session_code, "PARTICIPANTS_UPDATED", {
+            "participants": participants_snapshot,
+            "counts": counts
+        })
     except Exception as exc:
         logger.warning("broadcast_participants_with_checks failed: %s", exc)
+
+
+async def broadcast_participants(session_code: str) -> None:
+    state = manager.get_state(session_code)
+    if state is None:
+        state = manager.ensure_state(session_code)
+    await broadcast_participants_with_checks(session_code, state)
 
 
 
@@ -784,6 +803,16 @@ class GDLiveConnectionManager:
                 return ci.team_number
         return None
 
+    def set_client_teams(self, session_code: str, team_by_user: dict[int, int]) -> None:
+        """Update the persisted team_number on each connected client after teams
+        are assigned, so team-scoped broadcasts reach the right participants."""
+        room = self._rooms.get(session_code)
+        if not room:
+            return
+        for ci in room.values():
+            if ci.user_id in team_by_user:
+                ci.team_number = team_by_user[ci.user_id]
+
     def ensure_state(self, session_code: str, topic: str | None = None) -> RoomState:
         state = self._state.get(session_code)
         if state is None or state.ended:
@@ -913,7 +942,7 @@ async def gd_live_socket(
         connection = get_connection()
         session = queries.get_live_session_by_code(connection, session_code)
         topic = queries.get_live_team_topic(connection, session_code)
-        participants_list = _participant_snapshot(connection, session_code)
+        participants_list = queries.get_live_participants(connection, session_code)
         teams_from_db = queries.get_live_teams(connection, session_code) if session else []
     except Exception as _exc:
         logger.warning("WS state build error: %s", repr(_exc))
@@ -1456,19 +1485,7 @@ async def gd_live_socket(
                     await manager.broadcast_to_team(session_code, team_number, "TEAM_STATE_UPDATED", ts.snapshot())
                 
                 # Broadcast PARTICIPANTS_UPDATED globally so the lobby updates instantly
-                participants_snapshot = []
-                for uid, p in state.participants.items():
-                    participants_snapshot.append({
-                        "user_id": uid,
-                        "name": p.get("name"),
-                        "anonymous_label": p.get("label"),
-                        "status": p.get("status"),
-                        "team_number": p.get("team_number"),
-                        "ready": p.get("ready", False),
-                        "mic": p.get("mic", True),
-                        "network": p.get("network", "Good")
-                    })
-                await manager.broadcast(session_code, "PARTICIPANTS_UPDATED", {"participants": participants_snapshot})
+                await broadcast_participants_with_checks(session_code, state)
 
                 # ── Auto Start Logic: Check if all connected student participants are ready ──
                 async with manager._lock:
