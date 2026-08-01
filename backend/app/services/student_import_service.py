@@ -61,6 +61,13 @@ def _ensure_profile_columns(conn: MySQLConnection) -> None:
 def _safe_str(val: object) -> str:
     if val is None:
         return ""
+    if isinstance(val, float):
+        if pandas.isna(val):
+            return ""
+        if val.is_integer():
+            return str(int(val))
+        s = str(val)
+        return s if s != "nan" else ""
     s = str(val).strip()
     return s if s != "nan" else ""
 
