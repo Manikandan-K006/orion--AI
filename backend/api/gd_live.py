@@ -240,6 +240,9 @@ def _host_meeting_db_work(session_code: str):
                     "team_number": p.get("team_number"), "department": p.get("department"),
                     "year": p.get("year"), "status": p["status"]}
                    for p in participants]
+        # Propagate the newly assigned teams to every connected client so
+        # team-scoped broadcasts reach the students immediately.
+        manager.set_client_teams(session_code, {p["user_id"]: p["team_number"] for p in participants if p.get("team_number")})
         # Persist live status now (cheap; happens before broadcast returns to client).
         queries.execute(conn,
             "UPDATE gd_live_teams SET status = 'active' WHERE session_code = %s AND status = 'waiting'",

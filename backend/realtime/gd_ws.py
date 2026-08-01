@@ -803,6 +803,16 @@ class GDLiveConnectionManager:
                 return ci.team_number
         return None
 
+    def set_client_teams(self, session_code: str, team_by_user: dict[int, int]) -> None:
+        """Update the persisted team_number on each connected client after teams
+        are assigned, so team-scoped broadcasts reach the right participants."""
+        room = self._rooms.get(session_code)
+        if not room:
+            return
+        for ci in room.values():
+            if ci.user_id in team_by_user:
+                ci.team_number = team_by_user[ci.user_id]
+
     def ensure_state(self, session_code: str, topic: str | None = None) -> RoomState:
         state = self._state.get(session_code)
         if state is None or state.ended:
@@ -932,7 +942,7 @@ async def gd_live_socket(
         connection = get_connection()
         session = queries.get_live_session_by_code(connection, session_code)
         topic = queries.get_live_team_topic(connection, session_code)
-        participants_list = _participant_snapshot(connection, session_code)
+        participants_list = queries.get_live_participants(connection, session_code)
         teams_from_db = queries.get_live_teams(connection, session_code) if session else []
     except Exception as _exc:
         logger.warning("WS state build error: %s", repr(_exc))
