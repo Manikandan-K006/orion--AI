@@ -1196,13 +1196,17 @@ export default function Home() {
       setView("gd-live-admin-view");
       if (gdLiveAdminViewCode) loadGdLiveParticipants(gdLiveAdminViewCode);
     } else {
-      if (user?.role === "student" && !finished && gdLiveRoomCode) {
-        setGdLivePendingFinish({
-          code: gdLiveRoomCode,
-          topic: gdLiveRoomTopic,
-          members: gdLiveRoomMembers,
-          teams: gdLiveRoomTeams,
-        });
+      if (user?.role === "student") {
+        if (finished) {
+          setGdLivePendingFinish(null);
+        } else if (gdLiveRoomCode) {
+          setGdLivePendingFinish({
+            code: gdLiveRoomCode,
+            topic: gdLiveRoomTopic,
+            members: gdLiveRoomMembers,
+            teams: gdLiveRoomTeams,
+          });
+        }
       }
       setView("dashboard");
       loadDashboardData(token, user);
@@ -1218,7 +1222,7 @@ export default function Home() {
       // 1. Pull whatever transcript was captured before leaving the room.
       let transcript = "";
       try {
-        const finRes = await fetch(apiUrl + "/gd-live/sessions/" + code + "/finalize-transcript", {
+        const finRes = await fetch(getApiUrl() + "/gd-live/sessions/" + code + "/finalize-transcript", {
           method: "POST",
           headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
         });
@@ -1237,7 +1241,7 @@ export default function Home() {
       }
 
       // 3. Evaluate the finished speech and save the overall result.
-      const res = await fetch(apiUrl + "/gd-live/sessions/" + code + "/submit-and-evaluate", {
+      const res = await fetch(getApiUrl() + "/gd-live/sessions/" + code + "/submit-and-evaluate", {
         method: "POST",
         headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
         body: JSON.stringify({ transcript }),
@@ -1508,6 +1512,120 @@ export default function Home() {
         }}
         onLeave={leaveGdLiveRoom}
       />
+    );
+  }
+
+  // ───── GD Live Results (finished speech from dashboard) ─────
+  if (view === "gd-live-results" && gdLiveResultData && user) {
+    const e = gdLiveResultData.evaluation || {};
+    const num = (v: any) => Math.round(Number(v ?? 0));
+    const overall = num(e.overall_score);
+    const metrics = [
+      { label: "Grammar & Structure", value: num(e.grammar_score), color: "#2dd4bf" },
+      { label: "Fluency & Tempo", value: num(e.fluency_score), color: "#3b82f6" },
+      { label: "Confidence & Delivery", value: num(e.confidence_score), color: "#eab308" },
+      { label: "Accent / Clarity", value: num(e.accent_score ?? e.voice_clarity_score), color: "#06b6d4" },
+      { label: "Topic Relevance", value: num(e.relevance_score), color: "#22c55e" },
+      { label: "Content Quality", value: num(e.content_quality), color: "#ec4899" },
+    ];
+    const strengths = String(e.strengths || "").split(";").map((s: string) => s.trim()).filter(Boolean);
+    const weaknesses = String(e.improvement_tips || "").split(";").map((s: string) => s.trim()).filter(Boolean);
+    const recommendations = String(e.recommendations || "").split(";").map((s: string) => s.trim()).filter(Boolean);
+
+    return (
+      <div className="min-h-screen flex items-center justify-center p-6" style={{ background: "var(--bg)" }}>
+        <div className="w-full max-w-4xl space-y-6 animate-fade-up">
+          <div className="text-center">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 text-[10px] font-bold uppercase tracking-wider mb-2">
+              <CheckCircle2 className="w-3.5 h-3.5" /> Speech Completed
+            </div>
+            <h1 className="text-3xl font-black text-heading bg-gradient-to-r from-indigo-500 via-purple-500 to-indigo-600 bg-clip-text text-transparent">
+              Your Overall Result
+            </h1>
+            <p className="text-xs text-muted-soft mt-1">
+              {gdLiveResultData.topic ? `Topic: "${gdLiveResultData.topic}"` : "Group Discussion Evaluation"}
+            </p>
+          </div>
+
+          <div className="card p-8 text-center relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-40 h-40 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
+            <Trophy className="w-10 h-10 text-amber-400 mx-auto mb-2" />
+            <p className="text-6xl font-black text-heading">{overall}<span className="text-2xl text-muted-soft">%</span></p>
+            <p className="text-[10px] text-muted-soft uppercase font-bold tracking-wider mt-1">Overall Evaluation Index</p>
+            {gdLiveResultData.allCompleted && (
+              <p className="text-[10px] text-emerald-400 font-bold mt-2">Your team has completed the discussion!</p>
+            )}
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {metrics.map((m) => (
+              <div key={m.label} className="card p-4 space-y-2">
+                <p className="text-[10px] text-muted-soft font-bold uppercase tracking-wider">{m.label}</p>
+                <p className="text-2xl font-black text-heading">{m.value}<span className="text-xs text-muted-soft">%</span></p>
+                <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                  <div className="h-1.5 rounded-full transition-all duration-700" style={{ width: `${m.value}%`, background: m.color }} />
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex flex-wrap gap-3">
+            <div className="card p-4 flex-1 min-w-[150px]">
+              <p className="text-[10px] text-muted-soft font-bold uppercase tracking-wider">Credit Points Earned</p>
+              <p className="text-2xl font-black text-heading">{num(e.credential_points)} <span className="text-xs text-muted-soft">pts</span></p>
+            </div>
+            <div className="card p-4 flex-1 min-w-[150px]">
+              <p className="text-[10px] text-muted-soft font-bold uppercase tracking-wider">Speech Speed</p>
+              <p className="text-2xl font-black text-heading">{num(e.speech_speed_wpm)} <span className="text-xs text-muted-soft">wpm</span></p>
+            </div>
+            <div className="card p-4 flex-1 min-w-[150px]">
+              <p className="text-[10px] text-muted-soft font-bold uppercase tracking-wider">Filler Words</p>
+              <p className="text-2xl font-black text-heading">{num(e.filler_words_count)}</p>
+            </div>
+          </div>
+
+          {(strengths.length > 0 || weaknesses.length > 0 || recommendations.length > 0) && (
+            <div className="card p-6 space-y-5">
+              <h3 className="text-sm font-bold text-heading">AI Feedback</h3>
+              {strengths.length > 0 && (
+                <div>
+                  <p className="text-xs font-bold text-emerald-400 mb-2 flex items-center gap-1"><Sparkles className="w-3.5 h-3.5" /> Strengths</p>
+                  <ul className="space-y-1">
+                    {strengths.map((s, i) => <li key={i} className="text-xs text-body flex gap-2"><span className="text-emerald-400">•</span>{s}</li>)}
+                  </ul>
+                </div>
+              )}
+              {weaknesses.length > 0 && (
+                <div>
+                  <p className="text-xs font-bold text-amber-400 mb-2 flex items-center gap-1"><AlertCircle className="w-3.5 h-3.5" /> Areas to Improve</p>
+                  <ul className="space-y-1">
+                    {weaknesses.map((s, i) => <li key={i} className="text-xs text-body flex gap-2"><span className="text-amber-400">•</span>{s}</li>)}
+                  </ul>
+                </div>
+              )}
+              {recommendations.length > 0 && (
+                <div>
+                  <p className="text-xs font-bold text-indigo-400 mb-2 flex items-center gap-1"><BookOpen className="w-3.5 h-3.5" /> Recommendations</p>
+                  <ul className="space-y-1">
+                    {recommendations.map((s, i) => <li key={i} className="text-xs text-body flex gap-2"><span className="text-indigo-400">•</span>{s}</li>)}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+
+          {gdLiveResultData.transcript && (
+            <div className="card p-6">
+              <h3 className="text-xs font-bold text-heading uppercase tracking-wider mb-2">Your Finished Speech</h3>
+              <p className="text-xs text-body leading-relaxed max-h-40 overflow-y-auto">{gdLiveResultData.transcript}</p>
+            </div>
+          )}
+
+          <Button onClick={() => setView("dashboard")} className="btn-primary w-full h-11 text-sm font-bold">
+            Back to Dashboard
+          </Button>
+        </div>
+      </div>
     );
   }
 
@@ -2470,6 +2588,36 @@ export default function Home() {
 
               {user.role === "student" ? (
                 <>
+                  {/* Pending speech finish card */}
+                  {gdLivePendingFinish && (
+                    <div className="card p-5 border-l-4 border-l-rose-500 bg-gradient-to-r from-rose-500/10 to-amber-500/5 shadow-lg">
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                        <div className="w-12 h-12 rounded-2xl bg-rose-500/15 text-rose-500 flex items-center justify-center shrink-0">
+                          <Mic className="w-6 h-6" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h3 className="text-sm font-bold text-heading flex items-center gap-2">
+                            Your speech isn't finished yet
+                            <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-rose-500/15 text-rose-400 border border-rose-500/30 uppercase tracking-wider">Action Needed</span>
+                          </h3>
+                          <p className="text-xs text-muted-soft mt-1">
+                            You left the discussion "{gdLivePendingFinish.topic || "GD session"}" mid-turn.
+                            Finish your speech to evaluate your points and see your overall result.
+                          </p>
+                        </div>
+                        <div className="flex gap-2 shrink-0">
+                          <Button onClick={() => setView("gd-live-room")} variant="secondary" className="h-10 text-xs">
+                            Back to Room
+                          </Button>
+                          <Button onClick={finishGdLiveSpeech} disabled={gdLiveFinishing} className="btn-primary h-10 text-xs bg-rose-600 hover:bg-rose-500 border-0 font-bold">
+                            {gdLiveFinishing ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                            {gdLiveFinishing ? "Finishing..." : "Finish the Speech"}
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Metrics Grid */}
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div className="card p-5 card-hover relative overflow-hidden group border-l-4 border-l-purple-500 shadow-sm">
