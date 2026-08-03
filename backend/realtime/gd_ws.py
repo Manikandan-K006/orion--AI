@@ -469,12 +469,22 @@ def calculate_live_metrics(text: str) -> dict:
     questions_asked = text.count("?") + len(re.findall(r'\b(what do you think|how can we|why should|do you agree)\b', text_lower))
     wpm = min(180, max(90, total_words * 4))
 
+    # Pronunciation proxy: clear delivery is penalized by double words & fillers
+    pronunciation = max(55, min(96, 90 - len(double_words) * 4 - len(fillers) * 3))
+
+    # Relevance: reward reasoning & topic-marker words that stay on-topic
+    reasoning_words = ["because", "therefore", "however", "example", "for instance", "data", "statistics", "impact", "reason", "result", "benefit", "solution", "conclusion"]
+    reasoning_hits = sum(1 for w in reasoning_words if w in text_lower)
+    relevance = max(55, min(96, 66 + reasoning_hits * 6))
+
     return {
         "grammar": round(grammar, 1),
         "fluency": round(fluency, 1),
         "confidence": round(confidence, 1),
         "vocabulary": round(vocab, 1),
         "quality": round(quality, 1),
+        "pronunciation": round(pronunciation, 1),
+        "relevance": round(relevance, 1),
         "overall": round(overall, 1),
         "emotion": emotion,
         "wpm": wpm,
@@ -812,6 +822,14 @@ class GDLiveConnectionManager:
         for ci in room.values():
             if ci.user_id in team_by_user:
                 ci.team_number = team_by_user[ci.user_id]
+        # Keep the in-memory participant registry in sync too: REST-only host
+        # flows (host-meeting without the ready auto-start) never update it.
+        state = self._state.get(session_code)
+        if state:
+            for uid, tn in team_by_user.items():
+                p = state.participants.get(uid)
+                if p is not None:
+                    p["team_number"] = tn
 
     def ensure_state(self, session_code: str, topic: str | None = None) -> RoomState:
         state = self._state.get(session_code)
@@ -996,6 +1014,16 @@ async def gd_live_socket(
             data = await websocket.receive_json()
             event = data.get("event")
             payload = data.get("payload", {}) or {}
+
+            # Teams are assigned AFTER students connect (host-meeting / ready
+            # flow), so the connect-time team_number is stale (None). Re-resolve
+            # from the in-memory participant registry on every event so
+            # team-scoped handlers (LIVE_SPEECH, SPEAKER_FINISHED, AUDIO_CHUNK)
+            # find the correct TeamState for pre-assignment connections.
+            _pinfo = state.participants.get(user_id)
+            _resolved_team = _pinfo.get("team_number") if _pinfo else None
+            if _resolved_team is not None:
+                team_number = _resolved_team
 
             # Handle binary audio chunks
             if event == "AUDIO_CHUNK":
@@ -1501,19 +1529,9 @@ async def gd_live_socket(
                             break
                     
                     if all_students_ready:
-                        connection = None
-                        session_waiting = False
-                        try:
-                            connection = get_connection()
-                            session = queries.get_live_session_by_code(connection, session_code)
-                            if session and session["status"] == "waiting":
-                                session_waiting = True
-                        except Exception as exc:
-                            logger.warning("Auto-start session lookup failed: %s", exc)
-                        finally:
-                            if connection: _return(connection)
-                        
-                        if session_waiting:
+                        already_started = any(ts.round >= 2 for ts in state.team_states.values())
+
+                        if not already_started and not state.team_states:
                             try:
                                 from backend.api.gd_live import _host_meeting_db_work
                                 res = await asyncio.to_thread(_host_meeting_db_work, session_code)
@@ -1582,7 +1600,7 @@ async def gd_live_socket(
                                                 random.shuffle(ts_local.speaking_order)
                                                 ts_local.current_speaker_idx = 0
                                                 ts_local.round = 3
-                                                ts_local.timer_seconds = 30
+                                                ts_local.timer_seconds = 600
                                                 ts_local.timer_running = True
                                                 import time
                                                 ts_local.last_activity_time = time.time()
@@ -1595,9 +1613,9 @@ async def gd_live_socket(
                                                     "next_speaker_id": ts_local.speaking_order[1] if len(ts_local.speaking_order) > 1 else None,
                                                     "round": 3,
                                                     "topic": ts_local.topic,
-                                                    "speaking_time": 30
+                                                    "speaking_time": 600
                                                 })
-                                                opening_msg = f"🤖 AI Moderator: Let's begin Stage 3: Opening Round. {first_name}, you have 30 seconds. State your opinion."
+                                                opening_msg = f"🤖 AI Moderator: Let's begin Stage 3: Opening Round. {first_name}, you have up to 10 minutes. State your opinion. Click 'Conclude Turn' when you are done."
                                                 await manager.broadcast_to_team(session_code_local, tn_local, "CHAT_MESSAGE", {
                                                     "user_id": 0, "name": "AI Moderator", "label": "🤖 Moderator", "text": opening_msg
                                                 })
@@ -1608,6 +1626,12 @@ async def gd_live_socket(
                                     await manager.broadcast(session_code, "SESSION_STARTED", {"status": "active"})
                             except Exception as auto_err:
                                 logger.error("Auto-start hosting failed: %s", auto_err)
+                        elif not already_started:
+                            # Teams were seeded in memory already; just kick off Stage 2.
+                            try:
+                                await _handle_admin_event(manager, state, session_code, "START_GD", {})
+                            except Exception as auto_err:
+                                logger.error("Auto-start (active) failed: %s", auto_err)
 
                 continue
 
@@ -1829,7 +1853,7 @@ async def _handle_admin_event(
                     random.shuffle(ts_local.speaking_order)
                     ts_local.current_speaker_idx = 0
                     ts_local.round = 3  # Stage 3: Opening Round
-                    ts_local.timer_seconds = 30
+                    ts_local.timer_seconds = 600
                     ts_local.timer_running = True
                     import time
                     ts_local.last_activity_time = time.time()
@@ -1842,10 +1866,10 @@ async def _handle_admin_event(
                         "next_speaker_id": ts_local.speaking_order[1] if len(ts_local.speaking_order) > 1 else None,
                         "round": 3,
                         "topic": ts_local.topic,
-                        "speaking_time": 30
+                        "speaking_time": 600
                     })
                     
-                    opening_msg = f"🤖 AI Moderator: Let's begin Stage 3: Opening Round. {first_name}, you have 30 seconds. State your opinion."
+                    opening_msg = f"🤖 AI Moderator: Let's begin Stage 3: Opening Round. {first_name}, you have up to 10 minutes. State your opinion. Click 'Conclude Turn' when you are done."
                     await mgr.broadcast_to_team(session_code_local, tn_local, "CHAT_MESSAGE", {
                         "user_id": 0,
                         "name": "AI Moderator",

@@ -151,10 +151,10 @@ function PipelineTracker({ currentSpeakerId }: { currentSpeakerId: number | null
             <div
               key={step}
               className={`flex items-center gap-1 px-2 py-1 rounded-md shrink-0 transition-all border ${isActive
-                  ? "bg-indigo-600 border-indigo-500 text-white animate-pulse"
-                  : isDone
-                    ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
-                    : "bg-slate-950/40 border-slate-850 text-muted-soft"
+                ? "bg-indigo-600 border-indigo-500 text-white animate-pulse"
+                : isDone
+                  ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
+                  : "bg-slate-950/40 border-slate-850 text-muted-soft"
                 }`}
             >
               <span className={`w-1 h-1 rounded-full ${isActive ? "bg-white" : isDone ? "bg-emerald-400" : "bg-slate-700"}`} />
@@ -201,7 +201,7 @@ export default function GdLiveRoom({
   sessionCode: string; token: string; user: any; theme: string; initialTopic: string;
   initialMembers: any[]; initialTeams?: any[];
   showCountdown?: boolean; onCountdownDone?: () => void;
-  onLeave: () => void;
+  onLeave: (finished?: boolean) => void;
 }) {
   const { connected, send, subscribe } = useGdLiveWs(sessionCode, token);
   const [countdown, setCountdown] = useState<number | null>(showCountdown ? 3 : null);
@@ -211,8 +211,8 @@ export default function GdLiveRoom({
   const joinedMembers = members.filter((m: any) => m.status !== "invited");
   const [finishedIds, setFinishedIds] = useState<Set<number>>(new Set());
   const [allFinished, setAllFinished] = useState(false);
-  const [timerSeconds, setTimerSeconds] = useState(300);
-  const [defaultSpeakingTime, setDefaultSpeakingTime] = useState(300);
+  const [timerSeconds, setTimerSeconds] = useState(600);
+  const [defaultSpeakingTime, setDefaultSpeakingTime] = useState(600);
   const [prepNotes, setPrepNotes] = useState("");
   const [timerRunning, setTimerRunning] = useState(false);
   const [discussionStarted, setDiscussionStarted] = useState(false);
@@ -264,7 +264,7 @@ export default function GdLiveRoom({
   const [discussionRound, setDiscussionRound] = useState<number>(1);
   const [liveSpeechText, setLiveSpeechText] = useState("");
   const [liveTranscripts, setLiveTranscripts] = useState<Record<number, string>>({});
-  const [liveScores, setLiveScores] = useState<any>({ grammar: 85, fluency: 85, confidence: 85, vocabulary: 85, overall: 85, emotion: "Analytical", wpm: 135 });
+  const [liveScores, setLiveScores] = useState<any>(null);
   const [aiAlertsList, setAiAlertsList] = useState<any[]>([]);
   const [chatMessages, setChatMessages] = useState<any[]>([]);
   const [speakingHistory, setSpeakingHistory] = useState<any[]>([]);
@@ -688,10 +688,12 @@ export default function GdLiveRoom({
         setTimerSeconds(ts.timer_seconds);
         setFinishedIds(new Set(ts.finished_user_ids || []));
         setAllFinished(ts.all_finished || false);
-        if (ts.speaking_order) {
-          setSpeakingOrder(ts.speaking_order || []);
-          setCurrentSpeakerId(ts.speaking_order[ts.current_speaker_idx] ?? null);
-          setNextSpeakerId(ts.speaking_order[ts.current_speaker_idx + 1] ?? null);
+        if (ts.round !== undefined) {
+          if (ts.speaking_order) {
+            setSpeakingOrder(ts.speaking_order || []);
+            setCurrentSpeakerId(ts.speaking_order[ts.current_speaker_idx] ?? null);
+            setNextSpeakerId(ts.speaking_order[ts.current_speaker_idx + 1] ?? null);
+          }
           setDiscussionRound(ts.round || 1);
         }
         setReadyUsers(ts.ready_users || []);
@@ -834,9 +836,19 @@ export default function GdLiveRoom({
           break;
         }
         case "LIVE_EVALUATION_UPDATE": {
-          const { user_id, grammar, fluency, confidence, vocabulary, quality, overall } = msg.payload;
+          const { user_id, grammar, fluency, confidence, vocabulary, quality, overall, pronunciation, relevance, emotion, wpm } = msg.payload;
           if (user_id === userId) {
-            setLiveScores({ grammar, fluency, confidence, vocabulary: vocabulary || quality, overall });
+            setLiveScores({
+              grammar,
+              fluency,
+              confidence,
+              vocabulary: vocabulary || quality,
+              pronunciation,
+              relevance,
+              overall,
+              emotion,
+              wpm
+            });
           }
           break;
         }
@@ -890,7 +902,7 @@ export default function GdLiveRoom({
           break;
         case "SESSION_ENDED":
           stopSpeechRecognition();
-          onLeave();
+          onLeave(myFinished);
           break;
       }
     });
@@ -1099,7 +1111,7 @@ export default function GdLiveRoom({
           </div>
 
           <div className="flex flex-col sm:flex-row gap-4 mt-4">
-            <Button onClick={onLeave} className="flex-1 btn-primary bg-slate-800 hover:bg-slate-700 h-12 text-sm">
+            <Button onClick={() => onLeave(myFinished)} className="flex-1 btn-primary bg-slate-800 hover:bg-slate-700 h-12 text-sm">
               Back to Dashboard
             </Button>
             <Button
@@ -1211,8 +1223,8 @@ export default function GdLiveRoom({
               <Button
                 onClick={toggleLocalReady}
                 className={`w-full h-12 text-sm font-bold rounded-xl transition-all shadow-md ${isReady
-                    ? "bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-500/20"
-                    : "bg-gradient-to-r from-indigo-600 to-purple-650 text-white shadow-indigo-500/20"
+                  ? "bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-500/20"
+                  : "bg-gradient-to-r from-indigo-600 to-purple-650 text-white shadow-indigo-500/20"
                   }`}
               >
                 {isReady ? "✓ Ready & Checked" : "Mark Self Ready"}
@@ -1341,25 +1353,19 @@ export default function GdLiveRoom({
 
   // ─── MAIN WORKSPACE (STAGES 3, 4, 5, 6) ───
   const warnModal = showWarning ? (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-      <div className="card p-6 max-w-sm w-full text-center space-y-4 border border-amber-500/40 bg-slate-900/95">
-        <div className="flex items-center justify-center gap-2 text-amber-400">
-          <AlertTriangle className="w-7 h-7" />
-          <span className="text-lg font-extrabold">Proctoring Alert</span>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
+      <div className="w-full max-w-sm rounded-2xl border border-amber-500/40 bg-slate-900 p-6 text-center shadow-2xl">
+        <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-amber-500/15 text-amber-400">
+          <AlertCircle className="h-6 w-6" />
         </div>
-        <p className="text-sm text-heading font-semibold">{showWarning}</p>
-        {warningEvent && (
-          <p className="text-xs text-muted-soft">Reason: {warningEvent}</p>
-        )}
-        <p className="text-xs text-amber-400/80">
-          Further violations may result in automatic session termination.
+        <h3 className="mb-2 text-lg font-bold text-heading">Stay Focused!</h3>
+        <p className="mb-4 text-sm text-body">
+          {showWarning}
+          {warningEvent ? ` — ${warningEvent}` : ""}
         </p>
-        <button
-          onClick={() => setShowWarning(null)}
-          className="btn-primary w-full text-sm h-10"
-        >
-          I Understand
-        </button>
+        <Button onClick={() => setShowWarning(null)} className="w-full bg-gradient-to-r from-amber-500 to-orange-600 border-0">
+          I'm back, continue
+        </Button>
       </div>
     </div>
   ) : null;
@@ -1406,10 +1412,10 @@ export default function GdLiveRoom({
                   <div
                     key={p.phase}
                     className={`flex items-center gap-2 px-3 py-1.5 rounded-full transition-all shrink-0 border ${active
-                        ? "bg-indigo-600 border-indigo-500 text-white shadow-md shadow-indigo-600/20"
-                        : completed
-                          ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
-                          : "bg-slate-950/40 border-slate-800 text-muted-soft"
+                      ? "bg-indigo-600 border-indigo-500 text-white shadow-md shadow-indigo-600/20"
+                      : completed
+                        ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
+                        : "bg-slate-950/40 border-slate-800 text-muted-soft"
                       }`}
                   >
                     <span className={`w-1.5 h-1.5 rounded-full ${active ? "bg-white animate-ping" : completed ? "bg-emerald-400" : "bg-slate-700"}`} />
@@ -1426,7 +1432,7 @@ export default function GdLiveRoom({
               </span>
               <div className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-bold bg-slate-950 border border-slate-800 text-heading">
                 <Clock className="w-3.5 h-3.5 text-indigo-400" />
-                <span>{timerSeconds < 10 ? `00:0${timerSeconds}` : `00:${timerSeconds}`}</span>
+                <span>{formatTime(timerSeconds)}</span>
               </div>
             </div>
           </div>
@@ -1483,8 +1489,7 @@ export default function GdLiveRoom({
                             className="w-1 bg-gradient-to-t from-indigo-500 to-purple-650 rounded-full"
                             style={{
                               height: isRecording && currentSpeakerId === userId ? `${h}%` : '20%',
-                              animation: isRecording && currentSpeakerId === userId ? `bounce 1s ease-in-out infinite alternate` : 'none',
-                              animationDelay: `${i * 0.1}s`
+                              animation: isRecording && currentSpeakerId === userId ? `bounce 1s ease-in-out ${i * 0.1}s infinite alternate` : 'none'
                             }}
                           />
                         ))}
@@ -1493,7 +1498,7 @@ export default function GdLiveRoom({
                       {/* Circular countdown dial */}
                       <CircularTimer
                         seconds={timerSeconds}
-                        maxSeconds={discussionRound === 3 ? 30 : discussionRound === 5 ? 25 : 45}
+                        maxSeconds={discussionRound === 3 ? 600 : discussionRound === 5 ? 25 : 45}
                       />
 
                       {/* Agree/Disagree feedback buttons */}
@@ -1744,12 +1749,12 @@ export default function GdLiveRoom({
               <div className="card p-4 bg-slate-900/80 backdrop-blur-lg border border-slate-800 space-y-3">
                 <h3 className="text-xs font-bold text-heading uppercase tracking-wider border-b border-slate-850 pb-2">Round Score Evaluator</h3>
                 <div className="grid grid-cols-3 gap-y-3 gap-x-1.5 justify-items-center">
-                  <CircularProgress percent={liveScores.grammar || 85} size={56} strokeWidth={4.5} color="#2dd4bf" label="Grammar" />
-                  <CircularProgress percent={liveScores.fluency || 85} size={56} strokeWidth={4.5} color="#3b82f6" label="Fluency" />
-                  <CircularProgress percent={liveScores.pronunciation || 87} size={56} strokeWidth={4.5} color="#06b6d4" label="Accent" />
-                  <CircularProgress percent={liveScores.vocabulary || 85} size={56} strokeWidth={4.5} color="#ec4899" label="Vocabulary" />
-                  <CircularProgress percent={liveScores.confidence || 85} size={56} strokeWidth={4.5} color="#eab308" label="Confidence" />
-                  <CircularProgress percent={liveScores.relevance || 91} size={56} strokeWidth={4.5} color="#22c55e" label="Relevance" />
+                  <CircularProgress percent={liveScores?.grammar ?? 0} size={56} strokeWidth={4.5} color="#2dd4bf" label="Grammar" />
+                  <CircularProgress percent={liveScores?.fluency ?? 0} size={56} strokeWidth={4.5} color="#3b82f6" label="Fluency" />
+                  <CircularProgress percent={liveScores?.pronunciation ?? 0} size={56} strokeWidth={4.5} color="#06b6d4" label="Accent" />
+                  <CircularProgress percent={liveScores?.vocabulary ?? 0} size={56} strokeWidth={4.5} color="#ec4899" label="Vocabulary" />
+                  <CircularProgress percent={liveScores?.confidence ?? 0} size={56} strokeWidth={4.5} color="#eab308" label="Confidence" />
+                  <CircularProgress percent={liveScores?.relevance ?? 0} size={56} strokeWidth={4.5} color="#22c55e" label="Relevance" />
                 </div>
               </div>
 
@@ -1895,7 +1900,7 @@ export default function GdLiveRoom({
             )}
 
             <Button
-              onClick={onLeave}
+              onClick={() => onLeave(myFinished)}
               className="btn-secondary h-9 px-3 rounded-xl font-bold border-slate-800 hover:bg-slate-800 text-xs flex items-center gap-1 shrink-0"
             >
               Leave Room
