@@ -118,8 +118,8 @@ function formatTime(s: number) {
 
 function PipelineTracker({ currentSpeakerId }: { currentSpeakerId: number | null }) {
   const steps = [
-    "Voice Input", "Noise Removal", "Whisper STT", "Sentence Detection", 
-    "Grammar", "Emotion", "Confidence", "Relevance", "AI Decision Engine", 
+    "Voice Input", "Noise Removal", "Whisper STT", "Sentence Detection",
+    "Grammar", "Emotion", "Confidence", "Relevance", "AI Decision Engine",
     "Moderator Response", "Dashboard Update"
   ];
   const [activeIdx, setActiveIdx] = useState(-1);
@@ -150,13 +150,12 @@ function PipelineTracker({ currentSpeakerId }: { currentSpeakerId: number | null
           return (
             <div
               key={step}
-              className={`flex items-center gap-1 px-2 py-1 rounded-md shrink-0 transition-all border ${
-                isActive
+              className={`flex items-center gap-1 px-2 py-1 rounded-md shrink-0 transition-all border ${isActive
                   ? "bg-indigo-600 border-indigo-500 text-white animate-pulse"
                   : isDone
-                  ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
-                  : "bg-slate-950/40 border-slate-850 text-muted-soft"
-              }`}
+                    ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
+                    : "bg-slate-950/40 border-slate-850 text-muted-soft"
+                }`}
             >
               <span className={`w-1 h-1 rounded-full ${isActive ? "bg-white" : isDone ? "bg-emerald-400" : "bg-slate-700"}`} />
               <span>{step}</span>
@@ -240,7 +239,7 @@ export default function GdLiveRoom({
   const [interruptionCounts, setInterruptionCounts] = useState<Record<number, number>>({});
   const [speakingDurations, setSpeakingDurations] = useState<Record<number, number>>({});
   const [participationPercentages, setParticipationPercentages] = useState<Record<number, number>>({});
-  const [agreeDisagreeVotes, setAgreeDisagreeVotes] = useState<Record<number, {agree: number, disagree: number}>>({});
+  const [agreeDisagreeVotes, setAgreeDisagreeVotes] = useState<Record<number, { agree: number, disagree: number }>>({});
   const [argumentsMade, setArgumentsMade] = useState<Record<number, string[]>>({});
   const [relevantPointsCount, setRelevantPointsCount] = useState<Record<number, number>>({});
   const [offTopicCount, setOffTopicCount] = useState<Record<number, number>>({});
@@ -647,10 +646,10 @@ export default function GdLiveRoom({
     }
 
     if (transcript) setTranscript(transcript);
-    
+
     // Send finish notification
     send("SPEAKER_FINISHED", { user_id: userId, transcript });
-    
+
     // For continuous discussion rounds, unlock for future turns
     if (discussionRound === 2 || discussionRound === 3) {
       finishLockRef.current = false;
@@ -785,9 +784,9 @@ export default function GdLiveRoom({
           setDiscussionRound(round || 1);
           if (topic) setTopic(topic);
           if (speaking_order) setSpeakingOrder(speaking_order);
-          
+
           setTimerSeconds(defaultSpeakingTime);
-          
+
           if (current_speaker_id === userId) {
             startRecording();
             startSpeechRecognition();
@@ -1148,7 +1147,7 @@ export default function GdLiveRoom({
 
         <div className="relative z-10 flex-1 flex flex-col p-4 md:p-6 justify-center max-w-5xl mx-auto w-full">
           <div className="grid grid-cols-1 md:grid-cols-12 gap-6 animate-fade-up">
-            
+
             {/* Left side: Setup checklist */}
             <div className="md:col-span-5 card p-6 space-y-5 bg-slate-900/80 backdrop-blur-xl border border-slate-800 shadow-2xl">
               <div className="text-center md:text-left">
@@ -1195,12 +1194,12 @@ export default function GdLiveRoom({
                 {/* Sound test check */}
                 <div className="p-3.5 rounded-xl bg-indigo-500/5 border border-indigo-500/15 space-y-2">
                   <p className="text-[10px] text-indigo-300 font-bold">AI Voice & Audio Test</p>
-                  <Button 
-                    variant="secondary" 
+                  <Button
+                    variant="secondary"
                     onClick={() => {
                       voice.speak("Audio check successful. Your speakers are working.");
                       setAudioTestPassed(true);
-                    }} 
+                    }}
                     className="w-full text-xs h-9 border-indigo-500/30 text-indigo-300 hover:bg-indigo-500/10"
                   >
                     {audioTestPassed ? "🔊 Test Passed" : "🔈 Run Speaker Test"}
@@ -1209,13 +1208,12 @@ export default function GdLiveRoom({
               </div>
 
               {/* Ready status trigger */}
-              <Button 
+              <Button
                 onClick={toggleLocalReady}
-                className={`w-full h-12 text-sm font-bold rounded-xl transition-all shadow-md ${
-                  isReady 
-                    ? "bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-500/20" 
+                className={`w-full h-12 text-sm font-bold rounded-xl transition-all shadow-md ${isReady
+                    ? "bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-500/20"
                     : "bg-gradient-to-r from-indigo-600 to-purple-650 text-white shadow-indigo-500/20"
-                }`}
+                  }`}
               >
                 {isReady ? "✓ Ready & Checked" : "Mark Self Ready"}
               </Button>
@@ -1223,7 +1221,7 @@ export default function GdLiveRoom({
 
             {/* Right side: Moderator welcome and participants list */}
             <div className="md:col-span-7 space-y-4">
-              
+
               {/* Rules Explanation Card */}
               <div className="card p-6 bg-slate-900/80 backdrop-blur-xl border border-slate-800 shadow-2xl space-y-3">
                 <div className="flex items-center gap-2 border-b border-slate-850 pb-2">
@@ -1231,8 +1229,8 @@ export default function GdLiveRoom({
                   <h3 className="text-xs font-bold text-heading uppercase tracking-wider">AI Moderator Briefing</h3>
                 </div>
                 <div className="p-3.5 bg-slate-950/50 rounded-xl border border-slate-850 text-xs leading-relaxed text-body italic whitespace-pre-line">
-                  "🤖 AI Moderator: Welcome! Today we will evaluate 10 core placement parameters. 
-                  Please complete the hardware checklist. 
+                  "🤖 AI Moderator: Welcome! Today we will evaluate 10 core placement parameters.
+                  Please complete the hardware checklist.
 
                   We will automatically proceed through the following phases:
                   1. Waiting Room (Ready Sync)
@@ -1264,9 +1262,8 @@ export default function GdLiveRoom({
                       return (
                         <div key={m.user_id} className="p-2.5 rounded-lg bg-slate-950/40 border border-slate-850 flex items-center justify-between text-xs animate-fade-in">
                           <span className="font-bold text-heading truncate">{label}</span>
-                          <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded ${
-                            isUserReady ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" : "bg-amber-500/10 text-amber-400 border border-amber-500/20"
-                          }`}>
+                          <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded ${isUserReady ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" : "bg-amber-500/10 text-amber-400 border border-amber-500/20"
+                            }`}>
                             {isUserReady ? "Ready" : "Waiting"}
                           </span>
                         </div>
@@ -1278,7 +1275,7 @@ export default function GdLiveRoom({
                 {/* Admin controls to start */}
                 {user?.role === "admin" && (
                   <div className="pt-2 border-t border-slate-850">
-                    <Button 
+                    <Button
                       onClick={() => send("START_GD", {})}
                       className="w-full h-11 btn-primary bg-indigo-600 hover:bg-indigo-500 border-0 font-extrabold text-xs tracking-wider flex items-center justify-center gap-1.5"
                     >
@@ -1309,7 +1306,7 @@ export default function GdLiveRoom({
           <div className="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-650 flex items-center justify-center text-white shadow-xl shadow-indigo-500/10 animate-bounce">
             🤖
           </div>
-          
+
           <div className="space-y-1">
             <h1 className="text-2xl font-black text-heading bg-gradient-to-r from-indigo-500 to-purple-550 bg-clip-text text-transparent">AI Welcoming & Rules Briefing</h1>
             <p className="text-xs text-muted-soft uppercase font-bold tracking-wider">Phase 2: Introduction</p>
@@ -1343,6 +1340,30 @@ export default function GdLiveRoom({
   }
 
   // ─── MAIN WORKSPACE (STAGES 3, 4, 5, 6) ───
+  const warnModal = showWarning ? (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+      <div className="card p-6 max-w-sm w-full text-center space-y-4 border border-amber-500/40 bg-slate-900/95">
+        <div className="flex items-center justify-center gap-2 text-amber-400">
+          <AlertTriangle className="w-7 h-7" />
+          <span className="text-lg font-extrabold">Proctoring Alert</span>
+        </div>
+        <p className="text-sm text-heading font-semibold">{showWarning}</p>
+        {warningEvent && (
+          <p className="text-xs text-muted-soft">Reason: {warningEvent}</p>
+        )}
+        <p className="text-xs text-amber-400/80">
+          Further violations may result in automatic session termination.
+        </p>
+        <button
+          onClick={() => setShowWarning(null)}
+          className="btn-primary w-full text-sm h-10"
+        >
+          I Understand
+        </button>
+      </div>
+    </div>
+  ) : null;
+
   return (
     <div className={`min-h-screen flex flex-col relative overflow-hidden ${theme === "dark" ? "dark" : ""}`}>
       <div className="fixed inset-0 z-0">
@@ -1384,13 +1405,12 @@ export default function GdLiveRoom({
                 return (
                   <div
                     key={p.phase}
-                    className={`flex items-center gap-2 px-3 py-1.5 rounded-full transition-all shrink-0 border ${
-                      active
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-full transition-all shrink-0 border ${active
                         ? "bg-indigo-600 border-indigo-500 text-white shadow-md shadow-indigo-600/20"
                         : completed
-                        ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
-                        : "bg-slate-950/40 border-slate-800 text-muted-soft"
-                    }`}
+                          ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
+                          : "bg-slate-950/40 border-slate-800 text-muted-soft"
+                      }`}
                   >
                     <span className={`w-1.5 h-1.5 rounded-full ${active ? "bg-white animate-ping" : completed ? "bg-emerald-400" : "bg-slate-700"}`} />
                     <span>{p.label}</span>
@@ -1421,10 +1441,10 @@ export default function GdLiveRoom({
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
-            
+
             {/* Left Column: Current Speaker card and Turn queue */}
             <div className="lg:col-span-3 space-y-4">
-              
+
               {/* Speaker Card */}
               <div className="card p-4 bg-slate-900/80 backdrop-blur-lg border border-slate-800 space-y-4 relative overflow-hidden">
                 <div className="flex items-center justify-between">
@@ -1439,7 +1459,7 @@ export default function GdLiveRoom({
                   const label = speaker?.label || speaker?.anonymous_label || speaker?.name || `Member ${currentSpeakerId}`;
                   const speakingStatus = liveSpeakingStatuses[currentSpeakerId] || "Speaking";
                   const votes = agreeDisagreeVotes[currentSpeakerId] || { agree: 0, disagree: 0 };
-                  
+
                   return (
                     <div className="space-y-3.5">
                       <div className="flex items-center gap-3">
@@ -1448,9 +1468,8 @@ export default function GdLiveRoom({
                         </div>
                         <div className="min-w-0 flex-1">
                           <p className="text-xs font-bold text-heading truncate">{label}</p>
-                          <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded ${
-                            speakingStatus === "Speaking" ? "bg-emerald-500/10 text-emerald-400" : "bg-amber-500/10 text-amber-400"
-                          }`}>
+                          <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded ${speakingStatus === "Speaking" ? "bg-emerald-500/10 text-emerald-400" : "bg-amber-500/10 text-amber-400"
+                            }`}>
                             {speakingStatus}
                           </span>
                         </div>
@@ -1459,10 +1478,10 @@ export default function GdLiveRoom({
                       {/* Sound wave graphics */}
                       <div className="flex justify-center items-end gap-1 h-9 bg-slate-950/40 p-2 rounded-2xl border border-slate-850">
                         {[30, 60, 45, 90, 75, 40, 80, 50, 65, 30].map((h, i) => (
-                          <span 
-                            key={i} 
+                          <span
+                            key={i}
                             className="w-1 bg-gradient-to-t from-indigo-500 to-purple-650 rounded-full"
-                            style={{ 
+                            style={{
                               height: isRecording && currentSpeakerId === userId ? `${h}%` : '20%',
                               animation: isRecording && currentSpeakerId === userId ? `bounce 1s ease-in-out infinite alternate` : 'none',
                               animationDelay: `${i * 0.1}s`
@@ -1472,23 +1491,23 @@ export default function GdLiveRoom({
                       </div>
 
                       {/* Circular countdown dial */}
-                      <CircularTimer 
-                        seconds={timerSeconds} 
-                        maxSeconds={discussionRound === 3 ? 30 : discussionRound === 5 ? 25 : 45} 
+                      <CircularTimer
+                        seconds={timerSeconds}
+                        maxSeconds={discussionRound === 3 ? 30 : discussionRound === 5 ? 25 : 45}
                       />
 
                       {/* Agree/Disagree feedback buttons */}
                       {discussionRound === 4 && (
                         <div className="flex gap-2">
-                          <Button 
-                            variant="secondary" 
+                          <Button
+                            variant="secondary"
                             onClick={() => send("AGREE_DISAGREE_VOTE", { speaker_id: currentSpeakerId, vote_type: "agree" })}
                             className="flex-1 text-[10px] h-8 border-slate-800 hover:bg-emerald-500/10 hover:text-emerald-400"
                           >
                             👍 Agree ({votes.agree})
                           </Button>
-                          <Button 
-                            variant="secondary" 
+                          <Button
+                            variant="secondary"
                             onClick={() => send("AGREE_DISAGREE_VOTE", { speaker_id: currentSpeakerId, vote_type: "disagree" })}
                             className="flex-1 text-[10px] h-8 border-slate-800 hover:bg-rose-500/10 hover:text-rose-455"
                           >
@@ -1512,7 +1531,7 @@ export default function GdLiveRoom({
                   {discussionRound === 4 && <span className="text-[8px] bg-indigo-500/10 text-indigo-400 px-1.5 py-0.5 rounded">Active</span>}
                 </h3>
                 <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
-                  
+
                   {/* Rebuttal Queue (High Priority) */}
                   {rebuttalQueue.map((uid) => {
                     const label = members.find(m => m.user_id === uid)?.label || `Member ${uid}`;
@@ -1558,26 +1577,26 @@ export default function GdLiveRoom({
 
             {/* Middle Column: Participants lists, AI moderator log, speech transcript */}
             <div className="lg:col-span-6 space-y-4">
-              
+
               {/* Horizontal Slider card with checkmarks */}
               <div className="card p-4 bg-slate-900/80 backdrop-blur-lg border border-slate-800">
                 <div className="flex justify-between items-center border-b border-slate-850 pb-2 mb-3">
                   <h3 className="text-xs font-bold text-heading uppercase tracking-wider flex items-center gap-1">
                     <Users className="w-4 h-4 text-indigo-400" /> Active Round Participants ({members.length})
                   </h3>
-                  
+
                   {/* Local Ready and hand checks */}
                   <div className="flex gap-2">
                     {discussionRound === 4 && (
                       <>
-                        <Button 
+                        <Button
                           variant="secondary"
                           onClick={() => send("REQUEST_REBUTTAL", { requested: !rebuttalQueue.includes(userId) })}
                           className={`text-[9px] h-7 border-slate-800 hover:bg-rose-500/10 ${rebuttalQueue.includes(userId) ? "bg-rose-500/20 text-rose-300" : "text-muted-soft"}`}
                         >
                           🔥 Rebuttal Floor
                         </Button>
-                        <Button 
+                        <Button
                           variant="secondary"
                           onClick={() => send("RAISE_HAND", { raised: !handRaisedQueue.includes(userId) })}
                           className={`text-[9px] h-7 border-slate-800 hover:bg-indigo-500/10 ${handRaisedQueue.includes(userId) ? "bg-indigo-500/20 text-indigo-300" : "text-muted-soft"}`}
@@ -1595,12 +1614,11 @@ export default function GdLiveRoom({
                     const isSpeaking = m.user_id === currentSpeakerId;
                     const ready = readyUsers.includes(m.user_id);
                     const net = networkHealthMap[m.user_id] || "Good";
-                    
+
                     return (
                       <div key={m.user_id} className="flex flex-col items-center shrink-0 w-16 text-center">
-                        <div className={`w-11 h-11 rounded-full flex items-center justify-center text-white text-xs font-black relative border ${
-                          isSpeaking ? "border-indigo-500 bg-indigo-500/10 shadow-lg scale-105" : "border-slate-850 bg-slate-950/40"
-                        }`}>
+                        <div className={`w-11 h-11 rounded-full flex items-center justify-center text-white text-xs font-black relative border ${isSpeaking ? "border-indigo-500 bg-indigo-500/10 shadow-lg scale-105" : "border-slate-850 bg-slate-950/40"
+                          }`}>
                           {label[0].toUpperCase()}
                           {isSpeaking && <span className="absolute -bottom-1 -right-1 text-[8px]">🎙️</span>}
                           {ready && <span className="absolute -top-1 -right-1 text-[8px]">✅</span>}
@@ -1641,14 +1659,14 @@ export default function GdLiveRoom({
                     <span className="text-[9px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full font-mono">Stage 6</span>
                   </div>
                   <p className="text-xs text-body">AI Moderator: "What is the team consensus on this topic? One student should explain the team consensus outline."</p>
-                  
+
                   {consensusClaimedBy ? (
                     <div className="p-3 bg-slate-950/40 rounded-xl border border-slate-850 text-xs">
                       <span className="font-extrabold text-heading">Consensus Speaker: </span>
                       <span>{members.find(m => m.user_id === consensusClaimedBy)?.label || "Teammate"}</span>
                     </div>
                   ) : (
-                    <Button 
+                    <Button
                       onClick={() => send("CLAIM_CONSENSUS_TURN", {})}
                       className="w-full text-xs h-10 bg-amber-600 hover:bg-amber-500 text-white font-bold"
                     >
@@ -1721,7 +1739,7 @@ export default function GdLiveRoom({
 
             {/* Right Column: Circular Score Gauges & Live stats indicator cards */}
             <div className="lg:col-span-3 space-y-4">
-              
+
               {/* circular score metrics panel */}
               <div className="card p-4 bg-slate-900/80 backdrop-blur-lg border border-slate-800 space-y-3">
                 <h3 className="text-xs font-bold text-heading uppercase tracking-wider border-b border-slate-850 pb-2">Round Score Evaluator</h3>
@@ -1738,7 +1756,7 @@ export default function GdLiveRoom({
               {/* Dynamic live performance metrics panel */}
               <div className="card p-4 bg-slate-900/80 backdrop-blur-lg border border-slate-800 space-y-3.5">
                 <h3 className="text-xs font-bold text-heading uppercase tracking-wider border-b border-slate-850 pb-2">Dynamic Stats Tracker</h3>
-                
+
                 <div className="space-y-2.5 text-xs">
                   {/* speaking time */}
                   <div className="flex justify-between items-center">
@@ -1799,12 +1817,12 @@ export default function GdLiveRoom({
 
           {/* Floating actions control bar at the bottom */}
           <div className="flex items-center justify-center gap-4 bg-slate-900/90 backdrop-blur-md px-6 py-2.5 rounded-2xl border border-slate-800 shadow-2xl max-w-2xl mx-auto w-full mt-2">
-            
+
             {/* Stage 4 Claim floor triggers or mic controllers */}
             {discussionRound === 4 && submitStep === "idle" ? (
               isRecording ? (
-                <button 
-                  onClick={() => executeFinish()} 
+                <button
+                  onClick={() => executeFinish()}
                   className="flex flex-col items-center gap-1 text-[9px] text-rose-455 font-bold animate-pulse shrink-0"
                 >
                   <div className="w-9 h-9 rounded-xl bg-rose-600 flex items-center justify-center hover:bg-rose-500 text-white border border-rose-500 shadow-lg">
@@ -1813,14 +1831,14 @@ export default function GdLiveRoom({
                   <span>Yield Floor</span>
                 </button>
               ) : (
-                <button 
+                <button
                   onClick={() => {
                     startRecording();
                     startSpeechRecognition();
                     startChunkUpload();
                     setCurrentSpeakerId(userId);
                     send("LIVE_SPEECH", { text: "[Speaking turn claimed]" });
-                  }} 
+                  }}
                   className="flex flex-col items-center gap-1 text-[9px] text-emerald-400 font-bold shrink-0 animate-bounce"
                 >
                   <div className="w-9 h-9 rounded-xl bg-slate-850 flex items-center justify-center hover:bg-slate-855 border border-slate-800 text-emerald-400 shadow-lg">
@@ -1830,36 +1848,34 @@ export default function GdLiveRoom({
                 </button>
               )
             ) : (
-              <button 
-                onClick={() => {}} 
-                className={`flex flex-col items-center gap-1 text-[9px] font-bold shrink-0 ${
-                  currentSpeakerId === userId ? "text-emerald-400" : "text-slate-400"
-                }`}
+              <button
+                onClick={() => { }}
+                className={`flex flex-col items-center gap-1 text-[9px] font-bold shrink-0 ${currentSpeakerId === userId ? "text-emerald-400" : "text-slate-400"
+                  }`}
               >
-                <div className={`w-9 h-9 rounded-xl flex items-center justify-center border ${
-                  currentSpeakerId === userId ? "bg-slate-850 hover:bg-slate-800 border-slate-800 text-emerald-400" : "bg-slate-900/40 border-slate-850 text-slate-500 cursor-not-allowed"
-                }`}>
+                <div className={`w-9 h-9 rounded-xl flex items-center justify-center border ${currentSpeakerId === userId ? "bg-slate-850 hover:bg-slate-800 border-slate-800 text-emerald-400" : "bg-slate-900/40 border-slate-850 text-slate-500 cursor-not-allowed"
+                  }`}>
                   <Mic className="w-4 h-4" />
                 </div>
                 <span>{currentSpeakerId === userId ? "Mic Active" : "Mic Muted"}</span>
               </button>
             )}
 
-            <button onClick={() => {}} className="flex flex-col items-center gap-1 text-[9px] text-slate-405 font-bold">
+            <button onClick={() => { }} className="flex flex-col items-center gap-1 text-[9px] text-slate-405 font-bold">
               <div className="w-9 h-9 rounded-xl bg-slate-900/40 border border-slate-850 text-slate-500 flex items-center justify-center hover:bg-slate-800 cursor-not-allowed">
                 <Maximize2 className="w-4 h-4" />
               </div>
               <span>Camera</span>
             </button>
-            
-            <button onClick={() => {}} className="flex flex-col items-center gap-1 text-[9px] text-slate-405 font-bold">
+
+            <button onClick={() => { }} className="flex flex-col items-center gap-1 text-[9px] text-slate-405 font-bold">
               <div className="w-9 h-9 rounded-xl bg-slate-900/40 border border-slate-850 text-slate-500 flex items-center justify-center hover:bg-slate-800 cursor-not-allowed">
                 <Play className="w-4 h-4" />
               </div>
               <span>Screen</span>
             </button>
 
-            <button onClick={() => {}} className="flex flex-col items-center gap-1 text-[9px] text-slate-405 font-bold">
+            <button onClick={() => { }} className="flex flex-col items-center gap-1 text-[9px] text-slate-405 font-bold">
               <div className="w-9 h-9 rounded-xl bg-slate-900/40 border border-slate-850 text-slate-500 flex items-center justify-center hover:bg-slate-800 cursor-not-allowed">
                 <Sparkles className="w-4 h-4" />
               </div>
@@ -1867,19 +1883,19 @@ export default function GdLiveRoom({
             </button>
 
             <div className="h-7 w-px bg-slate-800 mx-2 shrink-0" />
-            
+
             {/* Conclude turn button */}
             {!myFinished && submitStep === "idle" && currentSpeakerId === userId && (
-              <Button 
-                onClick={() => executeFinish()} 
+              <Button
+                onClick={() => executeFinish()}
                 className="btn-primary h-9 px-3 rounded-xl font-bold bg-rose-600 hover:bg-rose-500 border-0 flex items-center gap-1 text-xs text-white shrink-0 shadow-lg"
               >
                 <Square className="w-3.5 h-3.5 fill-white animate-pulse" /> Conclude Turn
               </Button>
             )}
-            
-            <Button 
-              onClick={onLeave} 
+
+            <Button
+              onClick={onLeave}
               className="btn-secondary h-9 px-3 rounded-xl font-bold border-slate-800 hover:bg-slate-800 text-xs flex items-center gap-1 shrink-0"
             >
               Leave Room
