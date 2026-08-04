@@ -622,6 +622,7 @@ class TeamState:
         self.timer_seconds = speaking_time
         self.timer_running = False
         self.transcripts: dict[int, str] = {}
+        self.live_previews: dict[int, str] = {}
         self.evaluations: dict[int, dict] = {}
         
         # Turn/rounds tracking (7-stage state machine)
@@ -721,6 +722,7 @@ class TeamState:
             "relevant_points_count": self.relevant_points_count,
             "off_topic_count": self.off_topic_count,
             "live_speaking_statuses": self.live_speaking_statuses,
+            "live_previews": {str(k): v for k, v in self.live_previews.items()},
             "challenge_questions": self.challenge_questions,
             "consensus_claimed_by": self.consensus_claimed_by,
             "consensus_text": self.consensus_text,
@@ -1040,8 +1042,21 @@ async def gd_live_socket(
                 if ts:
                     text = payload.get("text", "")
                     if text:
-                        ts.transcripts[user_id] = text
-                        
+                        logger.debug("LIVE_SPEECH uid=%s text_len=%d preview=%s",
+                                     user_id, len(text), text[:60])
+                        # Store live preview separately — do NOT overwrite accumulated
+                        # Whisper transcript from upload-chunk.  The preview is only used
+                        # for real-time relay; the final transcript for evaluation comes
+                        # from ts.transcripts (populated by upload-chunk / finalize).
+                        ts.live_previews.setdefault(user_id, "")
+                        ts.live_previews[user_id] = text
+
+                        # Seed the accumulated transcript on first speech so that
+                        # finalize-transcript always has something even if no chunks
+                        # were uploaded yet.
+                        if not ts.transcripts.get(user_id, "").strip():
+                            ts.transcripts[user_id] = text
+
                         # Relay to all other team members so they see the live transcript scroll
                         await manager.broadcast_to_team(session_code, team_number, "LIVE_SPEECH_BROADCAST", {
                             "user_id": user_id,

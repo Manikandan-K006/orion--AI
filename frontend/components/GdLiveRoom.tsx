@@ -389,7 +389,7 @@ export default function GdLiveRoom({
     if (typeof window === "undefined") return;
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      console.warn("WebSpeech API is not supported in this browser.");
+      console.warn("[SPEECH] WebSpeech API not supported in this browser.");
       return;
     }
 
@@ -401,6 +401,8 @@ export default function GdLiveRoom({
     rec.continuous = true;
     rec.interimResults = true;
     rec.lang = "en-US";
+
+    console.log("[SPEECH] Starting Web Speech API...");
 
     rec.onresult = (event: any) => {
       let fullTranscript = "";
@@ -414,7 +416,7 @@ export default function GdLiveRoom({
     };
 
     rec.onerror = (event: any) => {
-      console.warn("Speech recognition notice:", event.error);
+      console.warn("[SPEECH] Error:", event.error);
       if (event.error === "no-speech" || event.error === "network") {
         setTimeout(() => {
           if (!finishLockRef.current) {
@@ -425,6 +427,7 @@ export default function GdLiveRoom({
     };
 
     rec.onend = () => {
+      console.log("[SPEECH] Recognition ended, restarting...");
       if (!finishLockRef.current) {
         try {
           rec.start();
@@ -453,39 +456,69 @@ export default function GdLiveRoom({
     try {
       setAudioError("");
       if (typeof window === "undefined" || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        console.warn("Microphone access requires HTTPS or localhost (or chrome://flags/#unsafely-treat-insecure-origin-as-secure).");
+        console.warn("[MIC] Microphone API not available. Requires HTTPS or localhost.");
+        setAudioError("Microphone API not available. Use HTTPS or localhost.");
         return;
       }
+
+      // Block mic on insecure LAN origins — getUserMedia is restricted to secure contexts
+      const hostname = window.location.hostname;
+      const isSecureContext = window.location.protocol === "https:" || hostname === "localhost" || hostname === "127.0.0.1";
+      if (!isSecureContext) {
+        console.error("[MIC] BLOCKED — insecure origin:", window.location.href);
+        setAudioError("Microphone requires HTTPS. Open chrome://flags/#unsafely-treat-insecure-origin-as-secure and add this URL, or use localhost.");
+        return;
+      }
+
+      console.log("[MIC] Requesting microphone access...");
       let stream: MediaStream;
       try {
         stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      } catch (e: any) {
-        if (e.name === "NotFoundError" || e.message.includes("not found")) {
-          console.warn("No microphone found. Using a silent dummy audio stream for testing.");
-          const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-          const dest = ctx.createMediaStreamDestination();
-          stream = dest.stream;
-        } else {
-          throw e;
+        const tracks = stream.getAudioTracks();
+        console.log("[MIC] Granted. Tracks:", tracks.map(t => ({
+          kind: t.kind, enabled: t.enabled, muted: t.muted,
+          readyState: t.readyState, label: t.label,
+        })));
+        if (tracks.length === 0 || tracks[0].readyState !== "live") {
+          console.error("[MIC] No active audio tracks!", tracks);
+          setAudioError("Microphone granted but no active audio track found.");
+          return;
         }
+      } catch (e: any) {
+        console.error("[MIC] getUserMedia FAILED:", e.name, e.message);
+        setAudioError(`Microphone error: ${e.name} — ${e.message}`);
+        return;
       }
       audioStreamRef.current = stream;
       const ctx = new AudioContext();
       audioContextRef.current = ctx;
+      if (ctx.state === "suspended") {
+        await ctx.resume();
+        console.log("[MIC] AudioContext resumed from suspended state");
+      }
       const src = ctx.createMediaStreamSource(stream);
       const analyser = ctx.createAnalyser();
       src.connect(analyser);
       const data = new Uint8Array(analyser.frequencyBinCount);
-      setInterval(() => {
+      const levelInterval = setInterval(() => {
         analyser.getByteFrequencyData(data);
         const avg = data.reduce((a, b) => a + b, 0) / data.length;
         setAudioLevel(Math.min(1, avg / 128));
       }, 100);
       audioChunksRef.current = [];
-      const recorder = new MediaRecorder(stream, { mimeType: "audio/webm;codecs=opus" });
+      const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+        ? "audio/webm;codecs=opus" : "audio/webm";
+      console.log("[MIC] Creating MediaRecorder, mimeType:", mimeType);
+      const recorder = new MediaRecorder(stream, { mimeType });
       mediaRecorderRef.current = recorder;
-      recorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+      recorder.onerror = (e) => {
+        console.error("[MIC] MediaRecorder error:", e);
+      };
       recorder.onstop = () => {
+        clearInterval(levelInterval);
         stream.getTracks().forEach((t) => t.stop());
         if (ctx.state !== "closed") {
           ctx.close().catch(() => { });
@@ -495,13 +528,15 @@ export default function GdLiveRoom({
       };
       recorder.start(1000);
       setIsRecording(true);
+      console.log("[MIC] Recording started. State:", recorder.state);
     } catch (err) {
-      setAudioError("Microphone access denied");
-      console.warn("Recording start failed:", err);
+      console.error("[MIC] startRecording failed:", err);
+      setAudioError("Microphone access failed");
     }
   }
 
   function stopMic() {
+    console.log("[MIC] Stopping. Recorder state:", mediaRecorderRef.current?.state);
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
       mediaRecorderRef.current.stop();
     }
@@ -520,20 +555,22 @@ export default function GdLiveRoom({
     if (!isRecording || chunkUploadRef.current || audioChunksRef.current.length === 0) return;
     chunkUploadRef.current = true;
     try {
-      // Take a snapshot of current chunks and clear for new recording
       const chunks = [...audioChunksRef.current];
       audioChunksRef.current = [];
       const blob = new Blob(chunks, { type: "audio/webm" });
       if (blob.size < 100) { chunkUploadRef.current = false; return; }
+      console.log("[CHUNK] Uploading:", blob.size, "bytes,", chunks.length, "chunks");
       const formData = new FormData();
       formData.append("file", blob, "gd_chunk_" + sessionCode + "_" + userId + ".webm");
-      await fetch(apiUrl + "/gd-live/sessions/" + sessionCode + "/upload-chunk", {
+      const res = await fetch(apiUrl + "/gd-live/sessions/" + sessionCode + "/upload-chunk", {
         method: "POST",
         headers: { Authorization: "Bearer " + token },
         body: formData,
       });
+      const data = await res.json();
+      console.log("[CHUNK] Server:", res.status, "transcript:", data.chunk_transcript?.substring(0, 60) || "(empty)");
     } catch (err) {
-      console.warn("Chunk upload failed:", err);
+      console.warn("[CHUNK] Upload failed:", err);
     }
     chunkUploadRef.current = false;
   }
@@ -541,7 +578,8 @@ export default function GdLiveRoom({
   function startChunkUpload() {
     if (chunkIntervalRef.current) clearInterval(chunkIntervalRef.current);
     chunkUploadRef.current = false;
-    chunkIntervalRef.current = setInterval(sendAudioChunk, 20000);
+    chunkIntervalRef.current = setInterval(sendAudioChunk, 10000);
+    console.log("[CHUNK] Upload interval started (10s)");
   }
 
   function stopChunkUpload() {
@@ -580,6 +618,7 @@ export default function GdLiveRoom({
   async function executeFinish() {
     if (finishLockRef.current) return;
     finishLockRef.current = true;
+    console.log("[FINISH] executeFinish called. Chunks remaining:", audioChunksRef.current.length);
     setTimerRunning(false);
     if (timerRef.current) clearInterval(timerRef.current);
     stopChunkUpload();
@@ -591,6 +630,7 @@ export default function GdLiveRoom({
       if (audioChunksRef.current.length > 0) {
         const finalBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
         audioChunksRef.current = [];
+        console.log("[FINISH] Final chunk:", finalBlob.size, "bytes");
         if (finalBlob.size >= 100) {
           const fd = new FormData();
           fd.append("file", finalBlob, "gd_chunk_" + sessionCode + "_" + userId + ".webm");
@@ -618,12 +658,14 @@ export default function GdLiveRoom({
       });
       const finData = await finRes.json();
       transcript = finData.transcript || "";
+      console.log("[FINISH] Finalize transcript:", transcript.length, "chars:", transcript.substring(0, 80));
     } catch (err) {
-      console.warn("Finalize transcript failed:", err);
+      console.warn("[FINISH] Finalize transcript failed:", err);
     }
 
     // If accumulated transcript is empty, fall back to full upload
     if (!transcript || transcript.length < 20) {
+      console.log("[FINISH] Accumulated transcript too short (" + transcript.length + " chars), trying fallback full upload");
       const blob = new Blob(audioChunksRef.current.length > 0
         ? audioChunksRef.current
         : [new Blob()], { type: "audio/webm" });
@@ -648,6 +690,7 @@ export default function GdLiveRoom({
     if (transcript) setTranscript(transcript);
 
     // Send finish notification
+    console.log("[FINISH] Sending SPEAKER_FINISHED. Transcript length:", transcript.length);
     send("SPEAKER_FINISHED", { user_id: userId, transcript });
 
     // For continuous discussion rounds, unlock for future turns
@@ -781,6 +824,7 @@ export default function GdLiveRoom({
         }
         case "SPEAKER_CHANGED": {
           const { current_speaker_id, next_speaker_id, round, topic, speaking_order } = msg.payload;
+          console.log("[SPEAKER_CHANGED] speaker:", current_speaker_id, "me:", userId, "round:", round);
           setCurrentSpeakerId(current_speaker_id);
           setNextSpeakerId(next_speaker_id);
           setDiscussionRound(round || 1);
@@ -790,11 +834,13 @@ export default function GdLiveRoom({
           setTimerSeconds(defaultSpeakingTime);
 
           if (current_speaker_id === userId) {
+            console.log("[SPEAKER_CHANGED] I am the speaker — starting mic");
             startRecording();
             startSpeechRecognition();
             startChunkUpload();
             setTimerRunning(true);
           } else {
+            console.log("[SPEAKER_CHANGED] Not the speaker — stopping mic");
             stopChunkUpload();
             stopSpeechRecognition();
             stopMic();
