@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { AlertCircle, Award, Clock, LogOut, MessageSquare, Mic, MicOff, Trophy, Users, User as UserIcon, Lock, Zap, Loader2, Copy, Check, Target, TrendingUp, ArrowUp, ArrowDown, Sparkles, Menu, X, Shield, Sun, Moon, RefreshCw, Video, VideoOff, Hand, MessageCircle, Maximize, PhoneOff, Radio, CheckCircle2, Mail, Phone, Globe, Eye, EyeOff, VolumeX, Volume2, Bell, Settings, Search, BookOpen, ShieldAlert, Calendar, Upload } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -320,6 +320,14 @@ export default function Home() {
   const isChunkUploadingRef = useRef<boolean>(false);
   const recordingEndedAtRef = useRef<number>(0);
   const audioStreamRef = useRef<MediaStream | null>(null);
+
+  // Ref wrappers to avoid stale closures in setInterval timers
+  const stopSoloRecordingRef = useRef(stopSoloRecording);
+  const sendSoloAudioChunkRef = useRef(sendSoloAudioChunk);
+  useEffect(() => {
+    stopSoloRecordingRef.current = stopSoloRecording;
+    sendSoloAudioChunkRef.current = sendSoloAudioChunk;
+  });
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [pageLoading, setPageLoading] = useState(false);
@@ -736,7 +744,7 @@ export default function Home() {
               clearInterval(timerRef.current);
               timerRef.current = null;
             }
-            stopSoloRecording();
+            stopSoloRecordingRef.current();
             return 0;
           }
           return prev - 1;
@@ -748,7 +756,7 @@ export default function Home() {
       if (chunkIntervalRef.current) {
         clearInterval(chunkIntervalRef.current);
       }
-      chunkIntervalRef.current = setInterval(sendSoloAudioChunk, 15000);
+      chunkIntervalRef.current = setInterval(() => sendSoloAudioChunkRef.current(), 15000);
       
     } catch (err) {
       console.warn("Mic permission denied:", err);
