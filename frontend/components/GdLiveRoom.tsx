@@ -709,31 +709,6 @@ export default function GdLiveRoom({
     chunkUploadRef.current = false;
   }
 
-  function startDiscussion() {
-    setDiscussionStarted(true);
-    setThinkingPhase(true);
-    setThinkingSeconds(120);
-    voice.announceDiscussionStarted();
-    setTimeout(() => voice.announceTopic(topic), 2000);
-  }
-
-  function beginDiscussion() {
-    if (thinkingTimerRef.current) clearInterval(thinkingTimerRef.current);
-    setThinkingPhase(false);
-    setTimerRunning(true);
-    if (currentSpeakerId === userId) {
-      startRecording();
-      startChunkUpload();
-      startSpeechRecognition();
-    } else {
-      stopMic();
-      stopChunkUpload();
-      stopSpeechRecognition();
-    }
-    proctoring.enable();
-    voice.announceBeginSpeaking();
-  }
-
   async function executeFinish() {
     if (finishLockRef.current) return;
     finishLockRef.current = true;
