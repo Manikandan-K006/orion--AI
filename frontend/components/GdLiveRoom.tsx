@@ -358,6 +358,7 @@ export default function GdLiveRoom({
   onLeave: (finished?: boolean) => void;
 }) {
   const { connected, send, subscribe } = useGdLiveWs(sessionCode, token);
+  const { localStream, remoteStreams, toggleCamera, toggleMic, cameraEnabled, micEnabled } = useWebRTC({ sessionCode, token, userId: user?.user_id ?? user?.id, send, subscribe });
   const [countdown, setCountdown] = useState<number | null>(showCountdown ? 3 : null);
   const [topic, setTopic] = useState(initialTopic);
   const [teamNumber, setTeamNumber] = useState<number | null>(null);
@@ -365,13 +366,10 @@ export default function GdLiveRoom({
   const joinedMembers = members.filter((m: any) => m.status !== "invited");
   const [finishedIds, setFinishedIds] = useState<Set<number>>(new Set());
   const [allFinished, setAllFinished] = useState(false);
-  const [timerSeconds, setTimerSeconds] = useState(600);
-  const [defaultSpeakingTime, setDefaultSpeakingTime] = useState(600);
-  const [prepNotes, setPrepNotes] = useState("");
+  const [timerSeconds, setTimerSeconds] = useState(60);
+  const [turnNumber, setTurnNumber] = useState(0);
+  const [maxTurns, setMaxTurns] = useState(0);
   const [timerRunning, setTimerRunning] = useState(false);
-  const [discussionStarted, setDiscussionStarted] = useState(false);
-  const [thinkingPhase, setThinkingPhase] = useState(false);
-  const [thinkingSeconds, setThinkingSeconds] = useState(120);
   const [isRecording, setIsRecording] = useState(false);
   const [audioLevel, setAudioLevel] = useState(0);
   const [transcript, setTranscript] = useState("");
@@ -383,45 +381,26 @@ export default function GdLiveRoom({
   const [submitStep, setSubmitStep] = useState<SubmitStep>("idle");
   const [evalStage, setEvalStage] = useState("");
   const [generatingStep, setGeneratingStep] = useState<string>("");
+  const [showTurnSummary, setShowTurnSummary] = useState(false);
+  const [turnSummaryScore, setTurnSummaryScore] = useState<any>(null);
 
-  // New state variables for 7-stage GD:
+  // Waiting room readiness:
   const [readyUsers, setReadyUsers] = useState<number[]>([]);
-  const [micChecks, setMicChecks] = useState<Record<number, boolean>>({});
-  const [networkHealthMap, setNetworkHealthMap] = useState<Record<number, string>>({});
-  const [handRaisedQueue, setHandRaisedQueue] = useState<number[]>([]);
-  const [rebuttalQueue, setRebuttalQueue] = useState<number[]>([]);
-  const [interruptionCounts, setInterruptionCounts] = useState<Record<number, number>>({});
-  const [speakingDurations, setSpeakingDurations] = useState<Record<number, number>>({});
-  const [participationPercentages, setParticipationPercentages] = useState<Record<number, number>>({});
-  const [agreeDisagreeVotes, setAgreeDisagreeVotes] = useState<Record<number, { agree: number, disagree: number }>>({});
-  const [argumentsMade, setArgumentsMade] = useState<Record<number, string[]>>({});
-  const [relevantPointsCount, setRelevantPointsCount] = useState<Record<number, number>>({});
-  const [offTopicCount, setOffTopicCount] = useState<Record<number, number>>({});
-  const [liveSpeakingStatuses, setLiveSpeakingStatuses] = useState<Record<number, string>>({});
-  const [challengeQuestions, setChallengeQuestions] = useState<Record<number, string>>({});
-  const [consensusClaimedBy, setConsensusClaimedBy] = useState<number | null>(null);
-  const [consensusText, setConsensusText] = useState("");
-  const [awards, setAwards] = useState<Record<string, string>>({});
-  const [winnerCard, setWinnerCard] = useState<any>(null);
-
-  // Local Stage 1 readiness checks:
   const [localMicCheck, setLocalMicCheck] = useState(true);
   const [localCameraCheck, setLocalCameraCheck] = useState(true);
   const [localNetwork, setLocalNetwork] = useState("Excellent");
   const [audioTestPassed, setAudioTestPassed] = useState(false);
   const [localReady, setLocalReady] = useState(false);
 
-  // Turn, round, speech streaming and alerts state variables
+  // Turn-based GD state:
   const [currentSpeakerId, setCurrentSpeakerId] = useState<number | null>(null);
-  const [nextSpeakerId, setNextSpeakerId] = useState<number | null>(null);
   const [speakingOrder, setSpeakingOrder] = useState<number[]>([]);
-  const [discussionRound, setDiscussionRound] = useState<number>(1);
   const [liveSpeechText, setLiveSpeechText] = useState("");
   const [liveTranscripts, setLiveTranscripts] = useState<Record<number, string>>({});
-  const [liveScores, setLiveScores] = useState<any>(null);
-  const [aiAlertsList, setAiAlertsList] = useState<any[]>([]);
   const [chatMessages, setChatMessages] = useState<any[]>([]);
   const [speakingHistory, setSpeakingHistory] = useState<any[]>([]);
+  const [participantCameraStatus, setParticipantCameraStatus] = useState<Record<number, boolean>>({});
+  const [participantMicStatus, setParticipantMicStatus] = useState<Record<number, boolean>>({});
   const recognitionRef = useRef<any>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
@@ -478,7 +457,7 @@ export default function GdLiveRoom({
     return () => clearTimeout(id);
   }, [countdown, onCountdownDone]);
 
-  // Timer effect
+  // Timer effect — always 60-second turns
   useEffect(() => {
     if (!timerRunning) { if (timerRef.current) clearInterval(timerRef.current); return; }
     timerRef.current = setInterval(() => {
@@ -489,7 +468,6 @@ export default function GdLiveRoom({
           voice.announceTimeOver();
           return 0;
         }
-        if (s === 61 && !announcedMarkers.current.has("60")) { announcedMarkers.current.add("60"); voice.announceOneMinute(); }
         if (s === 31 && !announcedMarkers.current.has("30")) { announcedMarkers.current.add("30"); voice.announceThirtySeconds(); }
         if (s === 11 && !announcedMarkers.current.has("10")) { announcedMarkers.current.add("10"); voice.announceTenSeconds(); }
         return s - 1;
@@ -510,7 +488,7 @@ export default function GdLiveRoom({
     return () => { if (thinkingTimerRef.current) clearInterval(thinkingTimerRef.current); };
   }, [thinkingPhase]);
 
-  // Auto-stop when timer hits 0
+  // Auto-stop when timer hits 0 — disable mic, lock speaking, send transcript
   useEffect(() => {
     if (timerRunning || timerSeconds > 0 || finishLockRef.current) return;
     if (myFinished || allFinished) return;
