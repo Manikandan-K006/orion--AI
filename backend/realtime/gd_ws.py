@@ -611,93 +611,84 @@ async def wait_and_broadcast_results(session_code: str, team_number: int, ts: Te
 
 
 class TeamState:
-    """Per-team state for parallel discussion: timer, members, evaluation."""
+    """Per-team state for 1-minute turn-based video GD."""
 
-    def __init__(self, team_number: int, topic: str, members: list[dict], speaking_time: int = 120) -> None:
+    def __init__(self, team_number: int, topic: str, members: list[dict], speaking_time: int = 60) -> None:
         self.team_number = team_number
         self.topic = topic
         self.members: dict[int, dict] = {m["user_id"]: m for m in members}
         self.finished_user_ids: set[int] = set()
         self.all_finished = False
-        self.timer_seconds = speaking_time
+        self.timer_seconds = 60  # Always 60 seconds per turn
         self.timer_running = False
         self.transcripts: dict[int, str] = {}
         self.live_previews: dict[int, str] = {}
         self.evaluations: dict[int, dict] = {}
-        
-        # Turn/rounds tracking (7-stage state machine)
+
+        # Turn-based speaking (1-minute per speaker)
         self.speaking_order: list[int] = []
         self.current_speaker_idx: int = 0
-        self.round: int = 1  # 1: Waiting Room, 2: AI Introduction, 3: Opening Round, 4: Intelligent Open Discussion, 5: Challenge Round, 6: Consensus, 7: Final summary
-        self.ai_questions: dict[int, str] = {}
+        self.turn_number: int = 0
+        self.round: int = 1  # 1: Waiting, 2: Discussion (turn-based), 3: Complete
         self.alert_cooldowns: dict[int, set[str]] = {}
-        self.last_speaker_id: int | None = None
         self.last_activity_time: float = 0.0
-        self.moderator_interaction_count: int = 0
-        self.open_discussion_speakers: list[int] = []
 
-        # Advanced GD indicators/queues:
+        # Per-user turn results
+        self.turn_scores: dict[int, list[dict]] = {}  # user_id -> list of turn score dicts
+
+        # Readiness & device state
         self.ready_users: set[int] = set()
         self.mic_checks: dict[int, bool] = {}
         self.network_health: dict[int, str] = {}
-        self.hand_raised_queue: list[int] = []
-        self.rebuttal_queue: list[int] = []
-        self.interruption_counts: dict[int, int] = {}
-        self.speaking_durations: dict[int, float] = {}
-        self.agree_disagree_votes: dict[int, dict[str, set[int]]] = {} # user_id -> {"agree": {uid1, uid2}, "disagree": {uid1}}
-        self.arguments_made: dict[int, list[str]] = {}
-        self.relevant_points_count: dict[int, int] = {}
-        self.off_topic_count: dict[int, int] = {}
-        self.live_speaking_statuses: dict[int, str] = {} # user_id -> "Speaking" | "Thinking" | "Idle"
-        self.consensus_claimed_by: int | None = None
-        self.consensus_text: str = ""
-        self.challenge_questions: dict[int, str] = {}
-        self.awards: dict[str, int] = {} # award_name -> user_id
+        self.video_enabled: dict[int, bool] = {}  # user_id -> camera on/off
+        self.mic_muted: dict[int, bool] = {}  # user_id -> muted or not
+
+        # Turn tracking
+        self.turn_start_time: float = 0.0
+        self.turn_recording_chunks: dict[int, list] = {}  # user_id -> accumulated audio chunks for current turn
 
     def start_discussion(self):
-        self.speaking_order = []
+        self.speaking_order = list(self.members.keys())
+        import random
+        random.shuffle(self.speaking_order)
         self.current_speaker_idx = 0
-        self.round = 1  # Start at Stage 1: Waiting Room
+        self.turn_number = 0
+        self.round = 2  # Active discussion
         self.timer_seconds = 60
         self.timer_running = False
         self.alert_cooldowns = {}
         import time
         self.last_activity_time = time.time()
-        self.last_speaker_id = None
-        self.moderator_interaction_count = 0
-        self.open_discussion_speakers = []
-        
-        self.ready_users = set()
-        self.mic_checks = {}
-        self.network_health = {}
-        self.hand_raised_queue = []
-        self.rebuttal_queue = []
-        self.interruption_counts = {}
-        self.speaking_durations = {}
-        self.agree_disagree_votes = {}
-        self.arguments_made = {}
-        self.relevant_points_count = {}
-        self.off_topic_count = {}
-        self.live_speaking_statuses = {}
-        self.consensus_claimed_by = None
-        self.consensus_text = ""
-        self.challenge_questions = {}
-        self.awards = {}
+        self.turn_start_time = time.time()
+        self.finished_user_ids = set()
+        self.all_finished = False
+        self.turn_scores = {uid: [] for uid in self.members}
+        self.video_enabled = {uid: True for uid in self.members}
+        self.mic_muted = {uid: False for uid in self.members}
+        self.turn_recording_chunks = {uid: [] for uid in self.members}
+
+    def get_current_speaker_id(self) -> int | None:
+        if self.current_speaker_idx < len(self.speaking_order):
+            return self.speaking_order[self.current_speaker_idx]
+        return None
+
+    def advance_speaker(self) -> int | None:
+        """Move to next speaker. Returns new speaker_id or None if all done."""
+        self.current_speaker_idx += 1
+        if self.current_speaker_idx >= len(self.speaking_order):
+            self.round = 3
+            self.all_finished = True
+            self.timer_running = False
+            return None
+        self.turn_number += 1
+        self.timer_seconds = 60
+        self.timer_running = True
+        import time
+        self.turn_start_time = time.time()
+        self.last_activity_time = time.time()
+        return self.get_current_speaker_id()
 
     def snapshot(self) -> dict:
-        total_time = sum(self.speaking_durations.values())
-        participation_percentages = {}
-        for uid in self.members.keys():
-            dur = self.speaking_durations.get(uid, 0.0)
-            participation_percentages[uid] = round((dur / total_time * 100), 1) if total_time > 0 else 0.0
-
-        vote_counts = {}
-        for uid, votes in self.agree_disagree_votes.items():
-            vote_counts[uid] = {
-                "agree": len(votes.get("agree", set())),
-                "disagree": len(votes.get("disagree", set()))
-            }
-
         return {
             "team_number": self.team_number,
             "topic": self.topic,
@@ -707,32 +698,20 @@ class TeamState:
             "timer_running": self.timer_running,
             "speaking_order": self.speaking_order,
             "current_speaker_idx": self.current_speaker_idx,
+            "current_speaker_id": self.get_current_speaker_id(),
+            "turn_number": self.turn_number,
             "round": self.round,
-            "ai_questions": self.ai_questions,
-            "ready_users": list(self.ready_users),
-            "mic_checks": self.mic_checks,
-            "network_health": self.network_health,
-            "hand_raised_queue": self.hand_raised_queue,
-            "rebuttal_queue": self.rebuttal_queue,
-            "interruption_counts": self.interruption_counts,
-            "speaking_durations": self.speaking_durations,
-            "participation_percentages": participation_percentages,
-            "agree_disagree_votes": vote_counts,
-            "arguments_made": self.arguments_made,
-            "relevant_points_count": self.relevant_points_count,
-            "off_topic_count": self.off_topic_count,
-            "live_speaking_statuses": self.live_speaking_statuses,
-            "live_previews": {str(k): v for k, v in self.live_previews.items()},
-            "challenge_questions": self.challenge_questions,
-            "consensus_claimed_by": self.consensus_claimed_by,
-            "consensus_text": self.consensus_text,
-            "awards": self.awards,
+            "turn_scores": {str(k): v for k, v in self.turn_scores.items()},
+            "video_enabled": self.video_enabled,
+            "mic_muted": self.mic_muted,
             "members": [
                 {
                     "user_id": uid,
                     "name": m.get("name"),
                     "label": m.get("label") or m.get("anonymous_label"),
-                    "status": "finished" if uid in self.finished_user_ids else "recording",
+                    "status": "finished" if uid in self.finished_user_ids else "speaking" if uid == self.get_current_speaker_id() else "waiting",
+                    "video_enabled": self.video_enabled.get(uid, True),
+                    "mic_muted": self.mic_muted.get(uid, False),
                 }
                 for uid, m in self.members.items()
             ],
@@ -916,6 +895,12 @@ _RELAY_EVENTS = {
     "REQUEST_REBUTTAL",
     "AGREE_DISAGREE_VOTE",
     "CLAIM_CONSENSUS_TURN",
+    "WEBRTC_OFFER",
+    "WEBRTC_ANSWER",
+    "WEBRTC_ICE_CANDIDATE",
+    "CAMERA_STATUS",
+    "MIC_STATUS",
+    "FINISH_EARLY",
 }
 
 
