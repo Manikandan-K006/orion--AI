@@ -892,9 +892,6 @@ _RELAY_EVENTS = {
     "SPEAKER_FINISHED",
     "LIVE_SPEECH",
     "SUBMIT_READY_STATUS",
-    "REQUEST_REBUTTAL",
-    "AGREE_DISAGREE_VOTE",
-    "CLAIM_CONSENSUS_TURN",
     "WEBRTC_OFFER",
     "WEBRTC_ANSWER",
     "WEBRTC_ICE_CANDIDATE",
@@ -1027,463 +1024,96 @@ async def gd_live_socket(
                 if ts:
                     text = payload.get("text", "")
                     if text:
-                        logger.debug("LIVE_SPEECH uid=%s text_len=%d preview=%s",
-                                     user_id, len(text), text[:60])
-                        # Store live preview separately — do NOT overwrite accumulated
-                        # Whisper transcript from upload-chunk.  The preview is only used
-                        # for real-time relay; the final transcript for evaluation comes
-                        # from ts.transcripts (populated by upload-chunk / finalize).
                         ts.live_previews.setdefault(user_id, "")
                         ts.live_previews[user_id] = text
-
-                        # Seed the accumulated transcript on first speech so that
-                        # finalize-transcript always has something even if no chunks
-                        # were uploaded yet.
                         if not ts.transcripts.get(user_id, "").strip():
                             ts.transcripts[user_id] = text
-
-                        # Relay to all other team members so they see the live transcript scroll
                         await manager.broadcast_to_team(session_code, team_number, "LIVE_SPEECH_BROADCAST", {
                             "user_id": user_id,
                             "text": text
                         })
-                        
-                        # Run real-time AI Moderator rules with cooldown throttling
-                        ts.alert_cooldowns.setdefault(user_id, set())
-                        alert = check_ai_moderator_rules(user_id, name, text, ts.topic)
-                        if alert and alert["type"] not in ts.alert_cooldowns[user_id]:
-                            ts.alert_cooldowns[user_id].add(alert["type"])
-                            # Send alert to team chat log
-                            await manager.broadcast_to_team(session_code, team_number, "CHAT_MESSAGE", {
-                                "user_id": 0,
-                                "name": "AI Moderator",
-                                "label": "⚠️ Alert",
-                                "text": alert["message"]
-                            })
-                            # Send alert event
-                            await manager.broadcast_to_team(session_code, team_number, "AI_ALERT", alert)
-                            
-                        # Also calculate and broadcast real-time metrics
-                        scores = calculate_live_metrics(text)
-                        await manager.broadcast_to_team(session_code, team_number, "LIVE_EVALUATION_UPDATE", {
-                            "user_id": user_id,
-                            **scores
-                        })
                 continue
-
             if event == "SPEAKER_FINISHED":
                 ts = state.team_states.get(team_number) if team_number else None
                 if ts:
-                    loop = asyncio.get_running_loop()
-                    from backend.ai.evaluation import evaluate_transcript                    if ts.round == 3:
-                        current_speaker_id = ts.speaking_order[ts.current_speaker_idx] if ts.speaking_order else None
-                        if current_speaker_id == user_id:
-                            # Clear cooldowns for this user's turn
-                            ts.alert_cooldowns.pop(user_id, None)
-                            
-                            transcript = payload.get("transcript", "").strip()
-                            if not transcript or len(transcript) < 5:
-                                transcript = "[No speech recorded]"
-                            
-                            words = transcript.split()
-                            duration = max(5.0, len(words) * 0.4)
-                            ts.speaking_durations[user_id] = ts.speaking_durations.get(user_id, 0.0) + duration
-
-                            # Dynamic check: speech too short? (less than 15 words)
-                            if len(words) < 15 and not payload.get("re-speech"):
-                                moderator_follow_up = generate_follow_up_question(name, transcript, ts.topic)
-                                await manager.broadcast_to_team(session_code, team_number, "CHAT_MESSAGE", {
-                                    "user_id": 0,
-                                    "name": "AI Moderator",
-                                    "label": "🤖 Moderator",
-                                    "text": f"🤖 AI Moderator: {name}, {moderator_follow_up}"
-                                })
-                                await manager.broadcast_to_team(session_code, team_number, "SPEAKER_CHANGED", {
-                                    "current_speaker_id": user_id,
-                                    "next_speaker_id": ts.speaking_order[ts.current_speaker_idx + 1] if ts.current_speaker_idx + 1 < len(ts.speaking_order) else None,
-                                    "round": 3,
-                                    "topic": ts.topic,
-                                    "speaking_time": 15,
-                                    "is_follow_up": True
-                                })
-                                await manager.broadcast_to_team(session_code, team_number, "TEAM_STATE_UPDATED", ts.snapshot())
-                                continue
-                            
-                            # Perform fast evaluation
-                            try:
-                                result = await loop.run_in_executor(None, evaluate_transcript, transcript, None, ts.topic)
-                                scores = _compute_scores_sync(result)
-                                ts.relevant_points_count[user_id] = ts.relevant_points_count.get(user_id, 0) + len(result.strengths)
-                                ts.off_topic_count[user_id] = ts.off_topic_count.get(user_id, 0) + (1 if result.topic_relevance_score < 70 else 0)
-                                ts.arguments_made.setdefault(user_id, []).extend(result.strengths)
-                                
-                                queries.save_live_evaluation(
-                                    get_connection(), session_code, user_id, team_number, transcript,
-                                    scores["overall"], result.fluency_score, result.grammar_score,
-                                    result.pronunciation_score, result.topic_relevance_score, result.content_quality_score,
-                                    scores["points"], scores["weaknesses"], scores["tips"]
-                                )
-                                ts.evaluations[user_id] = {
-                                    "overall_score": float(scores["overall"]),
-                                    "grammar_score": float(result.grammar_score),
-                                    "confidence_score": float(result.confidence_score),
-                                    "fluency_score": float(result.fluency_score),
-                                    "vocabulary_score": float(result.vocabulary_score),
-                                    "pronunciation_score": float(result.pronunciation_score),
-                                    "strengths": result.strengths,
-                                    "weaknesses": result.weaknesses,
-                                    "recommendations": result.recommendations,
-                                    "feedback": result.feedback
-                                }
-                            except Exception as exc:
-                                logger.error("Fast evaluation failed: %s", exc)
-                                scores = {
-                                    "overall": 75.0, "fluency": 75.0, "grammar": 75.0,
-                                    "accent": 75.0, "relevance": 75.0, "quality": 75.0,
-                                    "points": 37.5,
-                                    "weaknesses": "Short speech recorded", "tips": "Speak clearly and practice elaboration"
-                                }
-                                ts.evaluations[user_id] = {
-                                    "overall_score": 75.0,
-                                    "grammar_score": 75.0,
-                                    "confidence_score": 75.0,
-                                    "fluency_score": 75.0,
-                                    "vocabulary_score": 75.0,
-                                    "pronunciation_score": 75.0,
-                                    "strengths": ["Clear delivery"],
-                                    "weaknesses": ["Improve content depth"],
-                                    "recommendations": ["Elaborate on arguments"],
-                                    "feedback": "Evaluation completed with fallback settings."
-                                }
-                            
-                            ts.finished_user_ids.add(user_id)
-                            
-                            # Broadcast instant evaluation
-                            await manager.broadcast_to_team(session_code, team_number, "SPEAKER_EVALUATED", {
-                                "user_id": user_id,
-                                "scores": ts.evaluations[user_id],
-                                "transcript": transcript
-                            })
-                            
-                            # Send feedback to chat
-                            g_score = int(ts.evaluations[user_id]["grammar_score"])
-                            c_score = int(ts.evaluations[user_id]["confidence_score"])
-                            v_score = int(ts.evaluations[user_id]["vocabulary_score"])
-                            f_score = int(ts.evaluations[user_id]["fluency_score"])
-                            feedback_str = ts.evaluations[user_id]["feedback"]
-                            short_feedback = feedback_str.split(".")[0] + "."
-                            
-                            moderator_feedback_msg = (
-                                f"🤖 AI Moderator: {name}, Grammar: {g_score}%, Confidence: {c_score}%, "
-                                f"Vocabulary: {v_score}%, Fluency: {f_score}%.\n"
-                                f"AI Feedback: {short_feedback}"
-                            )
-                            await manager.broadcast_to_team(session_code, team_number, "CHAT_MESSAGE", {
-                                "user_id": 0,
-                                "name": "AI Moderator",
-                                "label": "🤖 Moderator",
-                                "text": moderator_feedback_msg
-                            })
-
-                            # Switch speaker
-                            if ts.current_speaker_idx + 1 < len(ts.speaking_order):
-                                ts.current_speaker_idx += 1
-                                next_speaker_id = ts.speaking_order[ts.current_speaker_idx]
-                                next_name = ts.members[next_speaker_id].get("name", "Student")
-                                ts.last_activity_time = time.time()
-                                
-                                await manager.broadcast_to_team(session_code, team_number, "SPEAKER_CHANGED", {
-                                    "current_speaker_id": next_speaker_id,
-                                    "next_speaker_id": ts.speaking_order[ts.current_speaker_idx + 1] if ts.current_speaker_idx + 1 < len(ts.speaking_order) else None,
-                                    "round": 3,
-                                    "topic": ts.topic,
-                                    "speaking_time": 30
-                                })
-                                
-                                moderator_msg = f"🤖 AI Moderator: Now it's {next_name}'s turn. You have 30 seconds."
-                                await manager.broadcast_to_team(session_code, team_number, "CHAT_MESSAGE", {
-                                    "user_id": 0,
-                                    "name": "AI Moderator",
-                                    "label": "🤖 Moderator",
-                                    "text": moderator_msg
-                                })
-                            else:
-                                # Transition to Stage 4: Intelligent Open Discussion
-                                ts.round = 4
-                                ts.current_speaker_idx = 0
-                                ts.timer_seconds = 120
-                                ts.last_activity_time = time.time()
-                                ts.hand_raised_queue = []
-                                ts.rebuttal_queue = []
-                                
-                                await manager.broadcast_to_team(session_code, team_number, "ROUND_CHANGED", {
-                                    "round": 4,
-                                    "topic": ts.topic,
-                                    "speaking_time": 120
-                                })
-                                
-                                moderator_msg = (
-                                    "🤖 AI Moderator: The Opening Round is complete! We are now entering Stage 4: Intelligent Open Discussion. "
-                                    "Please use the 'Raise Hand' or 'Request Rebuttal' buttons to claim speaking slots. Agree/Disagree voting is active."
-                                )
-                                await manager.broadcast_to_team(session_code, team_number, "CHAT_MESSAGE", {
-                                    "user_id": 0,
-                                    "name": "AI Moderator",
-                                    "label": "🤖 Moderator",
-                                    "text": moderator_msg
-                                })
-                            
-                            await manager.broadcast_to_team(session_code, team_number, "TEAM_STATE_UPDATED", ts.snapshot())
-
-                    elif ts.round == 4:
+                    current_speaker_id = ts.get_current_speaker_id()
+                    if current_speaker_id == user_id:
                         transcript = payload.get("transcript", "").strip()
-                        if transcript and len(transcript) >= 5:
+                        if not transcript or len(transcript) < 5:
+                            transcript = ts.transcripts.get(user_id, "").strip() or "[No speech recorded]"
+
+                        loop = asyncio.get_running_loop()
+                        try:
+                            result = await loop.run_in_executor(None, evaluate_transcript, transcript, None, ts.topic)
+                            scores = _compute_scores_sync(result)
+                        except Exception as exc:
+                            logger.error("AI evaluation failed: %s", exc)
+                            scores = {
+                                "overall": 75.0, "fluency": 75.0, "grammar": 75.0,
+                                "accent": 75.0, "relevance": 75.0, "quality": 75.0,
+                                "points": 37.5,
+                                "weaknesses": "Evaluation fallback", "tips": "Speak clearly and elaborate"
+                            }
+                            result = None
+
+                        eval_data = {
+                            "overall_score": float(scores["overall"]),
+                            "grammar_score": float(result.grammar_score) if result else 75.0,
+                            "confidence_score": float(result.confidence_score) if result else 75.0,
+                            "fluency_score": float(result.fluency_score) if result else 75.0,
+                            "vocabulary_score": float(result.vocabulary_score) if result else 75.0,
+                            "pronunciation_score": float(result.pronunciation_score) if result else 75.0,
+                        }
+                        if result:
+                            eval_data.update({
+                                "strengths": result.strengths,
+                                "weaknesses": result.weaknesses,
+                                "recommendations": result.recommendations,
+                                "feedback": result.feedback,
+                            })
+                        ts.evaluations[user_id] = eval_data
+                        ts.finished_user_ids.add(user_id)
+
+                        conn_eval = get_connection()
+                        try:
+                            turn_id = queries.save_turn(conn_eval, session_code, user_id, team_number, transcript, 60)
+                            queries.complete_turn(conn_eval, turn_id)
+                            queries.save_turn_evaluation(conn_eval, turn_id, eval_data)
+                        except Exception as exc:
+                            logger.error("DB save turn failed: %s", exc)
+                        finally:
+                            _return(conn_eval)
+
+                        await manager.broadcast_to_team(session_code, team_number, "TURN_EVALUATED", {
+                            "user_id": user_id,
+                            "scores": eval_data,
+                            "transcript": transcript,
+                        })
+
+                        next_speaker_id = ts.advance_speaker()
+                        if next_speaker_id:
+                            next_name = ts.members.get(next_speaker_id, {}).get("name", "Student")
                             ts.last_activity_time = time.time()
-                            words = transcript.split()
-                            word_count = len(words)
-                            duration = max(5.0, word_count * 0.4)
-                            ts.speaking_durations[user_id] = ts.speaking_durations.get(user_id, 0.0) + duration
-                            
-                            # Dominance check (>45s or >80 words)
-                            if duration > 45.0 or word_count > 80:
-                                ts.interruption_counts[user_id] = ts.interruption_counts.get(user_id, 0) + 1
-                                moderator_reply = f"🤖 AI Moderator: Thank you, {name}, for your contribution. To keep the debate fair, I must interrupt you to allow others a chance. Let's move the floor."
-                            # Same speaker twice consecutively
-                            elif ts.last_speaker_id == user_id:
-                                moderator_reply = f"🤖 AI Moderator: {name}, you have spoken consecutively. Please allow other teammates to respond first."
-                            else:
-                                ts.moderator_interaction_count += 1
-                                moderator_reply = generate_moderator_comment(name, transcript, ts.topic)
-                            
-                            ts.transcripts[user_id] = (ts.transcripts.get(user_id, "") + " " + transcript).strip()
-                            ts.last_speaker_id = user_id
-                            
-                            try:
-                                result = await loop.run_in_executor(None, evaluate_transcript, transcript, None, ts.topic)
-                                scores = _compute_scores_sync(result)
-                                ts.relevant_points_count[user_id] = ts.relevant_points_count.get(user_id, 0) + len(result.strengths)
-                                ts.off_topic_count[user_id] = ts.off_topic_count.get(user_id, 0) + (1 if result.topic_relevance_score < 70 else 0)
-                                ts.arguments_made.setdefault(user_id, []).extend(result.strengths)
-                                
-                                ts.evaluations[user_id] = {
-                                    "overall_score": float(scores["overall"]),
-                                    "grammar_score": float(result.grammar_score),
-                                    "confidence_score": float(result.confidence_score),
-                                    "fluency_score": float(result.fluency_score),
-                                    "vocabulary_score": float(result.vocabulary_score),
-                                    "pronunciation_score": float(result.pronunciation_score),
-                                }
-                            except Exception as exc:
-                                logger.error("Open discussion evaluation failed: %s", exc)
-                            
-                            # Broadcast moderator reply
+                            await manager.broadcast_to_team(session_code, team_number, "SPEAKER_CHANGED", {
+                                "current_speaker_id": next_speaker_id,
+                                "next_speaker_id": ts.get_current_speaker_id(),
+                                "round": ts.round,
+                                "topic": ts.topic,
+                                "speaking_time": 60,
+                            })
                             await manager.broadcast_to_team(session_code, team_number, "CHAT_MESSAGE", {
                                 "user_id": 0,
                                 "name": "AI Moderator",
                                 "label": "🤖 Moderator",
-                                "text": moderator_reply
+                                "text": f"{next_name}, you have 60 seconds. Begin!",
                             })
-                            
-                            # Broadcast SPEAKER_EVALUATED
-                            await manager.broadcast_to_team(session_code, team_number, "SPEAKER_EVALUATED", {
-                                "user_id": user_id,
-                                "scores": ts.evaluations.get(user_id, {}),
-                                "transcript": transcript
-                            })
-                            
-                            # Remove this user from queues if they were in them
-                            if user_id in ts.rebuttal_queue:
-                                ts.rebuttal_queue.remove(user_id)
-                            if user_id in ts.hand_raised_queue:
-                                ts.hand_raised_queue.remove(user_id)
-
-                            # Determine next speaker automatically based on queues
-                            next_speaker = None
-                            reason = "raise hand"
-                            if ts.rebuttal_queue:
-                                next_speaker = ts.rebuttal_queue.pop(0)
-                                reason = "rebuttal"
-                            elif ts.hand_raised_queue:
-                                next_speaker = ts.hand_raised_queue.pop(0)
-                                reason = "raise hand"
-                            
-                            if next_speaker:
-                                next_name = ts.members[next_speaker].get("name", "Student")
-                                await manager.broadcast_to_team(session_code, team_number, "SPEAKER_CHANGED", {
-                                    "current_speaker_id": next_speaker,
-                                    "next_speaker_id": ts.rebuttal_queue[0] if ts.rebuttal_queue else (ts.hand_raised_queue[0] if ts.hand_raised_queue else None),
-                                    "round": 4,
-                                    "topic": ts.topic,
-                                    "speaking_time": 45,
-                                    "reason": reason
-                                })
-                                await manager.broadcast_to_team(session_code, team_number, "CHAT_MESSAGE", {
-                                    "user_id": 0,
-                                    "name": "AI Moderator",
-                                    "label": "🤖 Moderator",
-                                    "text": f"🤖 AI Moderator: Floor allocated to {next_name} for a {reason}. You have 45 seconds."
-                                })
-                            else:
-                                # Set speaker ID to null, floor is open
-                                await manager.broadcast_to_team(session_code, team_number, "SPEAKER_CHANGED", {
-                                    "current_speaker_id": None,
-                                    "next_speaker_id": None,
-                                    "round": 4,
-                                    "topic": ts.topic,
-                                    "speaking_time": 0
-                                })
-                            
-                            # Transition to Challenge Round after 4 interactions
-                            if ts.moderator_interaction_count >= 4:
-                                ts.round = 5
-                                ts.current_speaker_idx = 0
-                                ts.speaking_order = list(ts.members.keys())
-                                random.shuffle(ts.speaking_order)
-                                ts.timer_seconds = 25
-                                ts.last_activity_time = time.time()
-                                
-                                challenge_types = [
-                                    "Counter-argument challenge: Can you present a counter-argument to the point that technology alienates humans?",
-                                    "Scenario question: Suppose a placement company rejects candidates using automated resumes. How do you defend candidate rights?",
-                                    "Leadership challenge: If your team members disagree completely, how will you guide them to consensus?",
-                                    "Problem-solving question: What immediate regulations would you pass to control data security breaches?",
-                                    "Decision-making challenge: If you had to choose between absolute safety and absolute convenience, which would you pick and why?"
-                                ]
-                                for idx, uid in enumerate(ts.speaking_order):
-                                    ts.challenge_questions[uid] = challenge_types[idx % len(challenge_types)]
-                                
-                                await manager.broadcast_to_team(session_code, team_number, "ROUND_CHANGED", {
-                                    "round": 5,
-                                    "topic": "AI Challenge Round",
-                                    "speaking_time": 25
-                                })
-                                
-                                first_challenge_speaker = ts.speaking_order[0]
-                                first_challenge_name = ts.members[first_challenge_speaker].get("name", "Student")
-                                first_question = ts.challenge_questions[first_challenge_speaker]
-                                
-                                await manager.broadcast_to_team(session_code, team_number, "SPEAKER_CHANGED", {
-                                    "current_speaker_id": first_challenge_speaker,
-                                    "next_speaker_id": ts.speaking_order[1] if len(ts.speaking_order) > 1 else None,
-                                    "round": 5,
-                                    "topic": first_question,
-                                    "speaking_time": 25
-                                })
-                                
-                                challenge_msg = (
-                                    f"🤖 AI Moderator: We are now entering Stage 5: AI Challenge Round! "
-                                    f"I will assign scenario and leadership questions. "
-                                    f"{first_challenge_name}, your question is: '{first_question}'. You have 25 seconds."
-                                )
-                                await manager.broadcast_to_team(session_code, team_number, "CHAT_MESSAGE", {
-                                    "user_id": 0, "name": "AI Moderator", "label": "🤖 Moderator", "text": challenge_msg
-                                })
-                            
-                            await manager.broadcast_to_team(session_code, team_number, "TEAM_STATE_UPDATED", ts.snapshot())
-
-                    elif ts.round == 5:
-                        current_speaker_id = ts.speaking_order[ts.current_speaker_idx] if ts.speaking_order else None
-                        if current_speaker_id == user_id:
-                            transcript = payload.get("transcript", "").strip()
-                            if not transcript:
-                                transcript = "[No response]"
-                            
-                            ts.transcripts[user_id] = (ts.transcripts.get(user_id, "") + " [Challenge]: " + transcript).strip()
-                            
-                            try:
-                                q_text = ts.challenge_questions.get(user_id, "Challenge Question")
-                                result = await loop.run_in_executor(None, evaluate_transcript, transcript, None, q_text)
-                                scores = _compute_scores_sync(result)
-                                ts.evaluations[user_id] = {
-                                    "overall_score": float(scores["overall"]),
-                                    "grammar_score": float(result.grammar_score),
-                                    "confidence_score": float(result.confidence_score),
-                                    "fluency_score": float(result.fluency_score),
-                                    "vocabulary_score": float(result.vocabulary_score),
-                                    "pronunciation_score": float(result.pronunciation_score),
-                                }
-                            except Exception as exc:
-                                logger.error("Challenge round evaluation failed: %s", exc)
-                            
-                            await manager.broadcast_to_team(session_code, team_number, "SPEAKER_EVALUATED", {
-                                "user_id": user_id,
-                                "scores": ts.evaluations.get(user_id, {}),
-                                "transcript": transcript
-                            })
-                            
-                            if ts.current_speaker_idx + 1 < len(ts.speaking_order):
-                                ts.current_speaker_idx += 1
-                                next_speaker_id = ts.speaking_order[ts.current_speaker_idx]
-                                next_name = ts.members[next_speaker_id].get("name", "Student")
-                                q_text = ts.challenge_questions.get(next_speaker_id, "Challenge Question")
-                                ts.last_activity_time = time.time()
-                                
-                                await manager.broadcast_to_team(session_code, team_number, "SPEAKER_CHANGED", {
-                                    "current_speaker_id": next_speaker_id,
-                                    "next_speaker_id": ts.speaking_order[ts.current_speaker_idx + 1] if ts.current_speaker_idx + 1 < len(ts.speaking_order) else None,
-                                    "round": 5,
-                                    "topic": q_text,
-                                    "speaking_time": 25
-                                })
-                                
-                                await manager.broadcast_to_team(session_code, team_number, "CHAT_MESSAGE", {
-                                    "user_id": 0, "name": "AI Moderator", "label": "🤖 Moderator",
-                                    "text": f"🤖 AI Moderator: Next is {next_name}. Question: '{q_text}'"
-                                })
-                            else:
-                                # Transition to Stage 6: Group Conclusion
-                                ts.round = 6
-                                ts.current_speaker_idx = 0
-                                ts.consensus_claimed_by = None
-                                ts.timer_seconds = 45
-                                ts.last_activity_time = time.time()
-                                
-                                await manager.broadcast_to_team(session_code, team_number, "ROUND_CHANGED", {
-                                    "round": 6,
-                                    "topic": "Group Conclusion: Team Consensus",
-                                    "speaking_time": 45
-                                })
-                                
-                                conclusion_msg = (
-                                    "🤖 AI Moderator: We are now entering Stage 6: Group Conclusion. "
-                                    "What is the team consensus? Please discuss and decide. "
-                                    "One participant can click 'Claim Consensus Speech' to deliver the final team consensus stance!"
-                                )
-                                await manager.broadcast_to_team(session_code, team_number, "CHAT_MESSAGE", {
-                                    "user_id": 0, "name": "AI Moderator", "label": "🤖 Moderator", "text": conclusion_msg
-                                })
-                            
-                            await manager.broadcast_to_team(session_code, team_number, "TEAM_STATE_UPDATED", ts.snapshot())
-
-                    elif ts.round == 6:
-                        if ts.consensus_claimed_by == user_id:
-                            transcript = payload.get("transcript", "").strip()
-                            ts.consensus_text = transcript
-                            
-                            ts.transcripts[user_id] = (ts.transcripts.get(user_id, "") + " [Consensus Summary]: " + transcript).strip()
-                            
-                            # Transition to Stage 7: Final Evaluation
-                            ts.round = 7
+                        else:
+                            ts.round = 3
                             ts.all_finished = True
                             ts.timer_running = False
-                            
-                            await manager.broadcast_to_team(session_code, team_number, "ROUND_CHANGED", {
-                                "round": 7,
-                                "topic": ts.topic,
-                                "speaking_time": 0
-                            })
-                            
-                            moderator_msg = (
-                                "🤖 AI Moderator: Thank you! The team consensus has been registered. "
-                                "We are now in Stage 7: Final Evaluation. "
-                                "I am running the final competency scores & awards calculations..."
-                            )
-                            await manager.broadcast_to_team(session_code, team_number, "CHAT_MESSAGE", {
-                                "user_id": 0, "name": "AI Moderator", "label": "🤖 Moderator", "text": moderator_msg
-                            })
-                            
                             asyncio.create_task(compile_and_broadcast_final_summary(session_code, team_number, ts))
-                            await manager.broadcast_to_team(session_code, team_number, "TEAM_STATE_UPDATED", ts.snapshot())
+
+                        await manager.broadcast_to_team(session_code, team_number, "TEAM_STATE_UPDATED", ts.snapshot())
                 continue
 
             if event not in _RELAY_EVENTS:
@@ -1542,7 +1172,6 @@ async def gd_live_socket(
                                     state.topic = topic
                                     state.team_states.clear()
                                     
-                                    # Fetch team topic mappings from DB
                                     t_topic_map = {}
                                     try:
                                         conn_temp = get_connection()
@@ -1578,56 +1207,29 @@ async def gd_live_socket(
                                                 
                                             state.ensure_team(tn, t_topic, team_members, speaking_time=speaking_time)
 
-                                    if session_code not in manager._silence_tasks:
-                                        manager._silence_tasks[session_code] = asyncio.create_task(silence_detector_task(session_code))
-
                                     for tn, ts in state.team_states.items():
                                         ts.start_discussion()
-                                        ts.round = 2
-                                        ts.timer_seconds = 10
-                                        ts.timer_running = True
                                         
-                                        moderator_msg = f"🤖 AI Moderator: Welcome to MZ ThinkCircle. Today's discussion topic is '{ts.topic}'. Let's begin the AI Introduction. Please review the rules. The Opening Round will begin in 10 seconds."
+                                        first_speaker_id = ts.get_current_speaker_id()
+                                        first_name = ts.members.get(first_speaker_id, {}).get("name", "Student") if first_speaker_id else "Student"
+                                        
+                                        moderator_msg = f"Welcome! Topic: '{ts.topic}'. {first_name}, you have 60 seconds. Begin!"
                                         asyncio.create_task(manager.broadcast_to_team(session_code, tn, "CHAT_MESSAGE", {
                                             "user_id": 0, "name": "AI Moderator", "label": "🤖 Moderator", "text": moderator_msg
                                         }))
+                                        asyncio.create_task(manager.broadcast_to_team(session_code, tn, "SPEAKER_CHANGED", {
+                                            "current_speaker_id": first_speaker_id,
+                                            "next_speaker_id": None,
+                                            "round": ts.round,
+                                            "topic": ts.topic,
+                                            "speaking_time": 60,
+                                        }))
                                         asyncio.create_task(manager.broadcast_to_team(session_code, tn, "TEAM_STATE_UPDATED", ts.snapshot()))
-                                        
-                                        async def auto_start_opening_round(session_code_local, tn_local, ts_local):
-                                            await asyncio.sleep(10)
-                                            if ts_local.round == 2:
-                                                ts_local.speaking_order = list(ts_local.members.keys())
-                                                random.shuffle(ts_local.speaking_order)
-                                                ts_local.current_speaker_idx = 0
-                                                ts_local.round = 3
-                                                ts_local.timer_seconds = 600
-                                                ts_local.timer_running = True
-                                                import time
-                                                ts_local.last_activity_time = time.time()
-                                                
-                                                first_speaker_id = ts_local.speaking_order[0]
-                                                first_name = ts_local.members[first_speaker_id].get("name", "Student")
-                                                
-                                                await manager.broadcast_to_team(session_code_local, tn_local, "SPEAKER_CHANGED", {
-                                                    "current_speaker_id": first_speaker_id,
-                                                    "next_speaker_id": ts_local.speaking_order[1] if len(ts_local.speaking_order) > 1 else None,
-                                                    "round": 3,
-                                                    "topic": ts_local.topic,
-                                                    "speaking_time": 600
-                                                })
-                                                opening_msg = f"🤖 AI Moderator: Let's begin Stage 3: Opening Round. {first_name}, you have up to 10 minutes. State your opinion. Click 'Conclude Turn' when you are done."
-                                                await manager.broadcast_to_team(session_code_local, tn_local, "CHAT_MESSAGE", {
-                                                    "user_id": 0, "name": "AI Moderator", "label": "🤖 Moderator", "text": opening_msg
-                                                })
-                                                await manager.broadcast_to_team(session_code_local, tn_local, "TEAM_STATE_UPDATED", ts_local.snapshot())
-
-                                        asyncio.create_task(auto_start_opening_round(session_code, tn, ts))
 
                                     await manager.broadcast(session_code, "SESSION_STARTED", {"status": "active"})
                             except Exception as auto_err:
                                 logger.error("Auto-start hosting failed: %s", auto_err)
                         elif not already_started:
-                            # Teams were seeded in memory already; just kick off Stage 2.
                             try:
                                 await _handle_admin_event(manager, state, session_code, "START_GD", {})
                             except Exception as auto_err:
@@ -1635,71 +1237,10 @@ async def gd_live_socket(
 
                 continue
 
-            elif event == "REQUEST_REBUTTAL":
-                ts = state.team_states.get(team_number) if team_number else None
-                if ts:
-                    requested = bool(payload.get("requested", True))
-                    if requested:
-                        if sender_id not in ts.rebuttal_queue:
-                            ts.rebuttal_queue.append(sender_id)
-                    else:
-                        if sender_id in ts.rebuttal_queue:
-                            ts.rebuttal_queue.remove(sender_id)
-                    await manager.broadcast_to_team(session_code, team_number, "REBUTTAL_REQUESTED", {
-                        "user_id": sender_id,
-                        "requested": requested
-                    })
-                    await manager.broadcast_to_team(session_code, team_number, "TEAM_STATE_UPDATED", ts.snapshot())
-                continue
-
-            elif event == "AGREE_DISAGREE_VOTE":
-                ts = state.team_states.get(team_number) if team_number else None
-                if ts:
-                    speaker_id = payload.get("speaker_id")
-                    vote_type = payload.get("vote_type")  # "agree" or "disagree"
-                    if speaker_id:
-                        ts.agree_disagree_votes.setdefault(speaker_id, {"agree": set(), "disagree": set()})
-                        ts.agree_disagree_votes[speaker_id]["agree"].discard(sender_id)
-                        ts.agree_disagree_votes[speaker_id]["disagree"].discard(sender_id)
-                        ts.agree_disagree_votes[speaker_id][vote_type].add(sender_id)
-                        await manager.broadcast_to_team(session_code, team_number, "TEAM_STATE_UPDATED", ts.snapshot())
-                continue
-
-            elif event == "CLAIM_CONSENSUS_TURN":
-                ts = state.team_states.get(team_number) if team_number else None
-                if ts and ts.round == 6:
-                    ts.consensus_claimed_by = sender_id
-                    ts.timer_seconds = 45
-                    ts.timer_running = True
-                    await manager.broadcast_to_team(session_code, team_number, "SPEAKER_CHANGED", {
-                        "current_speaker_id": sender_id,
-                        "next_speaker_id": None,
-                        "round": 6,
-                        "topic": ts.topic,
-                        "speaking_time": 45
-                    })
-                    moderator_msg = f"🤖 AI Moderator: {name} has claimed the turn to explain the team consensus! You have 45 seconds."
-                    await manager.broadcast_to_team(session_code, team_number, "CHAT_MESSAGE", {
-                        "user_id": 0, "name": "AI Moderator", "label": "🤖 Moderator", "text": moderator_msg
-                    })
-                    await manager.broadcast_to_team(session_code, team_number, "TEAM_STATE_UPDATED", ts.snapshot())
-                continue
-
             elif event == "RAISE_HAND":
                 p = state.participants.get(sender_id)
                 if p is not None:
                     p["hand_raised"] = bool(payload.get("raised"))
-                if team_number:
-                    ts = state.team_states.get(team_number)
-                    if ts:
-                        raised = bool(payload.get("raised"))
-                        if raised:
-                            if sender_id not in ts.hand_raised_queue:
-                                ts.hand_raised_queue.append(sender_id)
-                        else:
-                            if sender_id in ts.hand_raised_queue:
-                                ts.hand_raised_queue.remove(sender_id)
-                        await manager.broadcast_to_team(session_code, team_number, "TEAM_STATE_UPDATED", ts.snapshot())
                 if team_number:
                     await manager.broadcast_to_team(session_code, team_number, "HAND_RAISED",
                         {"user_id": sender_id, "raised": bool(payload.get("raised"))})
