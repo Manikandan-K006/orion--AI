@@ -1,10 +1,15 @@
 import asyncio
+import logging
 import os
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile
 from fastapi.responses import FileResponse
 from mysql.connector import MySQLConnection
+
+logger = logging.getLogger("speaksense.gd_live")
+_log = logging.getLogger("speaksense.api")
+
 
 from backend.ai.speech_recognition import transcribe_audio
 from backend.config import get_settings
@@ -635,7 +640,7 @@ async def upload_gd_live_audio(
     try:
         from backend.ai.evaluation import evaluate_transcript_parallel
         state = manager.get_state(session_code)
-        topic_text = state.get("topic", "") if state else ""
+        topic_text = getattr(state, "topic", "") or "" if state else ""
         evaluation = await evaluate_transcript_parallel(transcript, topic=topic_text, on_progress=_progress)
         await _send_progress("generating_scores")
     except Exception as exc:
@@ -867,7 +872,7 @@ async def _save_evaluation_bg(
     session_code: str, user_id: int, team_number: int, transcript: str, evaluation, logger
 ) -> None:
     """Save evaluation to DB in a background task. Single transaction, single commit."""
-    from backend.database.db import get_connection
+    from backend.database.db import get_connection, _return
     loop = asyncio.get_running_loop()
 
     def _do_save():
