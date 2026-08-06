@@ -717,14 +717,12 @@ export default function GdLiveRoom({
     if (timerRef.current) clearInterval(timerRef.current);
     stopChunkUpload();
     proctoring.disable();
-    setSubmitStep("finalizing");
 
-    // Send final chunk (remaining audio since last interval)
+    // Send final chunk
     try {
       if (audioChunksRef.current.length > 0) {
         const finalBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
         audioChunksRef.current = [];
-        console.log("[FINISH] Final chunk:", finalBlob.size, "bytes");
         if (finalBlob.size >= 100) {
           const fd = new FormData();
           fd.append("file", finalBlob, "gd_chunk_" + sessionCode + "_" + userId + ".webm");
@@ -739,11 +737,9 @@ export default function GdLiveRoom({
       console.warn("Final chunk upload failed:", err);
     }
 
-    // Stop mic after final chunk is sent
     stopMic();
 
-    // Get accumulated transcript from server
-    setSubmitStep("analyzing");
+    // Get accumulated transcript
     let transcript = "";
     try {
       const finRes = await fetch(apiUrl + "/gd-live/sessions/" + sessionCode + "/finalize-transcript", {
@@ -752,33 +748,8 @@ export default function GdLiveRoom({
       });
       const finData = await finRes.json();
       transcript = finData.transcript || "";
-      console.log("[FINISH] Finalize transcript:", transcript.length, "chars:", transcript.substring(0, 80));
     } catch (err) {
       console.warn("[FINISH] Finalize transcript failed:", err);
-    }
-
-    // If accumulated transcript is empty, fall back to full upload
-    if (!transcript || transcript.length < 20) {
-      console.log("[FINISH] Accumulated transcript too short (" + transcript.length + " chars), trying fallback full upload");
-      const blob = new Blob(audioChunksRef.current.length > 0
-        ? audioChunksRef.current
-        : [new Blob()], { type: "audio/webm" });
-      if (blob.size >= 100) {
-        try {
-          const formData = new FormData();
-          formData.append("file", blob, "gd_" + sessionCode + "_" + userId + ".webm");
-          const res = await fetch(apiUrl + "/gd-live/sessions/" + sessionCode + "/upload-audio", {
-            method: "POST",
-            headers: { Authorization: "Bearer " + token },
-            body: formData,
-          });
-          const data = await res.json();
-          if (data.transcript) transcript = data.transcript;
-          if (data.evaluation) setAiResult(data.evaluation);
-        } catch (err) {
-          console.warn("Fallback upload failed:", err);
-        }
-      }
     }
 
     if (transcript) setTranscript(transcript);
@@ -787,14 +758,10 @@ export default function GdLiveRoom({
     console.log("[FINISH] Sending SPEAKER_FINISHED. Transcript length:", transcript.length);
     send("SPEAKER_FINISHED", { user_id: userId, transcript });
 
-    // For continuous discussion rounds, unlock for future turns
-    if (discussionRound === 2 || discussionRound === 3) {
-      finishLockRef.current = false;
-      setSubmitStep("idle");
-      setLiveSpeechText("");
-    } else {
-      setSubmitStep("complete");
-    }
+    // Turn-based: unlock for next turns, show AI processing
+    finishLockRef.current = false;
+    setSubmitStep("idle");
+    setLiveSpeechText("");
   }
 
   function forceFinish(reason: string) {
@@ -822,34 +789,14 @@ export default function GdLiveRoom({
       const syncState = (ts: any) => {
         if (!ts) return;
         setMembers(ts.members || []);
-        setTimerSeconds(ts.timer_seconds);
+        if (ts.timer_seconds !== undefined) setTimerSeconds(ts.timer_seconds);
         setFinishedIds(new Set(ts.finished_user_ids || []));
         setAllFinished(ts.all_finished || false);
-        if (ts.round !== undefined) {
-          if (ts.speaking_order) {
-            setSpeakingOrder(ts.speaking_order || []);
-            setCurrentSpeakerId(ts.speaking_order[ts.current_speaker_idx] ?? null);
-            setNextSpeakerId(ts.speaking_order[ts.current_speaker_idx + 1] ?? null);
-          }
-          setDiscussionRound(ts.round || 1);
-        }
+        if (ts.speaking_order) setSpeakingOrder(ts.speaking_order);
+        if (ts.current_speaker_id !== undefined) setCurrentSpeakerId(ts.current_speaker_id);
+        if (ts.turn_number !== undefined) setTurnNumber(ts.turn_number);
+        if (ts.max_turns !== undefined) setMaxTurns(ts.max_turns);
         setReadyUsers(ts.ready_users || []);
-        setMicChecks(ts.mic_checks || {});
-        setNetworkHealthMap(ts.network_health || {});
-        setHandRaisedQueue(ts.hand_raised_queue || []);
-        setRebuttalQueue(ts.rebuttal_queue || []);
-        setInterruptionCounts(ts.interruption_counts || {});
-        setSpeakingDurations(ts.speaking_durations || {});
-        setParticipationPercentages(ts.participation_percentages || {});
-        setAgreeDisagreeVotes(ts.agree_disagree_votes || {});
-        setArgumentsMade(ts.arguments_made || {});
-        setRelevantPointsCount(ts.relevant_points_count || {});
-        setOffTopicCount(ts.off_topic_count || {});
-        setLiveSpeakingStatuses(ts.live_speaking_statuses || {});
-        setChallengeQuestions(ts.challenge_questions || {});
-        setConsensusClaimedBy(ts.consensus_claimed_by || null);
-        setConsensusText(ts.consensus_text || "");
-        setAwards(ts.awards || {});
       };
 
       switch (msg.event) {
@@ -863,10 +810,6 @@ export default function GdLiveRoom({
           if (myTeam) {
             setTeamNumber(myTeam.team_number);
             syncState(myTeam);
-            if (myTeam.timer_seconds) {
-              setDefaultSpeakingTime(myTeam.timer_seconds);
-            }
-
             if (!announcedMarkers.current.has("welcome")) {
               announcedMarkers.current.add("welcome");
               voice.announceDiscussionStart();
@@ -880,36 +823,17 @@ export default function GdLiveRoom({
           let activeTeamNum = teamNumber;
           if (!activeTeamNum) {
             const me = list.find((m: any) => m.user_id === userId);
-            if (me && me.team_number) {
-              activeTeamNum = me.team_number;
-              setTeamNumber(me.team_number);
-            }
+            if (me && me.team_number) { activeTeamNum = me.team_number; setTeamNumber(me.team_number); }
           }
           if (activeTeamNum) {
             const myTeamMembers = list.filter((m: any) => m.team_number === activeTeamNum);
             if (myTeamMembers.length > 0) {
-              setMembers(myTeamMembers.map((m: any) => ({
-                user_id: m.user_id,
-                name: m.name,
-                label: m.anonymous_label || m.label,
-                status: m.status,
-              })));
+              setMembers(myTeamMembers.map((m: any) => ({ user_id: m.user_id, name: m.name, label: m.anonymous_label || m.label, status: m.status })));
             }
           } else {
-            // For Waiting Room global lobby
-            setMembers(list.map((m: any) => ({
-              user_id: m.user_id,
-              name: m.name,
-              label: m.anonymous_label || m.label,
-              status: m.status,
-            })));
+            setMembers(list.map((m: any) => ({ user_id: m.user_id, name: m.name, label: m.anonymous_label || m.label, status: m.status })));
           }
-
-          // Always parse ready status lists, microphone checks, and connection health metrics
-          const ready = list.filter((m: any) => m.ready).map((m: any) => m.user_id);
-          setReadyUsers(ready);
-          setMicChecks(list.reduce((acc: any, m: any) => ({ ...acc, [m.user_id]: m.mic ?? true }), {}));
-          setNetworkHealthMap(list.reduce((acc: any, m: any) => ({ ...acc, [m.user_id]: m.network ?? "Good" }), {}));
+          setReadyUsers(list.filter((m: any) => m.ready).map((m: any) => m.user_id));
           break;
         }
         case "TEAM_STATE_UPDATED": {
@@ -917,15 +841,14 @@ export default function GdLiveRoom({
           break;
         }
         case "SPEAKER_CHANGED": {
-          const { current_speaker_id, next_speaker_id, round, topic, speaking_order } = msg.payload;
-          console.log("[SPEAKER_CHANGED] speaker:", current_speaker_id, "me:", userId, "round:", round);
+          const { current_speaker_id, speaking_order, turn_number, max_turns } = msg.payload;
+          console.log("[SPEAKER_CHANGED] speaker:", current_speaker_id, "me:", userId);
           setCurrentSpeakerId(current_speaker_id);
-          setNextSpeakerId(next_speaker_id);
-          setDiscussionRound(round || 1);
-          if (topic) setTopic(topic);
           if (speaking_order) setSpeakingOrder(speaking_order);
-
-          setTimerSeconds(defaultSpeakingTime);
+          if (turn_number !== undefined) setTurnNumber(turn_number);
+          if (max_turns !== undefined) setMaxTurns(max_turns);
+          setTimerSeconds(60);
+          setShowTurnSummary(false);
 
           if (current_speaker_id === userId) {
             console.log("[SPEAKER_CHANGED] I am the speaker — starting mic");
@@ -933,76 +856,47 @@ export default function GdLiveRoom({
             startSpeechRecognition();
             startChunkUpload();
             setTimerRunning(true);
+            proctoring.enable();
           } else {
             console.log("[SPEAKER_CHANGED] Not the speaker — stopping mic");
             stopChunkUpload();
             stopSpeechRecognition();
             stopMic();
             setTimerRunning(true);
+            proctoring.enable();
           }
           break;
         }
-        case "ROUND_CHANGED": {
-          const { round } = msg.payload;
-          setDiscussionRound(round);
-          stopMic();
-          stopSpeechRecognition();
-          stopChunkUpload();
-          break;
-        }
-        case "SPEAKER_EVALUATED": {
-          const { user_id, name, label, text, grammar, fluency, confidence, emotion } = msg.payload;
+        case "TURN_EVALUATED": {
+          const { user_id, score } = msg.payload;
+          if (user_id === userId) {
+            setTurnSummaryScore(score);
+            setShowTurnSummary(true);
+            setTimeout(() => setShowTurnSummary(false), 5000);
+          }
           setSpeakingHistory(prev => [
-            {
-              user_id,
-              name: name || label || `Member ${user_id}`,
-              label: label || name || `Member ${user_id}`,
-              text,
-              grammar: grammar || 85,
-              fluency: fluency || 85,
-              confidence: confidence || 85,
-              emotion: emotion || "Analytical"
-            },
+            { user_id, label: msg.payload?.label || `Member ${user_id}`, text: msg.payload?.text || "", ...score },
             ...prev
           ]);
           break;
         }
+        case "CAMERA_STATUS": {
+          const { user_id, camera_on } = msg.payload;
+          setParticipantCameraStatus(prev => ({ ...prev, [user_id]: camera_on }));
+          break;
+        }
+        case "MIC_STATUS": {
+          const { user_id, mic_on } = msg.payload;
+          setParticipantMicStatus(prev => ({ ...prev, [user_id]: mic_on }));
+          break;
+        }
         case "LIVE_SPEECH_BROADCAST": {
           const { user_id, text } = msg.payload;
-          setLiveTranscripts(prev => ({
-            ...prev,
-            [user_id]: text
-          }));
-          break;
-        }
-        case "LIVE_EVALUATION_UPDATE": {
-          const { user_id, grammar, fluency, confidence, vocabulary, quality, overall, pronunciation, relevance, emotion, wpm } = msg.payload;
-          if (user_id === userId) {
-            setLiveScores({
-              grammar,
-              fluency,
-              confidence,
-              vocabulary: vocabulary || quality,
-              pronunciation,
-              relevance,
-              overall,
-              emotion,
-              wpm
-            });
-          }
-          break;
-        }
-        case "AI_ALERT": {
-          const alert = msg.payload;
-          setAiAlertsList(prev => [alert, ...prev].slice(0, 5));
-          if (alert.type === "repetition" && alert.user_id === userId) {
-            voice.speak("Please do not repeat the question. Provide your own points.");
-          }
+          setLiveTranscripts(prev => ({ ...prev, [user_id]: text }));
           break;
         }
         case "CHAT_MESSAGE": {
-          const chat = msg.payload;
-          setChatMessages(prev => [...prev, chat]);
+          setChatMessages(prev => [...prev, msg.payload]);
           break;
         }
         case "ALL_FINISHED": {
@@ -1017,25 +911,15 @@ export default function GdLiveRoom({
           setResults(all);
           const sorted = [...all].sort((a: any, b: any) => b.overall_score - a.overall_score);
           const myIdx = sorted.findIndex((r: any) => r.user_id === userId);
-          if (myIdx >= 0) {
-            setMyResult(sorted[myIdx]);
-            setMyRank(myIdx + 1);
-          }
-          if (msg.payload?.winner) {
-            setWinnerCard(msg.payload.winner);
-          }
-          if (msg.payload?.awards) {
-            setAwards(msg.payload.awards);
-          }
+          if (myIdx >= 0) { setMyResult(sorted[myIdx]); setMyRank(myIdx + 1); }
+          if (msg.payload?.winner) setWinnerCard(msg.payload.winner);
           setShowResults(true);
           voice.announceEvaluationComplete();
           setTimeout(() => voice.announceLeaderboardReady(), 2500);
           break;
         }
         case "EVALUATION_PROGRESS":
-          if (msg.payload?.user_id === userId && msg.payload?.stage) {
-            setEvalStage(msg.payload.stage);
-          }
+          if (msg.payload?.user_id === userId && msg.payload?.stage) setEvalStage(msg.payload.stage);
           break;
         case "PARTICIPANT_LEFT":
           setMembers((prev) => prev.filter((m: any) => m.user_id !== msg.payload?.user_id));
@@ -1282,8 +1166,8 @@ export default function GdLiveRoom({
     );
   }
 
-  // ─── STAGE 1: WAITING ROOM VIEW ───
-  if (discussionRound === 1 && !showResults) {
+  // ─── WAITING ROOM VIEW (before discussion starts) ───
+  if (!currentSpeakerId && !showResults) {
     const isReady = readyUsers.includes(userId);
     return (
       <div className={`min-h-screen flex flex-col relative overflow-hidden ${theme === "dark" ? "dark" : ""}`}>
