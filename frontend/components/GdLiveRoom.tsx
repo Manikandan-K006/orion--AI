@@ -424,7 +424,6 @@ export default function GdLiveRoom({
   const audioContextRef = useRef<AudioContext | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const thinkingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const finishLockRef = useRef(false);
   const chunkIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const chunkUploadRef = useRef(false);
@@ -475,18 +474,6 @@ export default function GdLiveRoom({
     }, 1000);
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [timerRunning]);
-
-  // Thinking timer effect
-  useEffect(() => {
-    if (!thinkingPhase) { if (thinkingTimerRef.current) clearInterval(thinkingTimerRef.current); return; }
-    thinkingTimerRef.current = setInterval(() => {
-      setThinkingSeconds((s) => {
-        if (s <= 1) { if (thinkingTimerRef.current) clearInterval(thinkingTimerRef.current); beginDiscussion(); return 0; }
-        return s - 1;
-      });
-    }, 1000);
-    return () => { if (thinkingTimerRef.current) clearInterval(thinkingTimerRef.current); };
-  }, [thinkingPhase]);
 
   // Auto-stop when timer hits 0 — disable mic, lock speaking, send transcript
   useEffect(() => {
