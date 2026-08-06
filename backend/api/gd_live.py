@@ -1120,3 +1120,59 @@ def export_session_evaluations(session_code: str, connection: MySQLConnection = 
         "Weaknesses": e.get("weaknesses", "-"),
         "Recommendations": e.get("recommendations", "-")
     } for e in evals]
+
+
+@router.get("/sessions/{session_code}/turns")
+def get_turn_history(
+    session_code: str,
+    current_user: dict = Depends(get_current_user),
+    connection: MySQLConnection = Depends(get_db),
+) -> list[dict]:
+    """Get per-turn history for a GD Live session."""
+    return queries.get_turns_for_session(connection, session_code)
+
+
+@router.get("/sessions/{session_code}/turn-analytics")
+def get_turn_analytics(
+    session_code: str,
+    current_user: dict = Depends(get_current_user),
+    connection: MySQLConnection = Depends(get_db),
+) -> dict:
+    """Get aggregated turn analytics for admin dashboard."""
+    if current_user.get("role") != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only admins can view analytics")
+
+    analytics = queries.get_turn_analytics(connection, session_code)
+    turns = queries.get_turns_for_session(connection, session_code)
+
+    # Compute summary stats
+    total_turns = len(turns)
+    completed_turns = [t for t in turns if t.get("ai_completed")]
+    avg_duration = sum(t.get("duration_seconds", 0) for t in completed_turns) / max(len(completed_turns), 1)
+    avg_score = sum(t.get("overall_score", 0) for t in completed_turns) / max(len(completed_turns), 1)
+
+    return {
+        "session_code": session_code,
+        "total_turns": total_turns,
+        "completed_turns": len(completed_turns),
+        "average_duration_seconds": round(avg_duration, 1),
+        "average_score": round(avg_score, 1),
+        "per_user_analytics": analytics,
+        "turns": [{
+            "turn_number": t["turn_number"],
+            "speaker_order": t["speaker_order"],
+            "user_id": t["user_id"],
+            "name": t.get("name"),
+            "label": t.get("anonymous_label"),
+            "team_number": t["team_number"],
+            "duration_seconds": t.get("duration_seconds", 0),
+            "overall_score": t.get("overall_score", 0),
+            "grammar_score": t.get("grammar_score", 0),
+            "fluency_score": t.get("fluency_score", 0),
+            "pronunciation_score": t.get("pronunciation_score", 0),
+            "confidence_score": t.get("confidence_score", 0),
+            "vocabulary_score": t.get("vocabulary_score", 0),
+            "ai_completed": bool(t.get("ai_completed")),
+            "transcript": t.get("transcript", ""),
+        } for t in turns],
+    }

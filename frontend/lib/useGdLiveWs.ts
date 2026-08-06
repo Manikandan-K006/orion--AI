@@ -33,7 +33,13 @@ export type GDLiveWsEvent =
   | "EVALUATION_PROGRESS"
   | "LIVE_SPEECH_BROADCAST"
   | "LIVE_EVALUATION_UPDATE"
-  | "AI_ALERT";
+  | "AI_ALERT"
+  | "WEBRTC_OFFER"
+  | "WEBRTC_ANSWER"
+  | "WEBRTC_ICE_CANDIDATE"
+  | "TURN_EVALUATED"
+  | "CAMERA_STATUS"
+  | "MIC_STATUS";
 
 export type GDLiveWsMessage = {
   event: GDLiveWsEvent;
