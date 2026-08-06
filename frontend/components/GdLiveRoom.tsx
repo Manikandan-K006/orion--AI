@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { CheckCircle2, Loader2, Clock, Users, Mic, MicOff, Volume2, Brain, AlertTriangle, AlertCircle, Target, Maximize2, Medal, BarChart3, Zap, Play, User, Sparkles, FileText, Download, Lightbulb, MessageSquare, ShieldCheck, Activity, Trophy, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, Radar } from "recharts";
@@ -8,6 +8,160 @@ import { useGdLiveWs, GDLiveWsMessage } from "@/lib/useGdLiveWs";
 import { useVoiceAnnouncement } from "@/services/voice/useVoiceAnnouncement";
 import { useProctoring } from "@/services/proctoring/lockdown";
 import { getApiUrl } from "@/lib/config";
+
+interface UseWebRTCOptions {
+  sessionCode: string;
+  token: string;
+  userId: number;
+  send: (event: string, payload: any) => void;
+  subscribe: (handler: (msg: GDLiveWsMessage) => void) => () => void;
+}
+
+interface UseWebRTCReturn {
+  localStream: MediaStream | null;
+  remoteStreams: Map<number, MediaStream>;
+  toggleCamera: () => void;
+  toggleMic: () => void;
+  cameraEnabled: boolean;
+  micEnabled: boolean;
+}
+
+function useWebRTC({ sessionCode, token, userId, send, subscribe }: UseWebRTCOptions): UseWebRTCReturn {
+  const [localStream, setLocalStream] = useState<MediaStream | null>(null);
+  const [remoteStreams, setRemoteStreams] = useState<Map<number, MediaStream>>(new Map());
+  const [cameraEnabled, setCameraEnabled] = useState(true);
+  const [micEnabled, setMicEnabled] = useState(true);
+  const pcsRef = useRef<Map<number, RTCPeerConnection>>(new Map());
+  const localStreamRef = useRef<MediaStream | null>(null);
+
+  const getOrCreatePC = useCallback((peerId: number) => {
+    if (pcsRef.current.has(peerId)) return pcsRef.current.get(peerId)!;
+    const pc = new RTCPeerConnection({
+      iceServers: [{ urls: "stun:stun.l.google.com:19302" }, { urls: "stun:stun1.l.google.com:19302" }],
+    });
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach((track) => {
+        pc.addTrack(track, localStreamRef.current!);
+      });
+    }
+    pc.onicecandidate = (e) => {
+      if (e.candidate) {
+        send("WEBRTC_ICE_CANDIDATE", { target_user_id: peerId, candidate: e.candidate.toJSON() });
+      }
+    };
+    pc.ontrack = (e) => {
+      setRemoteStreams((prev) => {
+        const next = new Map(prev);
+        next.set(peerId, e.streams[0]);
+        return next;
+      });
+    };
+    pcsRef.current.set(peerId, pc);
+    return pc;
+  }, [send]);
+
+  const createOffer = useCallback(async (peerId: number) => {
+    const pc = getOrCreatePC(peerId);
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    send("WEBRTC_OFFER", { target_user_id: peerId, offer: pc.localDescription!.toJSON() });
+  }, [getOrCreatePC, send]);
+
+  const handleOffer = useCallback(async (peerId: number, offer: RTCSessionDescriptionInit) => {
+    const pc = getOrCreatePC(peerId);
+    await pc.setRemoteDescription(new RTCSessionDescription(offer));
+    const answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+    send("WEBRTC_ANSWER", { target_user_id: peerId, answer: pc.localDescription!.toJSON() });
+  }, [getOrCreatePC, send]);
+
+  const handleAnswer = useCallback(async (peerId: number, answer: RTCSessionDescriptionInit) => {
+    const pc = pcsRef.current.get(peerId);
+    if (pc) await pc.setRemoteDescription(new RTCSessionDescription(answer));
+  }, []);
+
+  const handleIceCandidate = useCallback(async (peerId: number, candidate: RTCIceCandidateInit) => {
+    const pc = pcsRef.current.get(peerId);
+    if (pc) await pc.addIceCandidate(new RTCIceCandidate(candidate));
+  }, []);
+
+  useEffect(() => {
+    let stream: MediaStream | null = null;
+    navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then((s) => {
+      stream = s;
+      localStreamRef.current = s;
+      setLocalStream(s);
+    }).catch((err) => {
+      console.warn("[WebRTC] getUserMedia failed:", err);
+      navigator.mediaDevices.getUserMedia({ audio: true }).then((s) => {
+        stream = s;
+        localStreamRef.current = s;
+        setLocalStream(s);
+        setCameraEnabled(false);
+      }).catch(() => {});
+    });
+    return () => {
+      stream?.getTracks().forEach((t) => t.stop());
+      pcsRef.current.forEach((pc) => pc.close());
+      pcsRef.current.clear();
+    };
+  }, []);
+
+  useEffect(() => {
+    const unsub = subscribe((msg: GDLiveWsMessage) => {
+      switch (msg.event) {
+        case "WEBRTC_OFFER":
+          if (msg.payload.from_user_id !== userId) handleOffer(msg.payload.from_user_id, msg.payload.offer);
+          break;
+        case "WEBRTC_ANSWER":
+          if (msg.payload.from_user_id !== userId) handleAnswer(msg.payload.from_user_id, msg.payload.answer);
+          break;
+        case "WEBRTC_ICE_CANDIDATE":
+          if (msg.payload.from_user_id !== userId) handleIceCandidate(msg.payload.from_user_id, msg.payload.candidate);
+          break;
+      }
+    });
+    return unsub;
+  }, [subscribe, userId, handleOffer, handleAnswer, handleIceCandidate]);
+
+  useEffect(() => {
+    if (!localStream) return;
+    const handler = (msg: GDLiveWsMessage) => {
+      if (msg.event === "TEAM_STATE_UPDATED" || msg.event === "STATE_SYNC") {
+        const members = msg.payload?.members || msg.payload?.state?.members || [];
+        members.forEach((m: any) => {
+          if (m.user_id !== userId && !pcsRef.current.has(m.user_id)) {
+            createOffer(m.user_id);
+          }
+        });
+      }
+    };
+    const unsub = subscribe(handler);
+    return unsub;
+  }, [localStream, subscribe, userId, createOffer]);
+
+  const toggleCamera = useCallback(() => {
+    if (!localStream) return;
+    const videoTrack = localStream.getVideoTracks()[0];
+    if (videoTrack) {
+      videoTrack.enabled = !videoTrack.enabled;
+      setCameraEnabled(videoTrack.enabled);
+      send("CAMERA_STATUS", { camera_on: videoTrack.enabled });
+    }
+  }, [localStream, send]);
+
+  const toggleMic = useCallback(() => {
+    if (!localStream) return;
+    const audioTrack = localStream.getAudioTracks()[0];
+    if (audioTrack) {
+      audioTrack.enabled = !audioTrack.enabled;
+      setMicEnabled(audioTrack.enabled);
+      send("MIC_STATUS", { mic_on: audioTrack.enabled });
+    }
+  }, [localStream, send]);
+
+  return { localStream, remoteStreams, toggleCamera, toggleMic, cameraEnabled, micEnabled };
+}
 
 interface CircularProgressProps {
   percent: number;

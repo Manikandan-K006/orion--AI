@@ -1363,20 +1363,13 @@ async def _handle_admin_event(
     if event == "START_GD":
         state.paused = False
         
-        # Start silence detector task
-        if session_code not in mgr._silence_tasks:
-            mgr._silence_tasks[session_code] = asyncio.create_task(silence_detector_task(session_code))
-        
-        # Initialize speaking turns for each team
         for tn, ts in state.team_states.items():
             ts.start_discussion()
-            # Set to Stage 2: AI Introduction
-            ts.round = 2
-            ts.timer_seconds = 10
-            ts.timer_running = True
             
-            # Welcome chat message
-            moderator_msg = f"🤖 AI Moderator: Welcome to MZ ThinkCircle. Today's discussion topic is '{ts.topic}'. Let's begin the AI Introduction. Please review the rules. The Opening Round will begin in 10 seconds."
+            first_speaker_id = ts.get_current_speaker_id()
+            first_name = ts.members.get(first_speaker_id, {}).get("name", "Student") if first_speaker_id else "Student"
+            
+            moderator_msg = f"Welcome! Topic: '{ts.topic}'. {first_name}, you have 60 seconds. Begin!"
             asyncio.create_task(mgr.broadcast_to_team(session_code, tn, "CHAT_MESSAGE", {
                 "user_id": 0,
                 "name": "AI Moderator",
@@ -1384,42 +1377,15 @@ async def _handle_admin_event(
                 "text": moderator_msg
             }))
             
+            asyncio.create_task(mgr.broadcast_to_team(session_code, tn, "SPEAKER_CHANGED", {
+                "current_speaker_id": first_speaker_id,
+                "next_speaker_id": None,
+                "round": ts.round,
+                "topic": ts.topic,
+                "speaking_time": 60,
+            }))
+            
             asyncio.create_task(mgr.broadcast_to_team(session_code, tn, "TEAM_STATE_UPDATED", ts.snapshot()))
-            
-            # Background task to automatically transition to Stage 3: Opening Round
-            async def auto_start_opening_round(session_code_local, tn_local, ts_local):
-                await asyncio.sleep(10)
-                if ts_local.round == 2:
-                    ts_local.speaking_order = list(ts_local.members.keys())
-                    random.shuffle(ts_local.speaking_order)
-                    ts_local.current_speaker_idx = 0
-                    ts_local.round = 3  # Stage 3: Opening Round
-                    ts_local.timer_seconds = 600
-                    ts_local.timer_running = True
-                    import time
-                    ts_local.last_activity_time = time.time()
-                    
-                    first_speaker_id = ts_local.speaking_order[0]
-                    first_name = ts_local.members[first_speaker_id].get("name", "Student")
-                    
-                    await mgr.broadcast_to_team(session_code_local, tn_local, "SPEAKER_CHANGED", {
-                        "current_speaker_id": first_speaker_id,
-                        "next_speaker_id": ts_local.speaking_order[1] if len(ts_local.speaking_order) > 1 else None,
-                        "round": 3,
-                        "topic": ts_local.topic,
-                        "speaking_time": 600
-                    })
-                    
-                    opening_msg = f"🤖 AI Moderator: Let's begin Stage 3: Opening Round. {first_name}, you have up to 10 minutes. State your opinion. Click 'Conclude Turn' when you are done."
-                    await mgr.broadcast_to_team(session_code_local, tn_local, "CHAT_MESSAGE", {
-                        "user_id": 0,
-                        "name": "AI Moderator",
-                        "label": "🤖 Moderator",
-                        "text": opening_msg
-                    })
-                    await mgr.broadcast_to_team(session_code_local, tn_local, "TEAM_STATE_UPDATED", ts_local.snapshot())
-            
-            asyncio.create_task(auto_start_opening_round(session_code, tn, ts))
             
         await mgr.broadcast(session_code, "SESSION_RESUMED", {"status": "active"})
     elif event == "PAUSE_GD":
