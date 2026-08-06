@@ -1039,8 +1039,11 @@ async def gd_live_socket(
                     current_speaker_id = ts.get_current_speaker_id()
                     if current_speaker_id == user_id:
                         transcript = payload.get("transcript", "").strip()
+                        logger.info("[SPEAKER_FINISHED] uid=%s payload_transcript_len=%d", user_id, len(transcript))
                         if not transcript or len(transcript) < 5:
-                            transcript = ts.transcripts.get(user_id, "").strip() or "[No speech recorded]"
+                            fallback = ts.transcripts.get(user_id, "").strip()
+                            logger.info("[SPEAKER_FINISHED] Using fallback from ts.transcripts: len=%d preview=%s", len(fallback), fallback[:100])
+                            transcript = fallback or "[No speech recorded]"
 
                         loop = asyncio.get_running_loop()
                         try:

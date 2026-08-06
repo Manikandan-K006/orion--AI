@@ -580,8 +580,13 @@ export default function GdLiveRoom({
       console.log("[MIC] Creating MediaRecorder, mimeType:", mimeType);
       const recorder = new MediaRecorder(stream, { mimeType });
       mediaRecorderRef.current = recorder;
+      let chunkCount = 0;
       recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+        if (e.data.size > 0) {
+          audioChunksRef.current.push(e.data);
+          chunkCount++;
+          if (chunkCount % 5 === 0) console.log("[MIC] Chunk #", chunkCount, "total chunks:", audioChunksRef.current.length);
+        }
       };
       recorder.onerror = (e) => {
         console.error("[MIC] MediaRecorder error:", e);
@@ -594,6 +599,7 @@ export default function GdLiveRoom({
         }
         setIsRecording(false);
         setAudioLevel(0);
+        console.log("[MIC] Recording stopped. Total chunks:", chunkCount);
       };
       recorder.start(1000);
       setIsRecording(true);
@@ -637,7 +643,7 @@ export default function GdLiveRoom({
         body: formData,
       });
       const data = await res.json();
-      console.log("[CHUNK] Server:", res.status, "transcript:", data.chunk_transcript?.substring(0, 60) || "(empty)");
+      console.log("[CHUNK] Server:", res.status, "chunk_transcript:", data.chunk_transcript?.substring(0, 80) || "(empty)", "accumulated:", data.accumulated_transcript?.length || 0, "chars");
     } catch (err) {
       console.warn("[CHUNK] Upload failed:", err);
     }
@@ -662,7 +668,7 @@ export default function GdLiveRoom({
   async function executeFinish() {
     if (finishLockRef.current) return;
     finishLockRef.current = true;
-    console.log("[FINISH] executeFinish called. Chunks remaining:", audioChunksRef.current.length);
+    console.log("[FINISH] executeFinish called. Chunks remaining:", audioChunksRef.current.length, "isRecording:", isRecording);
     setTimerRunning(false);
     if (timerRef.current) clearInterval(timerRef.current);
     stopChunkUpload();
@@ -674,17 +680,22 @@ export default function GdLiveRoom({
         const finalBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
         audioChunksRef.current = [];
         if (finalBlob.size >= 100) {
+          console.log("[FINISH] Uploading final chunk:", finalBlob.size, "bytes");
           const fd = new FormData();
           fd.append("file", finalBlob, "gd_chunk_" + sessionCode + "_" + userId + ".webm");
-          await fetch(apiUrl + "/gd-live/sessions/" + sessionCode + "/upload-chunk", {
+          const chunkRes = await fetch(apiUrl + "/gd-live/sessions/" + sessionCode + "/upload-chunk", {
             method: "POST",
             headers: { Authorization: "Bearer " + token },
             body: fd,
           });
+          const chunkData = await chunkRes.json();
+          console.log("[FINISH] Final chunk uploaded:", chunkRes.status, "transcript:", chunkData.chunk_transcript?.substring(0, 80) || "(empty)");
         }
+      } else {
+        console.log("[FINISH] No remaining chunks to upload");
       }
     } catch (err) {
-      console.warn("Final chunk upload failed:", err);
+      console.warn("[FINISH] Final chunk upload failed:", err);
     }
 
     stopMic();
@@ -698,6 +709,7 @@ export default function GdLiveRoom({
       });
       const finData = await finRes.json();
       transcript = finData.transcript || "";
+      console.log("[FINISH] Finalize transcript:", finRes.status, "length:", transcript.length, "preview:", transcript.substring(0, 100));
     } catch (err) {
       console.warn("[FINISH] Finalize transcript failed:", err);
     }
@@ -818,14 +830,15 @@ export default function GdLiveRoom({
           break;
         }
         case "TURN_EVALUATED": {
-          const { user_id, score } = msg.payload;
+          const { user_id, scores, transcript: turnTranscript } = msg.payload || {};
+          console.log("[TURN_EVALUATED] user:", user_id, "scores:", scores, "transcript:", turnTranscript?.substring(0, 80));
           if (user_id === userId) {
-            setTurnSummaryScore(score);
+            setTurnSummaryScore(scores);
             setShowTurnSummary(true);
             setTimeout(() => setShowTurnSummary(false), 5000);
           }
           setSpeakingHistory(prev => [
-            { user_id, label: msg.payload?.label || `Member ${user_id}`, text: msg.payload?.text || "", ...score },
+            { user_id, label: msg.payload?.label || `Member ${user_id}`, text: turnTranscript || "", ...scores },
             ...prev
           ]);
           break;

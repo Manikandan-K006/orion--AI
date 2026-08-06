@@ -558,6 +558,8 @@ async def upload_gd_live_audio(
     """Upload audio for the current speaker. Transcribes with Whisper in a thread,
     runs all AI evaluation modules in parallel, broadcasts live progress events,
     and returns scores immediately. Detailed analytics continue in background."""
+    import logging
+    _log = logging.getLogger("speaksense.api")
     ext = Path(file.filename or "").suffix.lower()
     if ext not in ALLOWED_AUDIO_TYPES:
         raise HTTPException(
@@ -613,10 +615,12 @@ async def upload_gd_live_audio(
     if accumulated_transcript and len(accumulated_transcript) > 20:
         # Use accumulated transcript from incremental chunks — skip re-transcription
         transcript = accumulated_transcript
-        logger.info("Using accumulated transcript (%d chars) for uid=%s", len(transcript), uid)
+        _log.info("[UPLOAD-AUDIO] Using accumulated transcript (%d chars) for uid=%s", len(transcript), uid)
     else:
         # Fallback: transcribe the entire recording at once
+        _log.info("[UPLOAD-AUDIO] No accumulated transcript, transcribing full audio: %s (%d bytes)", file_path, len(content))
         result = await loop.run_in_executor(None, transcribe_audio, str(file_path))
+        _log.info("[UPLOAD-AUDIO] Whisper result: success=%s transcript_len=%d", result.get("success"), len(result.get("transcript", "")))
         if not result.get("success", True):
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -727,6 +731,8 @@ async def upload_audio_chunk(
     transcript in memory. On Finish Discussion, the frontend sends a final chunk
     and the accumulated transcript is used for evaluation — no double transcription.
     """
+    import logging
+    _log = logging.getLogger("speaksense.api")
     ext = Path(file.filename or "").suffix.lower()
     if ext not in ALLOWED_AUDIO_TYPES:
         raise HTTPException(
@@ -745,14 +751,19 @@ async def upload_audio_chunk(
     content = await loop.run_in_executor(None, file.file.read)
     await loop.run_in_executor(None, file_path.write_bytes, content)
 
-    logger.info("GD chunk received: session=%s uid=%s size=%d bytes", session_code, current_user["id"], len(content))
+    _log.info("[UPLOAD-CHUNK] Received: session=%s uid=%s filename=%s size=%d bytes",
+              session_code, current_user["id"], file.filename, len(content))
 
     # Transcribe the chunk (beam_size=1 for speed)
     from backend.ai.speech_recognition import transcribe_chunk
     result = await loop.run_in_executor(None, transcribe_chunk, str(file_path))
     chunk_text = result.get("transcript", "") if result.get("success") else ""
-    logger.info("GD chunk transcribed: uid=%s success=%s transcript_len=%d text=%s",
-                current_user["id"], result.get("success"), len(chunk_text), chunk_text[:80])
+    _log.info("[UPLOAD-CHUNK] Transcribed: uid=%s success=%s chunk_len=%d text=%s",
+              current_user["id"], result.get("success"), len(chunk_text), chunk_text[:100])
+
+    if not result.get("success"):
+        _log.warning("[UPLOAD-CHUNK] Transcription FAILED for uid=%s: %s",
+                     current_user["id"], result.get("error", "unknown"))
 
     # Append to accumulated transcript in room state
     state = manager.get_state(session_code)
@@ -767,6 +778,8 @@ async def upload_audio_chunk(
                 existing = ts.transcripts.get(uid, "")
                 ts.transcripts[uid] = (existing + " " + chunk_text).strip()
                 accumulated = ts.transcripts[uid]
+                _log.info("[UPLOAD-CHUNK] Accumulated transcript for uid=%s: %d chars",
+                          uid, len(accumulated))
 
     # Clean up chunk file
     try:
@@ -792,6 +805,8 @@ async def finalize_transcript(
     The frontend calls this after the final upload-chunk when Finish Discussion
     is clicked, before triggering SPEAKER_FINISHED.
     """
+    import logging
+    _log = logging.getLogger("speaksense.api")
     state = manager.get_state(session_code)
     uid = current_user["id"]
     transcript = ""
@@ -804,8 +819,8 @@ async def finalize_transcript(
                 ts = state.team_states[tn]
                 transcript = ts.transcripts.get(uid, "")
 
-    logger.info("Finalize transcript: session=%s uid=%s transcript_len=%d",
-                session_code, uid, len(transcript.strip()))
+    _log.info("[FINALIZE] session=%s uid=%s transcript_len=%d preview=%s",
+              session_code, uid, len(transcript.strip()), transcript.strip()[:100])
     return {
         "transcript": transcript.strip(),
         "message": "Transcript finalized",
