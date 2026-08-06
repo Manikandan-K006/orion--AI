@@ -35,3 +35,60 @@
 2026-07-29T08:09:08.348829Z 0 [System] [MY-013602] [Server] Channel mysql_main configured to support TLS. Encrypted connections are now supported for this channel.
 2026-07-29T08:09:08.384611Z 0 [System] [MY-010931] [Server] C:\Program Files\MySQL\MySQL Server 8.4\bin\mysqld.exe: ready for connections. Version: '8.4.9'  socket: ''  port: 3306  MySQL Community Server - GPL.
 2026-07-29T08:09:08.384810Z 0 [System] [MY-011323] [Server] X Plugin ready for connections. Bind-address: '::' port: 33060
+2026-08-05T05:25:02.513332Z 0 [System] [MY-015015] [Server] MySQL Server - start.
+2026-08-05T05:25:02.700211Z 0 [System] [MY-010116] [Server] C:\Program Files\MySQL\MySQL Server 8.4\bin\mysqld.exe (mysqld 8.4.9) starting as process 28064
+2026-08-05T05:25:02.746686Z 1 [System] [MY-013576] [InnoDB] InnoDB initialization has started.
+2026-08-05T05:25:03.350166Z 1 [System] [MY-013577] [InnoDB] InnoDB initialization has ended.
+2026-08-05T05:25:03.525454Z 1 [Warning] [MY-012351] [InnoDB] Tablespace 1, name 'sys/sys_config', file '.\sys\sys_config.ibd' is missing!
+2026-08-05T05:25:03.795420Z 0 [System] [MY-010229] [Server] Starting XA crash recovery...
+2026-08-05T05:25:03.804531Z 0 [System] [MY-010232] [Server] XA crash recovery finished.
+2026-08-05T05:25:03.934368Z 0 [Warning] [MY-010068] [Server] CA certificate ca.pem is self signed.
+2026-08-05T05:25:03.934857Z 0 [System] [MY-013602] [Server] Channel mysql_main configured to support TLS. Encrypted connections are now supported for this channel.
+2026-08-05T05:25:04.012577Z 0 [System] [MY-010931] [Server] C:\Program Files\MySQL\MySQL Server 8.4\bin\mysqld.exe: ready for connections. Version: '8.4.9'  socket: ''  port: 3306  MySQL Community Server - GPL.
+2026-08-05T05:25:26.521930Z 0 [System] [MY-015015] [Server] MySQL Server - start.
+2026-08-05T05:25:26.705633Z 0 [System] [MY-010116] [Server] C:\Program Files\MySQL\MySQL Server 8.4\bin\mysqld.exe (mysqld 8.4.9) starting as process 26468
+2026-08-05T05:25:26.752389Z 1 [System] [MY-013576] [InnoDB] InnoDB initialization has started.
+2026-08-05T05:25:27.347370Z 1 [System] [MY-013577] [InnoDB] InnoDB initialization has ended.
+2026-08-05T05:25:27.442273Z 1 [Warning] [MY-012351] [InnoDB] Tablespace 1, name 'sys/sys_config', file '.\sys\sys_config.ibd' is missing!
+2026-08-05T05:25:27.516922Z 0 [System] [MY-010229] [Server] Starting XA crash recovery...
+2026-08-05T05:25:27.525195Z 0 [System] [MY-010232] [Server] XA crash recovery finished.
+2026-08-05T05:25:27.638041Z 0 [Warning] [MY-010068] [Server] CA certificate ca.pem is self signed.
+2026-08-05T05:25:27.638554Z 0 [System] [MY-013602] [Server] Channel mysql_main configured to support TLS. Encrypted connections are now supported for this channel.
+2026-08-05T05:25:27.661256Z 0 [System] [MY-010931] [Server] C:\Program Files\MySQL\MySQL Server 8.4\bin\mysqld.exe: ready for connections. Version: '8.4.9'  socket: ''  port: 0  MySQL Community Server - GPL.
+2026-08-05T05:25:27.663610Z 0 [ERROR] [MY-010131] [Server] TCP/IP, --shared-memory, or --named-pipe should be configured on NT OS
+2026-08-05T05:25:27.664374Z 0 [ERROR] [MY-010119] [Server] Aborting
+2026-08-05T05:25:28.789502Z 0 [System] [MY-010910] [Server] C:\Program Files\MySQL\MySQL Server 8.4\bin\mysqld.exe: Shutdown complete (mysqld 8.4.9)  MySQL Community Server - GPL.
+2026-08-05T05:25:28.790948Z 0 [System] [MY-015016] [Server] MySQL Server - end.
+2026-08-05T05:26:06.537241Z 0 [System] [MY-015015] [Server] MySQL Server - start.
+2026-08-05T05:26:06.681663Z 0 [System] [MY-010116] [Server] C:\Program Files\MySQL\MySQL Server 8.4\bin\mysqld.exe (mysqld 8.4.9) starting as process 22036
+2026-08-05T05:26:06.727503Z 1 [System] [MY-013576] [InnoDB] InnoDB initialization has started.
+2026-08-05T05:26:07.111167Z 1 [System] [MY-013577] [InnoDB] InnoDB initialization has ended.
+2026-08-05T05:26:07.262661Z 1 [Warning] [MY-012351] [InnoDB] Tablespace 1, name 'sys/sys_config', file '.\sys\sys_config.ibd' is missing!
+2026-08-05T05:26:07.490530Z 0 [Warning] [MY-010068] [Server] CA certificate ca.pem is self signed.
+2026-08-05T05:26:07.491008Z 0 [System] [MY-013602] [Server] Channel mysql_main configured to support TLS. Encrypted connections are now supported for this channel.
+2026-08-05T05:26:07.516909Z 0 [System] [MY-010931] [Server] C:\Program Files\MySQL\MySQL Server 8.4\bin\mysqld.exe: ready for connections. Version: '8.4.9'  socket: ''  port: 0  MySQL Community Server - GPL.
+2026-08-05T05:26:07.518891Z 0 [ERROR] [MY-010131] [Server] TCP/IP, --shared-memory, or --named-pipe should be configured on NT OS
+2026-08-05T05:26:07.519457Z 0 [ERROR] [MY-010119] [Server] Aborting
+2026-08-05T05:26:08.706169Z 0 [System] [MY-010910] [Server] C:\Program Files\MySQL\MySQL Server 8.4\bin\mysqld.exe: Shutdown complete (mysqld 8.4.9)  MySQL Community Server - GPL.
+2026-08-05T05:26:08.707655Z 0 [System] [MY-015016] [Server] MySQL Server - end.
+2026-08-05T05:26:35.050596Z 0 [System] [MY-015015] [Server] MySQL Server - start.
+2026-08-05T05:26:35.297763Z 0 [System] [MY-010116] [Server] C:\Program Files\MySQL\MySQL Server 8.4\bin\mysqld.exe (mysqld 8.4.9) starting as process 22368
+2026-08-05T05:26:35.321031Z 1 [System] [MY-013576] [InnoDB] InnoDB initialization has started.
+2026-08-05T05:26:35.718136Z 1 [System] [MY-013577] [InnoDB] InnoDB initialization has ended.
+2026-08-05T05:26:35.877288Z 1 [Warning] [MY-012351] [InnoDB] Tablespace 1, name 'sys/sys_config', file '.\sys\sys_config.ibd' is missing!
+2026-08-05T05:26:36.118386Z 0 [Warning] [MY-010068] [Server] CA certificate ca.pem is self signed.
+2026-08-05T05:26:36.119289Z 0 [System] [MY-013602] [Server] Channel mysql_main configured to support TLS. Encrypted connections are now supported for this channel.
+2026-08-05T05:26:36.159075Z 0 [System] [MY-010931] [Server] C:\Program Files\MySQL\MySQL Server 8.4\bin\mysqld.exe: ready for connections. Version: '8.4.9'  socket: ''  port: 0  MySQL Community Server - GPL.
+2026-08-05T05:26:36.161446Z 0 [ERROR] [MY-010131] [Server] TCP/IP, --shared-memory, or --named-pipe should be configured on NT OS
+2026-08-05T05:26:36.162145Z 0 [ERROR] [MY-010119] [Server] Aborting
+2026-08-05T05:26:37.358010Z 0 [System] [MY-010910] [Server] C:\Program Files\MySQL\MySQL Server 8.4\bin\mysqld.exe: Shutdown complete (mysqld 8.4.9)  MySQL Community Server - GPL.
+2026-08-05T05:26:37.359185Z 0 [System] [MY-015016] [Server] MySQL Server - end.
+2026-08-05T05:27:00.496761Z 0 [System] [MY-015015] [Server] MySQL Server - start.
+2026-08-05T05:27:00.709201Z 0 [System] [MY-010116] [Server] C:\Program Files\MySQL\MySQL Server 8.4\bin\mysqld.exe (mysqld 8.4.9) starting as process 16080
+2026-08-05T05:27:00.755966Z 1 [System] [MY-013576] [InnoDB] InnoDB initialization has started.
+2026-08-05T05:27:01.184892Z 1 [System] [MY-013577] [InnoDB] InnoDB initialization has ended.
+2026-08-05T05:27:01.335861Z 1 [Warning] [MY-012351] [InnoDB] Tablespace 1, name 'sys/sys_config', file '.\sys\sys_config.ibd' is missing!
+2026-08-05T05:27:01.603804Z 0 [Warning] [MY-010068] [Server] CA certificate ca.pem is self signed.
+2026-08-05T05:27:01.604276Z 0 [System] [MY-013602] [Server] Channel mysql_main configured to support TLS. Encrypted connections are now supported for this channel.
+2026-08-05T05:27:01.686786Z 0 [System] [MY-010931] [Server] C:\Program Files\MySQL\MySQL Server 8.4\bin\mysqld.exe: ready for connections. Version: '8.4.9'  socket: ''  port: 3306  MySQL Community Server - GPL.
+2026-08-05T09:12:41.753698Z 32 [Warning] [MY-013360] [Server] Plugin sha256_password reported: ''sha256_password' is deprecated and will be removed in a future release. Please use caching_sha2_password instead'
