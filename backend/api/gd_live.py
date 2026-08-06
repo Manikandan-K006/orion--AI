@@ -869,6 +869,7 @@ def _compute_scores(evaluation) -> dict:
 
 
 async def _save_evaluation_bg(
+    
     session_code: str, user_id: int, team_number: int, transcript: str, evaluation, logger
 ) -> None:
     """Save evaluation to DB in a background task. Single transaction, single commit."""
