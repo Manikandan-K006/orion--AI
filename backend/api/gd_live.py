@@ -745,10 +745,14 @@ async def upload_audio_chunk(
     content = await loop.run_in_executor(None, file.file.read)
     await loop.run_in_executor(None, file_path.write_bytes, content)
 
+    logger.info("GD chunk received: session=%s uid=%s size=%d bytes", session_code, current_user["id"], len(content))
+
     # Transcribe the chunk (beam_size=1 for speed)
     from backend.ai.speech_recognition import transcribe_chunk
     result = await loop.run_in_executor(None, transcribe_chunk, str(file_path))
     chunk_text = result.get("transcript", "") if result.get("success") else ""
+    logger.info("GD chunk transcribed: uid=%s success=%s transcript_len=%d text=%s",
+                current_user["id"], result.get("success"), len(chunk_text), chunk_text[:80])
 
     # Append to accumulated transcript in room state
     state = manager.get_state(session_code)
@@ -800,6 +804,8 @@ async def finalize_transcript(
                 ts = state.team_states[tn]
                 transcript = ts.transcripts.get(uid, "")
 
+    logger.info("Finalize transcript: session=%s uid=%s transcript_len=%d",
+                session_code, uid, len(transcript.strip()))
     return {
         "transcript": transcript.strip(),
         "message": "Transcript finalized",
