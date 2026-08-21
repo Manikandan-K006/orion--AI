@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { CheckCircle2, Loader2, Clock, Users, Mic, MicOff, Volume2, Brain, AlertTriangle, AlertCircle, Target, Maximize2, Medal, BarChart3, Zap, Play, User, Sparkles, FileText, Download, Lightbulb, MessageSquare, ShieldCheck, Activity, Trophy, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, Radar } from "recharts";
@@ -8,6 +8,160 @@ import { useGdLiveWs, GDLiveWsMessage } from "@/lib/useGdLiveWs";
 import { useVoiceAnnouncement } from "@/services/voice/useVoiceAnnouncement";
 import { useProctoring } from "@/services/proctoring/lockdown";
 import { getApiUrl } from "@/lib/config";
+
+interface UseWebRTCOptions {
+  sessionCode: string;
+  token: string;
+  userId: number;
+  send: (event: string, payload: any) => void;
+  subscribe: (handler: (msg: GDLiveWsMessage) => void) => () => void;
+}
+
+interface UseWebRTCReturn {
+  localStream: MediaStream | null;
+  remoteStreams: Map<number, MediaStream>;
+  toggleCamera: () => void;
+  toggleMic: () => void;
+  cameraEnabled: boolean;
+  micEnabled: boolean;
+}
+
+function useWebRTC({ sessionCode, token, userId, send, subscribe }: UseWebRTCOptions): UseWebRTCReturn {
+  const [localStream, setLocalStream] = useState<MediaStream | null>(null);
+  const [remoteStreams, setRemoteStreams] = useState<Map<number, MediaStream>>(new Map());
+  const [cameraEnabled, setCameraEnabled] = useState(true);
+  const [micEnabled, setMicEnabled] = useState(true);
+  const pcsRef = useRef<Map<number, RTCPeerConnection>>(new Map());
+  const localStreamRef = useRef<MediaStream | null>(null);
+
+  const getOrCreatePC = useCallback((peerId: number) => {
+    if (pcsRef.current.has(peerId)) return pcsRef.current.get(peerId)!;
+    const pc = new RTCPeerConnection({
+      iceServers: [{ urls: "stun:stun.l.google.com:19302" }, { urls: "stun:stun1.l.google.com:19302" }],
+    });
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach((track) => {
+        pc.addTrack(track, localStreamRef.current!);
+      });
+    }
+    pc.onicecandidate = (e) => {
+      if (e.candidate) {
+        send("WEBRTC_ICE_CANDIDATE", { target_user_id: peerId, candidate: e.candidate.toJSON() });
+      }
+    };
+    pc.ontrack = (e) => {
+      setRemoteStreams((prev) => {
+        const next = new Map(prev);
+        next.set(peerId, e.streams[0]);
+        return next;
+      });
+    };
+    pcsRef.current.set(peerId, pc);
+    return pc;
+  }, [send]);
+
+  const createOffer = useCallback(async (peerId: number) => {
+    const pc = getOrCreatePC(peerId);
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    send("WEBRTC_OFFER", { target_user_id: peerId, offer: pc.localDescription!.toJSON() });
+  }, [getOrCreatePC, send]);
+
+  const handleOffer = useCallback(async (peerId: number, offer: RTCSessionDescriptionInit) => {
+    const pc = getOrCreatePC(peerId);
+    await pc.setRemoteDescription(new RTCSessionDescription(offer));
+    const answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+    send("WEBRTC_ANSWER", { target_user_id: peerId, answer: pc.localDescription!.toJSON() });
+  }, [getOrCreatePC, send]);
+
+  const handleAnswer = useCallback(async (peerId: number, answer: RTCSessionDescriptionInit) => {
+    const pc = pcsRef.current.get(peerId);
+    if (pc) await pc.setRemoteDescription(new RTCSessionDescription(answer));
+  }, []);
+
+  const handleIceCandidate = useCallback(async (peerId: number, candidate: RTCIceCandidateInit) => {
+    const pc = pcsRef.current.get(peerId);
+    if (pc) await pc.addIceCandidate(new RTCIceCandidate(candidate));
+  }, []);
+
+  useEffect(() => {
+    let stream: MediaStream | null = null;
+    navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then((s) => {
+      stream = s;
+      localStreamRef.current = s;
+      setLocalStream(s);
+    }).catch((err) => {
+      console.warn("[WebRTC] getUserMedia failed:", err);
+      navigator.mediaDevices.getUserMedia({ audio: true }).then((s) => {
+        stream = s;
+        localStreamRef.current = s;
+        setLocalStream(s);
+        setCameraEnabled(false);
+      }).catch(() => {});
+    });
+    return () => {
+      stream?.getTracks().forEach((t) => t.stop());
+      pcsRef.current.forEach((pc) => pc.close());
+      pcsRef.current.clear();
+    };
+  }, []);
+
+  useEffect(() => {
+    const unsub = subscribe((msg: GDLiveWsMessage) => {
+      switch (msg.event) {
+        case "WEBRTC_OFFER":
+          if (msg.payload.from_user_id !== userId) handleOffer(msg.payload.from_user_id, msg.payload.offer);
+          break;
+        case "WEBRTC_ANSWER":
+          if (msg.payload.from_user_id !== userId) handleAnswer(msg.payload.from_user_id, msg.payload.answer);
+          break;
+        case "WEBRTC_ICE_CANDIDATE":
+          if (msg.payload.from_user_id !== userId) handleIceCandidate(msg.payload.from_user_id, msg.payload.candidate);
+          break;
+      }
+    });
+    return unsub;
+  }, [subscribe, userId, handleOffer, handleAnswer, handleIceCandidate]);
+
+  useEffect(() => {
+    if (!localStream) return;
+    const handler = (msg: GDLiveWsMessage) => {
+      if (msg.event === "TEAM_STATE_UPDATED" || msg.event === "STATE_SYNC") {
+        const members = msg.payload?.members || msg.payload?.state?.members || [];
+        members.forEach((m: any) => {
+          if (m.user_id !== userId && !pcsRef.current.has(m.user_id)) {
+            createOffer(m.user_id);
+          }
+        });
+      }
+    };
+    const unsub = subscribe(handler);
+    return unsub;
+  }, [localStream, subscribe, userId, createOffer]);
+
+  const toggleCamera = useCallback(() => {
+    if (!localStream) return;
+    const videoTrack = localStream.getVideoTracks()[0];
+    if (videoTrack) {
+      videoTrack.enabled = !videoTrack.enabled;
+      setCameraEnabled(videoTrack.enabled);
+      send("CAMERA_STATUS", { camera_on: videoTrack.enabled });
+    }
+  }, [localStream, send]);
+
+  const toggleMic = useCallback(() => {
+    if (!localStream) return;
+    const audioTrack = localStream.getAudioTracks()[0];
+    if (audioTrack) {
+      audioTrack.enabled = !audioTrack.enabled;
+      setMicEnabled(audioTrack.enabled);
+      send("MIC_STATUS", { mic_on: audioTrack.enabled });
+    }
+  }, [localStream, send]);
+
+  return { localStream, remoteStreams, toggleCamera, toggleMic, cameraEnabled, micEnabled };
+}
 
 interface CircularProgressProps {
   percent: number;
@@ -116,57 +270,6 @@ function formatTime(s: number) {
   return m + ":" + sec;
 }
 
-function PipelineTracker({ currentSpeakerId }: { currentSpeakerId: number | null }) {
-  const steps = [
-    "Voice Input", "Noise Removal", "Whisper STT", "Sentence Detection",
-    "Grammar", "Emotion", "Confidence", "Relevance", "AI Decision Engine",
-    "Moderator Response", "Dashboard Update"
-  ];
-  const [activeIdx, setActiveIdx] = useState(-1);
-
-  useEffect(() => {
-    if (!currentSpeakerId) {
-      setActiveIdx(-1);
-      return;
-    }
-    const interval = setInterval(() => {
-      setActiveIdx((prev) => (prev + 1) % steps.length);
-    }, 1500);
-    return () => clearInterval(interval);
-  }, [currentSpeakerId]);
-
-  return (
-    <div className="card p-3 space-y-2 bg-slate-900/70 border border-slate-800 shadow-md">
-      <div className="flex items-center justify-between">
-        <span className="text-[10px] font-bold text-heading uppercase tracking-wider flex items-center gap-1">
-          <Brain className="w-3.5 h-3.5 text-indigo-400" /> AI Decision Pipeline
-        </span>
-        <span className="text-[8px] font-mono text-muted-soft">{currentSpeakerId ? "Processing Live Speech..." : "Idle"}</span>
-      </div>
-      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-[9px] font-bold scrollbar-none scroll-smooth">
-        {steps.map((step, idx) => {
-          const isActive = idx === activeIdx;
-          const isDone = idx < activeIdx && activeIdx !== -1;
-          return (
-            <div
-              key={step}
-              className={`flex items-center gap-1 px-2 py-1 rounded-md shrink-0 transition-all border ${isActive
-                ? "bg-indigo-600 border-indigo-500 text-white animate-pulse"
-                : isDone
-                  ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
-                  : "bg-slate-950/40 border-slate-850 text-muted-soft"
-                }`}
-            >
-              <span className={`w-1 h-1 rounded-full ${isActive ? "bg-white" : isDone ? "bg-emerald-400" : "bg-slate-700"}`} />
-              <span>{step}</span>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
 function anonLabel(m: any, idx: number, uid: number): string {
   if (m.user_id === uid) return "You";
   const lbl = m.label || m.anonymous_label;
@@ -204,6 +307,7 @@ export default function GdLiveRoom({
   onLeave: (finished?: boolean) => void;
 }) {
   const { connected, send, subscribe } = useGdLiveWs(sessionCode, token);
+  const { localStream, remoteStreams, toggleCamera, toggleMic, cameraEnabled, micEnabled } = useWebRTC({ sessionCode, token, userId: user?.user_id ?? user?.id, send, subscribe });
   const [countdown, setCountdown] = useState<number | null>(showCountdown ? 3 : null);
   const [topic, setTopic] = useState(initialTopic);
   const [teamNumber, setTeamNumber] = useState<number | null>(null);
@@ -211,13 +315,10 @@ export default function GdLiveRoom({
   const joinedMembers = members.filter((m: any) => m.status !== "invited");
   const [finishedIds, setFinishedIds] = useState<Set<number>>(new Set());
   const [allFinished, setAllFinished] = useState(false);
-  const [timerSeconds, setTimerSeconds] = useState(600);
-  const [defaultSpeakingTime, setDefaultSpeakingTime] = useState(600);
-  const [prepNotes, setPrepNotes] = useState("");
+  const [timerSeconds, setTimerSeconds] = useState(60);
+  const [turnNumber, setTurnNumber] = useState(0);
+  const [maxTurns, setMaxTurns] = useState(0);
   const [timerRunning, setTimerRunning] = useState(false);
-  const [discussionStarted, setDiscussionStarted] = useState(false);
-  const [thinkingPhase, setThinkingPhase] = useState(false);
-  const [thinkingSeconds, setThinkingSeconds] = useState(120);
   const [isRecording, setIsRecording] = useState(false);
   const [audioLevel, setAudioLevel] = useState(0);
   const [transcript, setTranscript] = useState("");
@@ -229,45 +330,27 @@ export default function GdLiveRoom({
   const [submitStep, setSubmitStep] = useState<SubmitStep>("idle");
   const [evalStage, setEvalStage] = useState("");
   const [generatingStep, setGeneratingStep] = useState<string>("");
-
-  // New state variables for 7-stage GD:
-  const [readyUsers, setReadyUsers] = useState<number[]>([]);
-  const [micChecks, setMicChecks] = useState<Record<number, boolean>>({});
-  const [networkHealthMap, setNetworkHealthMap] = useState<Record<number, string>>({});
-  const [handRaisedQueue, setHandRaisedQueue] = useState<number[]>([]);
-  const [rebuttalQueue, setRebuttalQueue] = useState<number[]>([]);
-  const [interruptionCounts, setInterruptionCounts] = useState<Record<number, number>>({});
-  const [speakingDurations, setSpeakingDurations] = useState<Record<number, number>>({});
-  const [participationPercentages, setParticipationPercentages] = useState<Record<number, number>>({});
-  const [agreeDisagreeVotes, setAgreeDisagreeVotes] = useState<Record<number, { agree: number, disagree: number }>>({});
-  const [argumentsMade, setArgumentsMade] = useState<Record<number, string[]>>({});
-  const [relevantPointsCount, setRelevantPointsCount] = useState<Record<number, number>>({});
-  const [offTopicCount, setOffTopicCount] = useState<Record<number, number>>({});
-  const [liveSpeakingStatuses, setLiveSpeakingStatuses] = useState<Record<number, string>>({});
-  const [challengeQuestions, setChallengeQuestions] = useState<Record<number, string>>({});
-  const [consensusClaimedBy, setConsensusClaimedBy] = useState<number | null>(null);
-  const [consensusText, setConsensusText] = useState("");
-  const [awards, setAwards] = useState<Record<string, string>>({});
+  const [showTurnSummary, setShowTurnSummary] = useState(false);
+  const [turnSummaryScore, setTurnSummaryScore] = useState<any>(null);
   const [winnerCard, setWinnerCard] = useState<any>(null);
 
-  // Local Stage 1 readiness checks:
+  // Waiting room readiness:
+  const [readyUsers, setReadyUsers] = useState<number[]>([]);
   const [localMicCheck, setLocalMicCheck] = useState(true);
   const [localCameraCheck, setLocalCameraCheck] = useState(true);
   const [localNetwork, setLocalNetwork] = useState("Excellent");
   const [audioTestPassed, setAudioTestPassed] = useState(false);
   const [localReady, setLocalReady] = useState(false);
 
-  // Turn, round, speech streaming and alerts state variables
+  // Turn-based GD state:
   const [currentSpeakerId, setCurrentSpeakerId] = useState<number | null>(null);
-  const [nextSpeakerId, setNextSpeakerId] = useState<number | null>(null);
   const [speakingOrder, setSpeakingOrder] = useState<number[]>([]);
-  const [discussionRound, setDiscussionRound] = useState<number>(1);
   const [liveSpeechText, setLiveSpeechText] = useState("");
   const [liveTranscripts, setLiveTranscripts] = useState<Record<number, string>>({});
-  const [liveScores, setLiveScores] = useState<any>(null);
-  const [aiAlertsList, setAiAlertsList] = useState<any[]>([]);
   const [chatMessages, setChatMessages] = useState<any[]>([]);
   const [speakingHistory, setSpeakingHistory] = useState<any[]>([]);
+  const [participantCameraStatus, setParticipantCameraStatus] = useState<Record<number, boolean>>({});
+  const [participantMicStatus, setParticipantMicStatus] = useState<Record<number, boolean>>({});
   const recognitionRef = useRef<any>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
@@ -291,7 +374,6 @@ export default function GdLiveRoom({
   const audioContextRef = useRef<AudioContext | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const thinkingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const finishLockRef = useRef(false);
   const chunkIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const chunkUploadRef = useRef(false);
@@ -324,7 +406,7 @@ export default function GdLiveRoom({
     return () => clearTimeout(id);
   }, [countdown, onCountdownDone]);
 
-  // Timer effect
+  // Timer effect — always 60-second turns
   useEffect(() => {
     if (!timerRunning) { if (timerRef.current) clearInterval(timerRef.current); return; }
     timerRef.current = setInterval(() => {
@@ -335,7 +417,6 @@ export default function GdLiveRoom({
           voice.announceTimeOver();
           return 0;
         }
-        if (s === 61 && !announcedMarkers.current.has("60")) { announcedMarkers.current.add("60"); voice.announceOneMinute(); }
         if (s === 31 && !announcedMarkers.current.has("30")) { announcedMarkers.current.add("30"); voice.announceThirtySeconds(); }
         if (s === 11 && !announcedMarkers.current.has("10")) { announcedMarkers.current.add("10"); voice.announceTenSeconds(); }
         return s - 1;
@@ -344,19 +425,7 @@ export default function GdLiveRoom({
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [timerRunning]);
 
-  // Thinking timer effect
-  useEffect(() => {
-    if (!thinkingPhase) { if (thinkingTimerRef.current) clearInterval(thinkingTimerRef.current); return; }
-    thinkingTimerRef.current = setInterval(() => {
-      setThinkingSeconds((s) => {
-        if (s <= 1) { if (thinkingTimerRef.current) clearInterval(thinkingTimerRef.current); beginDiscussion(); return 0; }
-        return s - 1;
-      });
-    }, 1000);
-    return () => { if (thinkingTimerRef.current) clearInterval(thinkingTimerRef.current); };
-  }, [thinkingPhase]);
-
-  // Auto-stop when timer hits 0
+  // Auto-stop when timer hits 0 — disable mic, lock speaking, send transcript
   useEffect(() => {
     if (timerRunning || timerSeconds > 0 || finishLockRef.current) return;
     if (myFinished || allFinished) return;
@@ -511,8 +580,13 @@ export default function GdLiveRoom({
       console.log("[MIC] Creating MediaRecorder, mimeType:", mimeType);
       const recorder = new MediaRecorder(stream, { mimeType });
       mediaRecorderRef.current = recorder;
+      let chunkCount = 0;
       recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+        if (e.data.size > 0) {
+          audioChunksRef.current.push(e.data);
+          chunkCount++;
+          if (chunkCount % 5 === 0) console.log("[MIC] Chunk #", chunkCount, "total chunks:", audioChunksRef.current.length);
+        }
       };
       recorder.onerror = (e) => {
         console.error("[MIC] MediaRecorder error:", e);
@@ -525,6 +599,7 @@ export default function GdLiveRoom({
         }
         setIsRecording(false);
         setAudioLevel(0);
+        console.log("[MIC] Recording stopped. Total chunks:", chunkCount);
       };
       recorder.start(1000);
       setIsRecording(true);
@@ -568,7 +643,7 @@ export default function GdLiveRoom({
         body: formData,
       });
       const data = await res.json();
-      console.log("[CHUNK] Server:", res.status, "transcript:", data.chunk_transcript?.substring(0, 60) || "(empty)");
+      console.log("[CHUNK] Server:", res.status, "chunk_transcript:", data.chunk_transcript?.substring(0, 80) || "(empty)", "accumulated:", data.accumulated_transcript?.length || 0, "chars");
     } catch (err) {
       console.warn("[CHUNK] Upload failed:", err);
     }
@@ -590,66 +665,42 @@ export default function GdLiveRoom({
     chunkUploadRef.current = false;
   }
 
-  function startDiscussion() {
-    setDiscussionStarted(true);
-    setThinkingPhase(true);
-    setThinkingSeconds(120);
-    voice.announceDiscussionStarted();
-    setTimeout(() => voice.announceTopic(topic), 2000);
-  }
-
-  function beginDiscussion() {
-    if (thinkingTimerRef.current) clearInterval(thinkingTimerRef.current);
-    setThinkingPhase(false);
-    setTimerRunning(true);
-    if (currentSpeakerId === userId) {
-      startRecording();
-      startChunkUpload();
-      startSpeechRecognition();
-    } else {
-      stopMic();
-      stopChunkUpload();
-      stopSpeechRecognition();
-    }
-    proctoring.enable();
-    voice.announceBeginSpeaking();
-  }
-
   async function executeFinish() {
     if (finishLockRef.current) return;
     finishLockRef.current = true;
-    console.log("[FINISH] executeFinish called. Chunks remaining:", audioChunksRef.current.length);
+    console.log("[FINISH] executeFinish called. Chunks remaining:", audioChunksRef.current.length, "isRecording:", isRecording);
     setTimerRunning(false);
     if (timerRef.current) clearInterval(timerRef.current);
     stopChunkUpload();
     proctoring.disable();
-    setSubmitStep("finalizing");
 
-    // Send final chunk (remaining audio since last interval)
+    // Send final chunk
     try {
       if (audioChunksRef.current.length > 0) {
         const finalBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
         audioChunksRef.current = [];
-        console.log("[FINISH] Final chunk:", finalBlob.size, "bytes");
         if (finalBlob.size >= 100) {
+          console.log("[FINISH] Uploading final chunk:", finalBlob.size, "bytes");
           const fd = new FormData();
           fd.append("file", finalBlob, "gd_chunk_" + sessionCode + "_" + userId + ".webm");
-          await fetch(apiUrl + "/gd-live/sessions/" + sessionCode + "/upload-chunk", {
+          const chunkRes = await fetch(apiUrl + "/gd-live/sessions/" + sessionCode + "/upload-chunk", {
             method: "POST",
             headers: { Authorization: "Bearer " + token },
             body: fd,
           });
+          const chunkData = await chunkRes.json();
+          console.log("[FINISH] Final chunk uploaded:", chunkRes.status, "transcript:", chunkData.chunk_transcript?.substring(0, 80) || "(empty)");
         }
+      } else {
+        console.log("[FINISH] No remaining chunks to upload");
       }
     } catch (err) {
-      console.warn("Final chunk upload failed:", err);
+      console.warn("[FINISH] Final chunk upload failed:", err);
     }
 
-    // Stop mic after final chunk is sent
     stopMic();
 
-    // Get accumulated transcript from server
-    setSubmitStep("analyzing");
+    // Get accumulated transcript
     let transcript = "";
     try {
       const finRes = await fetch(apiUrl + "/gd-live/sessions/" + sessionCode + "/finalize-transcript", {
@@ -658,33 +709,9 @@ export default function GdLiveRoom({
       });
       const finData = await finRes.json();
       transcript = finData.transcript || "";
-      console.log("[FINISH] Finalize transcript:", transcript.length, "chars:", transcript.substring(0, 80));
+      console.log("[FINISH] Finalize transcript:", finRes.status, "length:", transcript.length, "preview:", transcript.substring(0, 100));
     } catch (err) {
       console.warn("[FINISH] Finalize transcript failed:", err);
-    }
-
-    // If accumulated transcript is empty, fall back to full upload
-    if (!transcript || transcript.length < 20) {
-      console.log("[FINISH] Accumulated transcript too short (" + transcript.length + " chars), trying fallback full upload");
-      const blob = new Blob(audioChunksRef.current.length > 0
-        ? audioChunksRef.current
-        : [new Blob()], { type: "audio/webm" });
-      if (blob.size >= 100) {
-        try {
-          const formData = new FormData();
-          formData.append("file", blob, "gd_" + sessionCode + "_" + userId + ".webm");
-          const res = await fetch(apiUrl + "/gd-live/sessions/" + sessionCode + "/upload-audio", {
-            method: "POST",
-            headers: { Authorization: "Bearer " + token },
-            body: formData,
-          });
-          const data = await res.json();
-          if (data.transcript) transcript = data.transcript;
-          if (data.evaluation) setAiResult(data.evaluation);
-        } catch (err) {
-          console.warn("Fallback upload failed:", err);
-        }
-      }
     }
 
     if (transcript) setTranscript(transcript);
@@ -693,14 +720,10 @@ export default function GdLiveRoom({
     console.log("[FINISH] Sending SPEAKER_FINISHED. Transcript length:", transcript.length);
     send("SPEAKER_FINISHED", { user_id: userId, transcript });
 
-    // For continuous discussion rounds, unlock for future turns
-    if (discussionRound === 2 || discussionRound === 3) {
-      finishLockRef.current = false;
-      setSubmitStep("idle");
-      setLiveSpeechText("");
-    } else {
-      setSubmitStep("complete");
-    }
+    // Turn-based: unlock for next turns, show AI processing
+    finishLockRef.current = false;
+    setSubmitStep("idle");
+    setLiveSpeechText("");
   }
 
   function forceFinish(reason: string) {
@@ -728,34 +751,14 @@ export default function GdLiveRoom({
       const syncState = (ts: any) => {
         if (!ts) return;
         setMembers(ts.members || []);
-        setTimerSeconds(ts.timer_seconds);
+        if (ts.timer_seconds !== undefined) setTimerSeconds(ts.timer_seconds);
         setFinishedIds(new Set(ts.finished_user_ids || []));
         setAllFinished(ts.all_finished || false);
-        if (ts.round !== undefined) {
-          if (ts.speaking_order) {
-            setSpeakingOrder(ts.speaking_order || []);
-            setCurrentSpeakerId(ts.speaking_order[ts.current_speaker_idx] ?? null);
-            setNextSpeakerId(ts.speaking_order[ts.current_speaker_idx + 1] ?? null);
-          }
-          setDiscussionRound(ts.round || 1);
-        }
+        if (ts.speaking_order) setSpeakingOrder(ts.speaking_order);
+        if (ts.current_speaker_id !== undefined) setCurrentSpeakerId(ts.current_speaker_id);
+        if (ts.turn_number !== undefined) setTurnNumber(ts.turn_number);
+        if (ts.max_turns !== undefined) setMaxTurns(ts.max_turns);
         setReadyUsers(ts.ready_users || []);
-        setMicChecks(ts.mic_checks || {});
-        setNetworkHealthMap(ts.network_health || {});
-        setHandRaisedQueue(ts.hand_raised_queue || []);
-        setRebuttalQueue(ts.rebuttal_queue || []);
-        setInterruptionCounts(ts.interruption_counts || {});
-        setSpeakingDurations(ts.speaking_durations || {});
-        setParticipationPercentages(ts.participation_percentages || {});
-        setAgreeDisagreeVotes(ts.agree_disagree_votes || {});
-        setArgumentsMade(ts.arguments_made || {});
-        setRelevantPointsCount(ts.relevant_points_count || {});
-        setOffTopicCount(ts.off_topic_count || {});
-        setLiveSpeakingStatuses(ts.live_speaking_statuses || {});
-        setChallengeQuestions(ts.challenge_questions || {});
-        setConsensusClaimedBy(ts.consensus_claimed_by || null);
-        setConsensusText(ts.consensus_text || "");
-        setAwards(ts.awards || {});
       };
 
       switch (msg.event) {
@@ -769,10 +772,6 @@ export default function GdLiveRoom({
           if (myTeam) {
             setTeamNumber(myTeam.team_number);
             syncState(myTeam);
-            if (myTeam.timer_seconds) {
-              setDefaultSpeakingTime(myTeam.timer_seconds);
-            }
-
             if (!announcedMarkers.current.has("welcome")) {
               announcedMarkers.current.add("welcome");
               voice.announceDiscussionStart();
@@ -786,36 +785,17 @@ export default function GdLiveRoom({
           let activeTeamNum = teamNumber;
           if (!activeTeamNum) {
             const me = list.find((m: any) => m.user_id === userId);
-            if (me && me.team_number) {
-              activeTeamNum = me.team_number;
-              setTeamNumber(me.team_number);
-            }
+            if (me && me.team_number) { activeTeamNum = me.team_number; setTeamNumber(me.team_number); }
           }
           if (activeTeamNum) {
             const myTeamMembers = list.filter((m: any) => m.team_number === activeTeamNum);
             if (myTeamMembers.length > 0) {
-              setMembers(myTeamMembers.map((m: any) => ({
-                user_id: m.user_id,
-                name: m.name,
-                label: m.anonymous_label || m.label,
-                status: m.status,
-              })));
+              setMembers(myTeamMembers.map((m: any) => ({ user_id: m.user_id, name: m.name, label: m.anonymous_label || m.label, status: m.status })));
             }
           } else {
-            // For Waiting Room global lobby
-            setMembers(list.map((m: any) => ({
-              user_id: m.user_id,
-              name: m.name,
-              label: m.anonymous_label || m.label,
-              status: m.status,
-            })));
+            setMembers(list.map((m: any) => ({ user_id: m.user_id, name: m.name, label: m.anonymous_label || m.label, status: m.status })));
           }
-
-          // Always parse ready status lists, microphone checks, and connection health metrics
-          const ready = list.filter((m: any) => m.ready).map((m: any) => m.user_id);
-          setReadyUsers(ready);
-          setMicChecks(list.reduce((acc: any, m: any) => ({ ...acc, [m.user_id]: m.mic ?? true }), {}));
-          setNetworkHealthMap(list.reduce((acc: any, m: any) => ({ ...acc, [m.user_id]: m.network ?? "Good" }), {}));
+          setReadyUsers(list.filter((m: any) => m.ready).map((m: any) => m.user_id));
           break;
         }
         case "TEAM_STATE_UPDATED": {
@@ -823,15 +803,14 @@ export default function GdLiveRoom({
           break;
         }
         case "SPEAKER_CHANGED": {
-          const { current_speaker_id, next_speaker_id, round, topic, speaking_order } = msg.payload;
-          console.log("[SPEAKER_CHANGED] speaker:", current_speaker_id, "me:", userId, "round:", round);
+          const { current_speaker_id, speaking_order, turn_number, max_turns } = msg.payload;
+          console.log("[SPEAKER_CHANGED] speaker:", current_speaker_id, "me:", userId);
           setCurrentSpeakerId(current_speaker_id);
-          setNextSpeakerId(next_speaker_id);
-          setDiscussionRound(round || 1);
-          if (topic) setTopic(topic);
           if (speaking_order) setSpeakingOrder(speaking_order);
-
-          setTimerSeconds(defaultSpeakingTime);
+          if (turn_number !== undefined) setTurnNumber(turn_number);
+          if (max_turns !== undefined) setMaxTurns(max_turns);
+          setTimerSeconds(60);
+          setShowTurnSummary(false);
 
           if (current_speaker_id === userId) {
             console.log("[SPEAKER_CHANGED] I am the speaker — starting mic");
@@ -839,76 +818,48 @@ export default function GdLiveRoom({
             startSpeechRecognition();
             startChunkUpload();
             setTimerRunning(true);
+            proctoring.enable();
           } else {
             console.log("[SPEAKER_CHANGED] Not the speaker — stopping mic");
             stopChunkUpload();
             stopSpeechRecognition();
             stopMic();
             setTimerRunning(true);
+            proctoring.enable();
           }
           break;
         }
-        case "ROUND_CHANGED": {
-          const { round } = msg.payload;
-          setDiscussionRound(round);
-          stopMic();
-          stopSpeechRecognition();
-          stopChunkUpload();
-          break;
-        }
-        case "SPEAKER_EVALUATED": {
-          const { user_id, name, label, text, grammar, fluency, confidence, emotion } = msg.payload;
+        case "TURN_EVALUATED": {
+          const { user_id, scores, transcript: turnTranscript } = msg.payload || {};
+          console.log("[TURN_EVALUATED] user:", user_id, "scores:", scores, "transcript:", turnTranscript?.substring(0, 80));
+          if (user_id === userId) {
+            setTurnSummaryScore(scores);
+            setShowTurnSummary(true);
+            setTimeout(() => setShowTurnSummary(false), 5000);
+          }
           setSpeakingHistory(prev => [
-            {
-              user_id,
-              name: name || label || `Member ${user_id}`,
-              label: label || name || `Member ${user_id}`,
-              text,
-              grammar: grammar || 85,
-              fluency: fluency || 85,
-              confidence: confidence || 85,
-              emotion: emotion || "Analytical"
-            },
+            { user_id, label: msg.payload?.label || `Member ${user_id}`, text: turnTranscript || "", ...scores },
             ...prev
           ]);
           break;
         }
+        case "CAMERA_STATUS": {
+          const { user_id, camera_on } = msg.payload;
+          setParticipantCameraStatus(prev => ({ ...prev, [user_id]: camera_on }));
+          break;
+        }
+        case "MIC_STATUS": {
+          const { user_id, mic_on } = msg.payload;
+          setParticipantMicStatus(prev => ({ ...prev, [user_id]: mic_on }));
+          break;
+        }
         case "LIVE_SPEECH_BROADCAST": {
           const { user_id, text } = msg.payload;
-          setLiveTranscripts(prev => ({
-            ...prev,
-            [user_id]: text
-          }));
-          break;
-        }
-        case "LIVE_EVALUATION_UPDATE": {
-          const { user_id, grammar, fluency, confidence, vocabulary, quality, overall, pronunciation, relevance, emotion, wpm } = msg.payload;
-          if (user_id === userId) {
-            setLiveScores({
-              grammar,
-              fluency,
-              confidence,
-              vocabulary: vocabulary || quality,
-              pronunciation,
-              relevance,
-              overall,
-              emotion,
-              wpm
-            });
-          }
-          break;
-        }
-        case "AI_ALERT": {
-          const alert = msg.payload;
-          setAiAlertsList(prev => [alert, ...prev].slice(0, 5));
-          if (alert.type === "repetition" && alert.user_id === userId) {
-            voice.speak("Please do not repeat the question. Provide your own points.");
-          }
+          setLiveTranscripts(prev => ({ ...prev, [user_id]: text }));
           break;
         }
         case "CHAT_MESSAGE": {
-          const chat = msg.payload;
-          setChatMessages(prev => [...prev, chat]);
+          setChatMessages(prev => [...prev, msg.payload]);
           break;
         }
         case "ALL_FINISHED": {
@@ -923,25 +874,15 @@ export default function GdLiveRoom({
           setResults(all);
           const sorted = [...all].sort((a: any, b: any) => b.overall_score - a.overall_score);
           const myIdx = sorted.findIndex((r: any) => r.user_id === userId);
-          if (myIdx >= 0) {
-            setMyResult(sorted[myIdx]);
-            setMyRank(myIdx + 1);
-          }
-          if (msg.payload?.winner) {
-            setWinnerCard(msg.payload.winner);
-          }
-          if (msg.payload?.awards) {
-            setAwards(msg.payload.awards);
-          }
+          if (myIdx >= 0) { setMyResult(sorted[myIdx]); setMyRank(myIdx + 1); }
+          if (msg.payload?.winner) setWinnerCard(msg.payload.winner);
           setShowResults(true);
           voice.announceEvaluationComplete();
           setTimeout(() => voice.announceLeaderboardReady(), 2500);
           break;
         }
         case "EVALUATION_PROGRESS":
-          if (msg.payload?.user_id === userId && msg.payload?.stage) {
-            setEvalStage(msg.payload.stage);
-          }
+          if (msg.payload?.user_id === userId && msg.payload?.stage) setEvalStage(msg.payload.stage);
           break;
         case "PARTICIPANT_LEFT":
           setMembers((prev) => prev.filter((m: any) => m.user_id !== msg.payload?.user_id));
@@ -1188,8 +1129,8 @@ export default function GdLiveRoom({
     );
   }
 
-  // ─── STAGE 1: WAITING ROOM VIEW ───
-  if (discussionRound === 1 && !showResults) {
+  // ─── WAITING ROOM VIEW (before discussion starts) ───
+  if (!currentSpeakerId && !showResults) {
     const isReady = readyUsers.includes(userId);
     return (
       <div className={`min-h-screen flex flex-col relative overflow-hidden ${theme === "dark" ? "dark" : ""}`}>
@@ -1351,53 +1292,7 @@ export default function GdLiveRoom({
     );
   }
 
-  // ─── STAGE 2: AI INTRODUCTION VIEW ───
-  if (discussionRound === 2 && !showResults) {
-    return (
-      <div className={`min-h-screen flex flex-col relative overflow-hidden ${theme === "dark" ? "dark" : ""}`}>
-        <div className="fixed inset-0 z-0">
-          <img src={theme === "dark" ? "/animated_gd_bg.jpeg" : "/gd_light_bg.jpeg"} alt="" className="w-full h-full object-cover opacity-80" />
-          <div className="absolute inset-0 bg-gradient-to-tr from-slate-950 via-slate-900 to-indigo-950/40 opacity-90 dark:block hidden" />
-        </div>
-
-        <div className="relative z-10 flex-1 flex flex-col p-4 justify-center max-w-2xl mx-auto w-full animate-fade-up text-center space-y-6">
-          <div className="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-650 flex items-center justify-center text-white shadow-xl shadow-indigo-500/10 animate-bounce">
-            🤖
-          </div>
-
-          <div className="space-y-1">
-            <h1 className="text-2xl font-black text-heading bg-gradient-to-r from-indigo-500 to-purple-550 bg-clip-text text-transparent">AI Welcoming & Rules Briefing</h1>
-            <p className="text-xs text-muted-soft uppercase font-bold tracking-wider">Phase 2: Introduction</p>
-          </div>
-
-          <div className="card p-6 text-left space-y-3 relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/5 rounded-full blur-xl" />
-            <p className="text-[10px] text-indigo-400 font-bold uppercase tracking-wider">Active Group Stance Topic</p>
-            <h2 className="text-lg md:text-xl font-extrabold text-heading">"{topic}"</h2>
-            <div className="h-px bg-slate-850 my-2" />
-            <p className="text-[10px] text-purple-400 font-bold uppercase tracking-wider">Speaking Order Sequence</p>
-            <div className="flex flex-wrap gap-2 pt-1.5">
-              {speakingOrder.map((uid, idx) => {
-                const label = members.find(m => m.user_id === uid)?.label || `Member ${uid}`;
-                return (
-                  <span key={uid} className="text-xs px-2.5 py-1 rounded-full bg-slate-950/50 border border-slate-800 text-heading font-medium">
-                    {idx + 1}. {label}
-                  </span>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="flex flex-col items-center justify-center space-y-2">
-            <Loader2 className="w-6 h-6 animate-spin text-indigo-500" />
-            <span className="text-xs font-bold text-heading">Opening Round begins in {timerSeconds} seconds...</span>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // ─── MAIN WORKSPACE (STAGES 3, 4, 5, 6) ───
+  // ─── MAIN WORKSPACE: Turn-based Video GD ───
   const warnModal = showWarning ? (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
       <div className="w-full max-w-sm rounded-2xl border border-amber-500/40 bg-slate-900 p-6 text-center shadow-2xl">
@@ -1416,539 +1311,271 @@ export default function GdLiveRoom({
     </div>
   ) : null;
 
+  const currentSpeaker = currentSpeakerId ? members.find((m: any) => m.user_id === currentSpeakerId) : null;
+  const isMyTurn = currentSpeakerId === userId;
+
   return (
     <div className={`min-h-screen flex flex-col relative overflow-hidden ${theme === "dark" ? "dark" : ""}`}>
       <div className="fixed inset-0 z-0">
-        <img
-          src={theme === "dark" ? "/animated_gd_bg.jpeg" : "/gd_light_bg.jpeg"}
-          alt=""
-          className="w-full h-full object-cover opacity-80"
-        />
+        <img src={theme === "dark" ? "/animated_gd_bg.jpeg" : "/gd_light_bg.jpeg"} alt="" className="w-full h-full object-cover opacity-80" />
         <div className="absolute inset-0 bg-gradient-to-tr from-slate-950 via-slate-900 to-indigo-950/40 opacity-90 dark:block hidden" />
         <div className="absolute inset-0 bg-gradient-to-tr from-slate-50 via-indigo-50/20 to-purple-50/30 dark:hidden block" />
       </div>
 
       <div className="relative z-10 flex-1 flex flex-col p-4 md:p-6">
         {warnModal}
-        <div className="max-w-7xl mx-auto w-full space-y-4 flex-1 flex flex-col justify-center animate-fade-up">
 
-          {/* ─── PHASE TIMELINE HEADER ─── */}
-          <div className="card p-3.5 bg-slate-900/80 backdrop-blur-xl border border-slate-800 flex items-center justify-between gap-4 shadow-2xl">
+        {/* Top Bar */}
+        <div className="max-w-7xl mx-auto w-full mb-4">
+          <div className="card p-3 bg-slate-900/80 backdrop-blur-xl border border-slate-800 flex items-center justify-between gap-4 shadow-2xl">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-indigo-500 to-purple-650 flex items-center justify-center text-white font-extrabold text-sm">
-                MZ
-              </div>
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-indigo-500 to-purple-650 flex items-center justify-center text-white font-extrabold text-sm">MZ</div>
               <div className="leading-tight hidden sm:block">
                 <p className="text-xs font-black text-heading tracking-tight">ThinkCircle</p>
-                <p className="text-[9px] text-muted-soft font-bold uppercase tracking-wider">AI Live Orchestrator</p>
+                <p className="text-[9px] text-muted-soft font-bold uppercase tracking-wider">Turn-based Video GD</p>
               </div>
             </div>
 
-            {/* Steps Timeline (Stages 3 to 6) */}
-            <div className="flex items-center gap-2 overflow-x-auto pb-1 text-[10px] font-bold scrollbar-none">
-              {[
-                { phase: 3, label: "Opening Round" },
-                { phase: 4, label: "Open Discussion" },
-                { phase: 5, label: "AI Challenge" },
-                { phase: 6, label: "Conclusion" }
-              ].map((p) => {
-                const active = discussionRound === p.phase;
-                const completed = discussionRound > p.phase;
-                return (
-                  <div
-                    key={p.phase}
-                    className={`flex items-center gap-2 px-3 py-1.5 rounded-full transition-all shrink-0 border ${active
-                      ? "bg-indigo-600 border-indigo-500 text-white shadow-md shadow-indigo-600/20"
-                      : completed
-                        ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
-                        : "bg-slate-950/40 border-slate-800 text-muted-soft"
-                      }`}
-                  >
-                    <span className={`w-1.5 h-1.5 rounded-full ${active ? "bg-white animate-ping" : completed ? "bg-emerald-400" : "bg-slate-700"}`} />
-                    <span>{p.label}</span>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Timer and Profile */}
-            <div className="flex items-center gap-3 shrink-0">
+            <div className="flex items-center gap-2 text-[10px] font-bold text-heading">
+              <span className="px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">Turn {turnNumber}/{maxTurns || "\u2014"}</span>
               <span className="hidden sm:inline-flex px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 items-center gap-1 uppercase tracking-wider">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" /> Live
               </span>
-              <div className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-bold bg-slate-950 border border-slate-800 text-heading">
-                <Clock className="w-3.5 h-3.5 text-indigo-400" />
-                <span>{formatTime(timerSeconds)}</span>
-              </div>
+            </div>
+
+            <div className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-bold bg-slate-950 border border-slate-800 text-heading">
+              <Clock className="w-3.5 h-3.5 text-indigo-400" />
+              <span>{formatTime(timerSeconds)}</span>
             </div>
           </div>
+        </div>
 
-          {/* AI Decision Pipeline steps */}
-          <PipelineTracker currentSpeakerId={currentSpeakerId} />
+        {/* Main Content Area */}
+        <div className="max-w-7xl mx-auto w-full flex-1 flex flex-col gap-4">
 
-          {/* Topic header */}
+          {/* Topic */}
           <div className="card p-3 bg-slate-900/60 border border-slate-800 text-center">
-            <span className="text-[9px] text-indigo-400 font-bold uppercase tracking-wider">Discussion Topic Stance</span>
+            <span className="text-[9px] text-indigo-400 font-bold uppercase tracking-wider">Discussion Topic</span>
             <p className="text-sm md:text-base font-bold text-heading mt-0.5">"{topic}"</p>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+          <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
 
-            {/* Left Column: Current Speaker card and Turn queue */}
-            <div className="lg:col-span-3 space-y-4">
+            {/* Left Column: Timer + Current Speaker */}
+            <div className="lg:col-span-4 space-y-4">
 
-              {/* Speaker Card */}
-              <div className="card p-4 bg-slate-900/80 backdrop-blur-lg border border-slate-800 space-y-4 relative overflow-hidden">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-bold text-heading uppercase tracking-wider">Current Speaker</span>
-                  {currentSpeakerId === userId && (
-                    <span className="px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-[8px] font-bold">You</span>
-                  )}
-                </div>
-
-                {currentSpeakerId ? (() => {
-                  const speaker = members.find(m => m.user_id === currentSpeakerId);
-                  const label = speaker?.label || speaker?.anonymous_label || speaker?.name || `Member ${currentSpeakerId}`;
-                  const speakingStatus = liveSpeakingStatuses[currentSpeakerId] || "Speaking";
-                  const votes = agreeDisagreeVotes[currentSpeakerId] || { agree: 0, disagree: 0 };
-
-                  return (
-                    <div className="space-y-3.5">
-                      <div className="flex items-center gap-3">
-                        <div className="w-11 h-11 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-650 text-white flex items-center justify-center font-black text-sm shrink-0 border border-indigo-550/20">
-                          {label[0].toUpperCase()}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="text-xs font-bold text-heading truncate">{label}</p>
-                          <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded ${speakingStatus === "Speaking" ? "bg-emerald-500/10 text-emerald-400" : "bg-amber-500/10 text-amber-400"
-                            }`}>
-                            {speakingStatus}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Sound wave graphics */}
-                      <div className="flex justify-center items-end gap-1 h-9 bg-slate-950/40 p-2 rounded-2xl border border-slate-850">
-                        {[30, 60, 45, 90, 75, 40, 80, 50, 65, 30].map((h, i) => (
-                          <span
-                            key={i}
-                            className="w-1 bg-gradient-to-t from-indigo-500 to-purple-650 rounded-full"
-                            style={{
-                              height: isRecording && currentSpeakerId === userId ? `${h}%` : '20%',
-                              animation: isRecording && currentSpeakerId === userId ? `bounce 1s ease-in-out ${i * 0.1}s infinite alternate` : 'none'
-                            }}
-                          />
-                        ))}
-                      </div>
-
-                      {/* Circular countdown dial */}
-                      <CircularTimer
-                        seconds={timerSeconds}
-                        maxSeconds={discussionRound === 3 ? 600 : discussionRound === 5 ? 25 : 45}
-                      />
-
-                      {/* Agree/Disagree feedback buttons */}
-                      {discussionRound === 4 && (
-                        <div className="flex gap-2">
-                          <Button
-                            variant="secondary"
-                            onClick={() => send("AGREE_DISAGREE_VOTE", { speaker_id: currentSpeakerId, vote_type: "agree" })}
-                            className="flex-1 text-[10px] h-8 border-slate-800 hover:bg-emerald-500/10 hover:text-emerald-400"
-                          >
-                            👍 Agree ({votes.agree})
-                          </Button>
-                          <Button
-                            variant="secondary"
-                            onClick={() => send("AGREE_DISAGREE_VOTE", { speaker_id: currentSpeakerId, vote_type: "disagree" })}
-                            className="flex-1 text-[10px] h-8 border-slate-800 hover:bg-rose-500/10 hover:text-rose-455"
-                          >
-                            👎 Disagree ({votes.disagree})
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })() : (
-                  <div className="text-center py-6 text-xs text-muted-soft italic">
-                    {discussionRound === 4 ? "Awaiting participant to Claim Floor / Raise Hand..." : "Awaiting active speaker turn..."}
-                  </div>
+              {/* 60-Second Timer */}
+              <div className="card p-6 bg-slate-900/80 backdrop-blur-lg border border-slate-800 flex flex-col items-center space-y-2">
+                <span className="text-[10px] font-bold text-heading uppercase tracking-wider">Turn Timer</span>
+                <CircularTimer seconds={timerSeconds} maxSeconds={60} />
+                {timerRunning && (
+                  <span className={`text-[9px] font-bold ${timerSeconds <= 10 ? "text-rose-400 animate-pulse" : "text-muted-soft"}`}>
+                    {timerSeconds <= 10 ? "Time running out!" : `${timerSeconds}s remaining`}
+                  </span>
                 )}
               </div>
 
-              {/* Turn Queue Sidebar */}
+              {/* Current Speaker Card */}
               <div className="card p-4 bg-slate-900/80 backdrop-blur-lg border border-slate-800 space-y-3">
-                <h3 className="text-xs font-bold text-heading uppercase tracking-wider flex items-center justify-between">
-                  <span>Floor Queues</span>
-                  {discussionRound === 4 && <span className="text-[8px] bg-indigo-500/10 text-indigo-400 px-1.5 py-0.5 rounded">Active</span>}
-                </h3>
-                <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold text-heading uppercase tracking-wider flex items-center gap-1">
+                    <Mic className="w-3.5 h-3.5 text-indigo-400" /> Current Speaker
+                  </span>
+                  {isMyTurn && <span className="px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-[8px] font-bold animate-pulse">YOUR TURN</span>}
+                </div>
 
-                  {/* Rebuttal Queue (High Priority) */}
-                  {rebuttalQueue.map((uid) => {
-                    const label = members.find(m => m.user_id === uid)?.label || `Member ${uid}`;
+                {currentSpeaker ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-11 h-11 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-650 text-white flex items-center justify-center font-black text-sm shrink-0 border ${isMyTurn ? "border-indigo-400 shadow-lg shadow-indigo-500/20" : "border-indigo-550/20"}`}>
+                        {(currentSpeaker.label || currentSpeaker.name || "?")[0].toUpperCase()}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-bold text-heading truncate">{currentSpeaker.label || currentSpeaker.name}</p>
+                        <span className="text-[8px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400">Speaking</span>
+                      </div>
+                    </div>
+                    {isMyTurn && (
+                      <Button onClick={() => executeFinish()} className="w-full h-9 text-[10px] font-bold bg-rose-600 hover:bg-rose-500 border-0 rounded-lg flex items-center justify-center gap-1">
+                        <Square className="w-3 h-3 fill-white" /> Finish Early
+                      </Button>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-[10px] text-muted-soft text-center py-4 italic">Waiting for next speaker...</p>
+                )}
+              </div>
+
+              {/* AI Processing Indicator */}
+              {submitStep !== "idle" && submitStep !== "complete" && (
+                <div className="card p-4 bg-indigo-500/5 border border-indigo-500/20 flex items-center gap-3">
+                  <Loader2 className="w-5 h-5 text-indigo-400 animate-spin shrink-0" />
+                  <div>
+                    <p className="text-xs font-bold text-heading">AI Processing...</p>
+                    <p className="text-[9px] text-muted-soft">{STAGE_LABELS[submitStep] || "Processing..."}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Turn Summary Card */}
+              {showTurnSummary && turnSummaryScore && (
+                <div className="card p-4 bg-emerald-500/5 border border-emerald-500/20 space-y-2 animate-fade-up">
+                  <div className="flex items-center gap-1.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                    <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">Turn Evaluated</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <CircularProgress percent={turnSummaryScore.grammar ?? 0} size={48} strokeWidth={4} color="#2dd4bf" label="Grammar" />
+                    <CircularProgress percent={turnSummaryScore.fluency ?? 0} size={48} strokeWidth={4} color="#3b82f6" label="Fluency" />
+                    <CircularProgress percent={turnSummaryScore.overall ?? 0} size={48} strokeWidth={4} color="#8b5cf6" label="Score" />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Center Column: Video Grid */}
+            <div className="lg:col-span-5 space-y-4">
+              <div className="card p-4 bg-slate-900/80 backdrop-blur-lg border border-slate-800">
+                <div className="flex items-center justify-between border-b border-slate-850 pb-2 mb-3">
+                  <h3 className="text-xs font-bold text-heading uppercase tracking-wider flex items-center gap-1">
+                    <Users className="w-4 h-4 text-indigo-400" /> Participants ({members.length})
+                  </h3>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  {/* Local Video Tile */}
+                  <div className={`relative rounded-xl overflow-hidden border-2 aspect-video bg-slate-950 ${isMyTurn ? "border-indigo-500 shadow-lg shadow-indigo-500/20" : "border-slate-800"}`}>
+                    {localStream ? (
+                      <video ref={(el) => { if (el) el.srcObject = localStream; }} autoPlay muted playsInline className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center bg-slate-950">
+                        <User className="w-8 h-8 text-slate-700" />
+                      </div>
+                    )}
+                    <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-bold text-white truncate">You</span>
+                        <div className="flex items-center gap-1">
+                          {!cameraEnabled && <Maximize2 className="w-3 h-3 text-rose-400" />}
+                          {!micEnabled && <MicOff className="w-3 h-3 text-rose-400" />}
+                          {cameraEnabled && micEnabled && <Mic className="w-3 h-3 text-emerald-400" />}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Remote Video Tiles */}
+                  {members.filter((m: any) => m.user_id !== userId).map((m: any) => {
+                    const stream = remoteStreams.get(m.user_id);
+                    const isSpeaker = m.user_id === currentSpeakerId;
+                    const camOn = participantCameraStatus[m.user_id] !== false;
+                    const micOn = participantMicStatus[m.user_id] !== false;
                     return (
-                      <div key={uid} className="p-2 rounded-lg bg-rose-500/10 border border-rose-500/25 flex justify-between items-center text-xs">
-                        <span className="font-bold text-rose-300">🔥 Rebuttal: {label}</span>
-                        <span className="text-[8px] bg-rose-500/20 text-rose-400 px-1 py-0.5 rounded">Priority</span>
+                      <div key={m.user_id} className={`relative rounded-xl overflow-hidden border-2 aspect-video bg-slate-950 ${isSpeaker ? "border-indigo-500 shadow-lg shadow-indigo-500/20" : "border-slate-800"}`}>
+                        {stream && camOn ? (
+                          <video ref={(el) => { if (el) el.srcObject = stream; }} autoPlay playsInline className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center bg-slate-950">
+                            <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-650 flex items-center justify-center text-white font-black text-sm">
+                              {(m.label || m.name || "?")[0].toUpperCase()}
+                            </div>
+                          </div>
+                        )}
+                        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-bold text-white truncate">{m.label || m.name}</span>
+                            <div className="flex items-center gap-1">
+                              {!camOn && <Maximize2 className="w-3 h-3 text-rose-400" />}
+                              {!micOn && <MicOff className="w-3 h-3 text-rose-400" />}
+                              {camOn && micOn && <Mic className="w-3 h-3 text-emerald-400" />}
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     );
                   })}
-
-                  {/* Regular speak Queue */}
-                  {discussionRound === 3 ? (
-                    speakingOrder.map((uid, idx) => {
-                      const label = members.find(m => m.user_id === uid)?.label || `Member ${uid}`;
-                      const isCurrent = uid === currentSpeakerId;
-                      const isDone = finishedIds.has(uid);
-                      return (
-                        <div key={uid} className={`p-2 rounded-lg border flex justify-between items-center text-xs ${isCurrent ? "border-indigo-550/40 bg-indigo-500/10" : "border-slate-850"}`}>
-                          <span className="text-heading font-medium">{idx + 1}. {label}</span>
-                          <span className="text-[8px]">{isCurrent ? "Speaking" : isDone ? "Done" : "Waiting"}</span>
-                        </div>
-                      );
-                    })
-                  ) : (
-                    handRaisedQueue.map((uid, idx) => {
-                      const label = members.find(m => m.user_id === uid)?.label || `Member ${uid}`;
-                      return (
-                        <div key={uid} className="p-2 rounded-lg border border-slate-850 flex justify-between items-center text-xs">
-                          <span className="text-heading font-medium">{idx + 1}. {label}</span>
-                          <span className="text-[8px] text-indigo-400">Hand Raised</span>
-                        </div>
-                      );
-                    })
-                  )}
-
-                  {discussionRound === 4 && handRaisedQueue.length === 0 && rebuttalQueue.length === 0 && (
-                    <p className="text-[10px] text-muted-soft text-center py-2 italic">Queue is empty. Raise hand or rebuttal to speak.</p>
-                  )}
                 </div>
               </div>
             </div>
 
-            {/* Middle Column: Participants lists, AI moderator log, speech transcript */}
-            <div className="lg:col-span-6 space-y-4">
-
-              {/* Horizontal Slider card with checkmarks */}
-              <div className="card p-4 bg-slate-900/80 backdrop-blur-lg border border-slate-800">
-                <div className="flex justify-between items-center border-b border-slate-850 pb-2 mb-3">
-                  <h3 className="text-xs font-bold text-heading uppercase tracking-wider flex items-center gap-1">
-                    <Users className="w-4 h-4 text-indigo-400" /> Active Round Participants ({members.length})
-                  </h3>
-
-                  {/* Local Ready and hand checks */}
-                  <div className="flex gap-2">
-                    {discussionRound === 4 && (
-                      <>
-                        <Button
-                          variant="secondary"
-                          onClick={() => send("REQUEST_REBUTTAL", { requested: !rebuttalQueue.includes(userId) })}
-                          className={`text-[9px] h-7 border-slate-800 hover:bg-rose-500/10 ${rebuttalQueue.includes(userId) ? "bg-rose-500/20 text-rose-300" : "text-muted-soft"}`}
-                        >
-                          🔥 Rebuttal Floor
-                        </Button>
-                        <Button
-                          variant="secondary"
-                          onClick={() => send("RAISE_HAND", { raised: !handRaisedQueue.includes(userId) })}
-                          className={`text-[9px] h-7 border-slate-800 hover:bg-indigo-500/10 ${handRaisedQueue.includes(userId) ? "bg-indigo-500/20 text-indigo-300" : "text-muted-soft"}`}
-                        >
-                          ✋ Raise Hand
-                        </Button>
-                      </>
-                    )}
-                  </div>
-                </div>
-
-                <div className="flex gap-4 overflow-x-auto py-1 justify-center scrollbar-none">
-                  {members.map((m: any, idx: number) => {
-                    const label = m.label || m.anonymous_label || m.name || `Member ${idx + 1}`;
-                    const isSpeaking = m.user_id === currentSpeakerId;
-                    const ready = readyUsers.includes(m.user_id);
-                    const net = networkHealthMap[m.user_id] || "Good";
-
-                    return (
-                      <div key={m.user_id} className="flex flex-col items-center shrink-0 w-16 text-center">
-                        <div className={`w-11 h-11 rounded-full flex items-center justify-center text-white text-xs font-black relative border ${isSpeaking ? "border-indigo-500 bg-indigo-500/10 shadow-lg scale-105" : "border-slate-850 bg-slate-950/40"
-                          }`}>
-                          {label[0].toUpperCase()}
-                          {isSpeaking && <span className="absolute -bottom-1 -right-1 text-[8px]">🎙️</span>}
-                          {ready && <span className="absolute -top-1 -right-1 text-[8px]">✅</span>}
-                        </div>
-                        <span className="text-[9px] font-bold text-heading mt-1 truncate w-full">{label}</span>
-                        <span className="text-[8px] text-muted-soft font-mono mt-0.5">{net}</span>
-                      </div>
-                    );
-                  })}
+            {/* Right Column: Chat + Speech */}
+            <div className="lg:col-span-3 space-y-4">
+              {/* Live Speech Feed */}
+              <div className="card p-4 bg-slate-900/80 backdrop-blur-lg border border-slate-800 space-y-3">
+                <h3 className="text-xs font-bold text-heading uppercase tracking-wider flex items-center justify-between border-b border-slate-850 pb-2">
+                  <span className="flex items-center gap-1"><Mic className="w-3.5 h-3.5 text-indigo-400" /> Live Speech</span>
+                </h3>
+                <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
+                  {currentSpeakerId && (
+                    <div className="p-2.5 rounded-lg bg-indigo-500/5 border border-indigo-500/20 text-[10px] italic">
+                      <span className="font-bold text-indigo-400 block mb-0.5">
+                        {isMyTurn ? "You" : members.find((m: any) => m.user_id === currentSpeakerId)?.label || "Teammate"}...
+                      </span>
+                      <p className="text-heading whitespace-pre-wrap leading-relaxed">
+                        {isMyTurn ? liveSpeechText : (liveTranscripts[currentSpeakerId] || "")}
+                      </p>
+                    </div>
+                  )}
+                  {speakingHistory.map((h: any, i: number) => (
+                    <div key={i} className="p-2 rounded-lg bg-slate-950/40 border border-slate-850 text-[10px]">
+                      <span className="font-bold text-heading">{h.label}</span>
+                      <p className="text-body italic mt-0.5 line-clamp-2">{h.text}</p>
+                    </div>
+                  ))}
+                  {speakingHistory.length === 0 && !currentSpeakerId && (
+                    <p className="text-[10px] text-muted-soft text-center py-3 italic">No speech yet...</p>
+                  )}
                 </div>
               </div>
 
-              {/* Stage 5 custom Challenge Question Card */}
-              {discussionRound === 5 && (
-                <div className="card p-4 border border-indigo-500/30 bg-indigo-500/5 space-y-2 animate-fade-up">
-                  <div className="flex justify-between items-center">
-                    <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider flex items-center gap-1">
-                      <Zap className="w-4 h-4 text-indigo-400" /> Dynamic AI Challenge Assignment
-                    </span>
-                    <span className="text-[9px] bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded-full font-mono">Stage 5</span>
-                  </div>
-                  <div className="p-3 bg-slate-950/50 rounded-xl border border-slate-850">
-                    <p className="text-[10px] text-muted-soft uppercase font-bold tracking-wider">Assigned Scenario Challenge Question</p>
-                    <p className="text-xs text-heading font-semibold mt-1">
-                      {currentSpeakerId ? (challengeQuestions[currentSpeakerId] || "Counter Question") : "Assigning scenario questions to speakers..."}
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {/* Stage 6 Consensus explain request */}
-              {discussionRound === 6 && (
-                <div className="card p-4 border border-amber-500/30 bg-amber-500/5 space-y-3.5 animate-fade-up">
-                  <div className="flex justify-between items-center">
-                    <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1">
-                      <CheckCircle2 className="w-4 h-4 text-amber-500" /> Stage 6: Group Consensus Stance
-                    </span>
-                    <span className="text-[9px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full font-mono">Stage 6</span>
-                  </div>
-                  <p className="text-xs text-body">AI Moderator: "What is the team consensus on this topic? One student should explain the team consensus outline."</p>
-
-                  {consensusClaimedBy ? (
-                    <div className="p-3 bg-slate-950/40 rounded-xl border border-slate-850 text-xs">
-                      <span className="font-extrabold text-heading">Consensus Speaker: </span>
-                      <span>{members.find(m => m.user_id === consensusClaimedBy)?.label || "Teammate"}</span>
-                    </div>
-                  ) : (
-                    <Button
-                      onClick={() => send("CLAIM_CONSENSUS_TURN", {})}
-                      className="w-full text-xs h-10 bg-amber-600 hover:bg-amber-500 text-white font-bold"
-                    >
-                      🗣️ Claim Consensus Turn
-                    </Button>
-                  )}
-                </div>
-              )}
-
-              {/* AI Moderator Chat logs */}
+              {/* Chat Panel */}
               <div className="card p-4 bg-slate-900/80 backdrop-blur-lg border border-slate-800 space-y-3">
-                <div className="flex justify-between items-center border-b border-slate-850 pb-2">
-                  <h3 className="text-xs font-bold text-heading uppercase tracking-wider flex items-center gap-1">
-                    <Brain className="w-4 h-4 text-indigo-400" /> AI Moderator Log
-                  </h3>
-                  <span className="text-[9px] text-indigo-400 font-bold bg-indigo-500/10 px-2 py-0.5 rounded-full flex items-center gap-1 animate-pulse">
-                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-400" /> Dynamic engine
-                  </span>
-                </div>
-
-                <div className="space-y-2.5 max-h-40 overflow-y-auto pr-1">
-                  {chatMessages.map((msg, idx) => (
-                    <div key={idx} className="flex gap-2.5 items-start p-2.5 bg-slate-950/30 rounded-xl border border-slate-850">
+                <h3 className="text-xs font-bold text-heading uppercase tracking-wider border-b border-slate-850 pb-2 flex items-center gap-1">
+                  <MessageSquare className="w-3.5 h-3.5 text-indigo-400" /> Chat
+                </h3>
+                <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                  {chatMessages.map((msg: any, idx: number) => (
+                    <div key={idx} className="flex gap-2 items-start p-2 bg-slate-950/30 rounded-lg border border-slate-850">
                       <span className="text-xs">🤖</span>
-                      <div className="text-[11px] min-w-0">
-                        <span className="font-bold text-indigo-400 block">{msg.name || "AI Moderator"}</span>
-                        <p className="text-body leading-normal mt-0.5 whitespace-pre-wrap">{msg.text}</p>
+                      <div className="text-[10px] min-w-0">
+                        <span className="font-bold text-indigo-400">{msg.name || "AI"}</span>
+                        <p className="text-body leading-normal mt-0.5">{msg.text}</p>
                       </div>
                     </div>
                   ))}
                   {chatMessages.length === 0 && (
-                    <p className="text-[10px] text-muted-soft text-center py-2 italic">Awaiting AI facilitator interactions...</p>
+                    <p className="text-[10px] text-muted-soft text-center py-2 italic">No messages yet</p>
                   )}
                   <div ref={chatEndRef} />
                 </div>
               </div>
-
-              {/* Speech transcript panels */}
-              <div className="card p-4 bg-slate-900/80 backdrop-blur-lg border border-slate-800 space-y-3">
-                <h3 className="text-xs font-bold text-heading uppercase tracking-wider flex items-center justify-between border-b border-slate-850 pb-2">
-                  <span className="flex items-center gap-1"><Mic className="w-4 h-4 text-indigo-400" /> Live Speech Feed</span>
-                  <span className="text-[8px] bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded-full">Speech-to-Text</span>
-                </h3>
-
-                <div className="space-y-3 max-h-56 overflow-y-auto pr-1">
-                  {currentSpeakerId && (
-                    <div className="p-3 rounded-xl bg-indigo-500/5 border border-indigo-500/20 text-xs italic animate-fade-up">
-                      <span className="font-bold text-indigo-400 block mb-1">
-                        🎙️ {currentSpeakerId === userId ? "You (Speaking)" : members.find(m => m.user_id === currentSpeakerId)?.label || "Teammate"}...
-                      </span>
-                      <p className="text-heading whitespace-pre-wrap leading-relaxed">
-                        {currentSpeakerId === userId ? liveSpeechText : (liveTranscripts[currentSpeakerId] || "")}
-                      </p>
-                    </div>
-                  )}
-
-                  {speakingHistory.map((h, i) => (
-                    <div key={i} className="p-3 rounded-xl bg-slate-950/40 border border-slate-850 text-xs space-y-1">
-                      <div className="flex justify-between items-center">
-                        <span className="font-bold text-heading">{h.label}</span>
-                        <span className="text-[9px] text-muted-soft font-mono">Emotion: {h.emotion}</span>
-                      </div>
-                      <p className="text-body italic leading-relaxed">{h.text}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-            </div>
-
-            {/* Right Column: Circular Score Gauges & Live stats indicator cards */}
-            <div className="lg:col-span-3 space-y-4">
-
-              {/* circular score metrics panel */}
-              <div className="card p-4 bg-slate-900/80 backdrop-blur-lg border border-slate-800 space-y-3">
-                <h3 className="text-xs font-bold text-heading uppercase tracking-wider border-b border-slate-850 pb-2">Round Score Evaluator</h3>
-                <div className="grid grid-cols-3 gap-y-3 gap-x-1.5 justify-items-center">
-                  <CircularProgress percent={liveScores?.grammar ?? 0} size={56} strokeWidth={4.5} color="#2dd4bf" label="Grammar" />
-                  <CircularProgress percent={liveScores?.fluency ?? 0} size={56} strokeWidth={4.5} color="#3b82f6" label="Fluency" />
-                  <CircularProgress percent={liveScores?.pronunciation ?? 0} size={56} strokeWidth={4.5} color="#06b6d4" label="Accent" />
-                  <CircularProgress percent={liveScores?.vocabulary ?? 0} size={56} strokeWidth={4.5} color="#ec4899" label="Vocabulary" />
-                  <CircularProgress percent={liveScores?.confidence ?? 0} size={56} strokeWidth={4.5} color="#eab308" label="Confidence" />
-                  <CircularProgress percent={liveScores?.relevance ?? 0} size={56} strokeWidth={4.5} color="#22c55e" label="Relevance" />
-                </div>
-              </div>
-
-              {/* Dynamic live performance metrics panel */}
-              <div className="card p-4 bg-slate-900/80 backdrop-blur-lg border border-slate-800 space-y-3.5">
-                <h3 className="text-xs font-bold text-heading uppercase tracking-wider border-b border-slate-850 pb-2">Dynamic Stats Tracker</h3>
-
-                <div className="space-y-2.5 text-xs">
-                  {/* speaking time */}
-                  <div className="flex justify-between items-center">
-                    <span className="text-muted-soft">Total Speaking Time</span>
-                    <span className="font-mono font-bold text-heading">{speakingDurations[userId] ? `${Math.round(speakingDurations[userId])}s` : "0s"}</span>
-                  </div>
-
-                  {/* participation percentage */}
-                  <div className="flex justify-between items-center">
-                    <span className="text-muted-soft">Participation Rate</span>
-                    <span className="font-mono font-bold text-indigo-400">{participationPercentages[userId] ? `${participationPercentages[userId]}%` : "0%"}</span>
-                  </div>
-
-                  {/* Interruption count */}
-                  <div className="flex justify-between items-center">
-                    <span className="text-muted-soft">Interruption Count</span>
-                    <span className="font-mono font-bold text-rose-455">{interruptionCounts[userId] || 0}</span>
-                  </div>
-
-                  {/* relevant points */}
-                  <div className="flex justify-between items-center">
-                    <span className="text-muted-soft">Relevant Key Arguments</span>
-                    <span className="font-mono font-bold text-emerald-400">{relevantPointsCount[userId] || 0}</span>
-                  </div>
-
-                  {/* off topic count */}
-                  <div className="flex justify-between items-center">
-                    <span className="text-muted-soft">Off-Topic Incidents</span>
-                    <span className="font-mono font-bold text-amber-400">{offTopicCount[userId] || 0}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* AI live feedback checkpoints list */}
-              <div className="card p-4 bg-slate-900/80 backdrop-blur-lg border border-slate-800 space-y-3">
-                <h3 className="text-xs font-bold text-heading uppercase tracking-wider border-b border-slate-850 pb-2">Live AI Coaching</h3>
-                <div className="space-y-2 text-xs text-body font-medium">
-                  {offTopicCount[userId] && offTopicCount[userId] > 0 ? (
-                    <p className="text-amber-400">⚠️ Try to stick to the active topic theme. Avoid shifting perspectives too far.</p>
-                  ) : null}
-                  {interruptionCounts[userId] && interruptionCounts[userId] > 0 ? (
-                    <p className="text-rose-400">⚠️ Avoid speaking longer than 45 seconds to keep participation balanced.</p>
-                  ) : null}
-                  <div className="flex items-start gap-1.5">
-                    <span className="text-emerald-500 font-bold">✓</span>
-                    <span>Speak clearly in English. Avoid fillers like "uh", "um", "like".</span>
-                  </div>
-                  <div className="flex items-start gap-1.5">
-                    <span className="text-emerald-500 font-bold">✓</span>
-                    <span>Click 'Agree' or 'Disagree' to react dynamically to your teammate's turn.</span>
-                  </div>
-                </div>
-              </div>
-
             </div>
 
           </div>
 
-          {/* Floating actions control bar at the bottom */}
-          <div className="flex items-center justify-center gap-4 bg-slate-900/90 backdrop-blur-md px-6 py-2.5 rounded-2xl border border-slate-800 shadow-2xl max-w-2xl mx-auto w-full mt-2">
-
-            {/* Stage 4 Claim floor triggers or mic controllers */}
-            {discussionRound === 4 && submitStep === "idle" ? (
-              isRecording ? (
-                <button
-                  onClick={() => executeFinish()}
-                  className="flex flex-col items-center gap-1 text-[9px] text-rose-455 font-bold animate-pulse shrink-0"
-                >
-                  <div className="w-9 h-9 rounded-xl bg-rose-600 flex items-center justify-center hover:bg-rose-500 text-white border border-rose-500 shadow-lg">
-                    <Mic className="w-4 h-4" />
-                  </div>
-                  <span>Yield Floor</span>
-                </button>
-              ) : (
-                <button
-                  onClick={() => {
-                    startRecording();
-                    startSpeechRecognition();
-                    startChunkUpload();
-                    setCurrentSpeakerId(userId);
-                    send("LIVE_SPEECH", { text: "[Speaking turn claimed]" });
-                  }}
-                  className="flex flex-col items-center gap-1 text-[9px] text-emerald-400 font-bold shrink-0 animate-bounce"
-                >
-                  <div className="w-9 h-9 rounded-xl bg-slate-850 flex items-center justify-center hover:bg-slate-855 border border-slate-800 text-emerald-400 shadow-lg">
-                    <MicOff className="w-4 h-4" />
-                  </div>
-                  <span>Claim Floor</span>
-                </button>
-              )
-            ) : (
-              <button
-                onClick={() => { }}
-                className={`flex flex-col items-center gap-1 text-[9px] font-bold shrink-0 ${currentSpeakerId === userId ? "text-emerald-400" : "text-slate-400"
-                  }`}
-              >
-                <div className={`w-9 h-9 rounded-xl flex items-center justify-center border ${currentSpeakerId === userId ? "bg-slate-850 hover:bg-slate-800 border-slate-800 text-emerald-400" : "bg-slate-900/40 border-slate-850 text-slate-500 cursor-not-allowed"
-                  }`}>
-                  <Mic className="w-4 h-4" />
-                </div>
-                <span>{currentSpeakerId === userId ? "Mic Active" : "Mic Muted"}</span>
-              </button>
-            )}
-
-            <button onClick={() => { }} className="flex flex-col items-center gap-1 text-[9px] text-slate-405 font-bold">
-              <div className="w-9 h-9 rounded-xl bg-slate-900/40 border border-slate-850 text-slate-500 flex items-center justify-center hover:bg-slate-800 cursor-not-allowed">
+          {/* Bottom Control Bar */}
+          <div className="flex items-center justify-center gap-3 bg-slate-900/90 backdrop-blur-md px-6 py-2.5 rounded-2xl border border-slate-800 shadow-2xl max-w-lg mx-auto w-full mt-2">
+            <button onClick={toggleCamera} className="flex flex-col items-center gap-1 text-[9px] font-bold shrink-0">
+              <div className={`w-9 h-9 rounded-xl flex items-center justify-center border ${cameraEnabled ? "bg-slate-850 border-slate-800 text-emerald-400 hover:bg-slate-800" : "bg-rose-600/20 border-rose-500/30 text-rose-400"}`}>
                 <Maximize2 className="w-4 h-4" />
               </div>
-              <span>Camera</span>
+              <span className={cameraEnabled ? "text-emerald-400" : "text-rose-400"}>Camera</span>
             </button>
 
-            <button onClick={() => { }} className="flex flex-col items-center gap-1 text-[9px] text-slate-405 font-bold">
-              <div className="w-9 h-9 rounded-xl bg-slate-900/40 border border-slate-850 text-slate-500 flex items-center justify-center hover:bg-slate-800 cursor-not-allowed">
-                <Play className="w-4 h-4" />
+            <button onClick={toggleMic} className="flex flex-col items-center gap-1 text-[9px] font-bold shrink-0">
+              <div className={`w-9 h-9 rounded-xl flex items-center justify-center border ${micEnabled ? "bg-slate-850 border-slate-800 text-emerald-400 hover:bg-slate-800" : "bg-rose-600/20 border-rose-500/30 text-rose-400"}`}>
+                {micEnabled ? <Mic className="w-4 h-4" /> : <MicOff className="w-4 h-4" />}
               </div>
-              <span>Screen</span>
+              <span className={micEnabled ? "text-emerald-400" : "text-rose-400"}>Mic</span>
             </button>
 
-            <button onClick={() => { }} className="flex flex-col items-center gap-1 text-[9px] text-slate-405 font-bold">
-              <div className="w-9 h-9 rounded-xl bg-slate-900/40 border border-slate-850 text-slate-500 flex items-center justify-center hover:bg-slate-800 cursor-not-allowed">
-                <Sparkles className="w-4 h-4" />
-              </div>
-              <span>Reactions</span>
-            </button>
-
-            <div className="h-7 w-px bg-slate-800 mx-2 shrink-0" />
-
-            {/* Conclude turn button */}
-            {!myFinished && submitStep === "idle" && currentSpeakerId === userId && (
-              <Button
-                onClick={() => executeFinish()}
-                className="btn-primary h-9 px-3 rounded-xl font-bold bg-rose-600 hover:bg-rose-500 border-0 flex items-center gap-1 text-xs text-white shrink-0 shadow-lg"
-              >
-                <Square className="w-3.5 h-3.5 fill-white animate-pulse" /> Conclude Turn
+            {isMyTurn && timerRunning && (
+              <Button onClick={() => executeFinish()} className="btn-primary h-9 px-3 rounded-xl font-bold bg-rose-600 hover:bg-rose-500 border-0 flex items-center gap-1 text-[10px] text-white shrink-0 shadow-lg">
+                <Square className="w-3 h-3 fill-white animate-pulse" /> Finish Early
               </Button>
             )}
 
-            <Button
-              onClick={() => onLeave(myFinished)}
-              className="btn-secondary h-9 px-3 rounded-xl font-bold border-slate-800 hover:bg-slate-800 text-xs flex items-center gap-1 shrink-0"
-            >
+            <Button onClick={() => onLeave(myFinished)} className="btn-secondary h-9 px-3 rounded-xl font-bold border-slate-800 hover:bg-slate-800 text-[10px] flex items-center gap-1 shrink-0">
               Leave Room
             </Button>
           </div>

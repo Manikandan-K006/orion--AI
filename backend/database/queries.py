@@ -993,3 +993,64 @@ def get_live_leaderboard(connection: MySQLConnection, session_code: str) -> list
         "LEFT JOIN gd_live_participants lp ON lp.session_code = e.session_code AND lp.user_id = e.user_id "
         "WHERE e.session_code = %s ORDER BY e.overall_score DESC",
         (session_code,))
+
+
+# ── Per-turn tracking functions for 1-minute turn-based GD ──
+
+def save_turn(connection: MySQLConnection, session_code: str, user_id: int, team_number: int,
+              turn_number: int, speaker_order: int) -> int:
+    return execute(connection,
+        "INSERT INTO gd_live_turns (session_code, user_id, team_number, turn_number, speaker_order, start_time) "
+        "VALUES (%s, %s, %s, %s, %s, NOW()) "
+        "ON DUPLICATE KEY UPDATE start_time=NOW()",
+        (session_code, user_id, team_number, turn_number, speaker_order))
+
+
+def complete_turn(connection: MySQLConnection, session_code: str, user_id: int, turn_number: int,
+                  duration_seconds: int, transcript: str, video_enabled: bool, audio_enabled: bool) -> None:
+    execute(connection,
+        "UPDATE gd_live_turns SET end_time=NOW(), duration_seconds=%s, transcript=%s, "
+        "video_enabled=%s, audio_enabled=%s "
+        "WHERE session_code=%s AND user_id=%s AND turn_number=%s",
+        (duration_seconds, transcript, int(video_enabled), int(audio_enabled),
+         session_code, user_id, turn_number))
+
+
+def save_turn_evaluation(connection: MySQLConnection, session_code: str, user_id: int, turn_number: int,
+                         overall_score: float, fluency_score: float, grammar_score: float,
+                         pronunciation_score: float, confidence_score: float, vocabulary_score: float,
+                         relevance_score: float, content_quality: float,
+                         strengths: str, weaknesses: str, recommendations: str) -> None:
+    execute(connection,
+        "UPDATE gd_live_turns SET ai_completed=1, overall_score=%s, fluency_score=%s, "
+        "grammar_score=%s, pronunciation_score=%s, confidence_score=%s, vocabulary_score=%s, "
+        "relevance_score=%s, content_quality=%s, strengths=%s, weaknesses=%s, recommendations=%s "
+        "WHERE session_code=%s AND user_id=%s AND turn_number=%s",
+        (overall_score, fluency_score, grammar_score, pronunciation_score, confidence_score,
+         vocabulary_score, relevance_score, content_quality, strengths, weaknesses, recommendations,
+         session_code, user_id, turn_number))
+
+
+def get_turns_for_session(connection: MySQLConnection, session_code: str) -> list[dict[str, Any]]:
+    return fetch_all(connection,
+        "SELECT t.*, u.name, lp.anonymous_label FROM gd_live_turns t "
+        "JOIN users u ON u.id = t.user_id "
+        "LEFT JOIN gd_live_participants lp ON lp.session_code = t.session_code AND lp.user_id = t.user_id "
+        "WHERE t.session_code = %s ORDER BY t.turn_number, t.speaker_order",
+        (session_code,))
+
+
+def get_turns_for_user(connection: MySQLConnection, session_code: str, user_id: int) -> list[dict[str, Any]]:
+    return fetch_all(connection,
+        "SELECT * FROM gd_live_turns WHERE session_code=%s AND user_id=%s ORDER BY turn_number",
+        (session_code, user_id))
+
+
+def get_turn_analytics(connection: MySQLConnection, session_code: str) -> dict[str, Any]:
+    """Aggregate analytics for admin dashboard."""
+    rows = fetch_all(connection,
+        "SELECT user_id, team_number, AVG(duration_seconds) AS avg_duration, "
+        "AVG(overall_score) AS avg_score, COUNT(*) AS turns_taken "
+        "FROM gd_live_turns WHERE session_code=%s GROUP BY user_id, team_number",
+        (session_code,))
+    return rows

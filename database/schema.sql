@@ -516,4 +516,36 @@ CREATE TABLE IF NOT EXISTS gd_live_evaluations (
     UNIQUE KEY (session_code, user_id)
 );
 
+-- Per-turn tracking for 1-minute turn-based GD
+CREATE TABLE IF NOT EXISTS gd_live_turns (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    session_code VARCHAR(4) NOT NULL,
+    user_id INT NOT NULL,
+    team_number INT NOT NULL,
+    turn_number INT NOT NULL,
+    speaker_order INT NOT NULL,
+    start_time TIMESTAMP NULL,
+    end_time TIMESTAMP NULL,
+    duration_seconds INT DEFAULT 0,
+    video_enabled TINYINT(1) DEFAULT 1,
+    audio_enabled TINYINT(1) DEFAULT 1,
+    transcript TEXT,
+    ai_completed TINYINT(1) DEFAULT 0,
+    overall_score FLOAT DEFAULT 0,
+    fluency_score FLOAT DEFAULT 0,
+    grammar_score FLOAT DEFAULT 0,
+    pronunciation_score FLOAT DEFAULT 0,
+    confidence_score FLOAT DEFAULT 0,
+    vocabulary_score FLOAT DEFAULT 0,
+    relevance_score FLOAT DEFAULT 0,
+    content_quality FLOAT DEFAULT 0,
+    strengths TEXT,
+    weaknesses TEXT,
+    recommendations TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (session_code) REFERENCES gd_live_sessions(session_code) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    UNIQUE KEY (session_code, user_id, turn_number)
+);
+
 -- Students are seeded via backend/seed.py with proper bcrypt hashes

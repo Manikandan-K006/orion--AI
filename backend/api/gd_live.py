@@ -1,10 +1,15 @@
 import asyncio
+import logging
 import os
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile
 from fastapi.responses import FileResponse
 from mysql.connector import MySQLConnection
+
+logger = logging.getLogger("speaksense.gd_live")
+_log = logging.getLogger("speaksense.api")
+
 
 from backend.ai.speech_recognition import transcribe_audio
 from backend.config import get_settings
@@ -558,6 +563,8 @@ async def upload_gd_live_audio(
     """Upload audio for the current speaker. Transcribes with Whisper in a thread,
     runs all AI evaluation modules in parallel, broadcasts live progress events,
     and returns scores immediately. Detailed analytics continue in background."""
+    import logging
+    _log = logging.getLogger("speaksense.api")
     ext = Path(file.filename or "").suffix.lower()
     if ext not in ALLOWED_AUDIO_TYPES:
         raise HTTPException(
@@ -613,10 +620,12 @@ async def upload_gd_live_audio(
     if accumulated_transcript and len(accumulated_transcript) > 20:
         # Use accumulated transcript from incremental chunks — skip re-transcription
         transcript = accumulated_transcript
-        logger.info("Using accumulated transcript (%d chars) for uid=%s", len(transcript), uid)
+        _log.info("[UPLOAD-AUDIO] Using accumulated transcript (%d chars) for uid=%s", len(transcript), uid)
     else:
         # Fallback: transcribe the entire recording at once
+        _log.info("[UPLOAD-AUDIO] No accumulated transcript, transcribing full audio: %s (%d bytes)", file_path, len(content))
         result = await loop.run_in_executor(None, transcribe_audio, str(file_path))
+        _log.info("[UPLOAD-AUDIO] Whisper result: success=%s transcript_len=%d", result.get("success"), len(result.get("transcript", "")))
         if not result.get("success", True):
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -631,7 +640,7 @@ async def upload_gd_live_audio(
     try:
         from backend.ai.evaluation import evaluate_transcript_parallel
         state = manager.get_state(session_code)
-        topic_text = state.get("topic", "") if state else ""
+        topic_text = getattr(state, "topic", "") or "" if state else ""
         evaluation = await evaluate_transcript_parallel(transcript, topic=topic_text, on_progress=_progress)
         await _send_progress("generating_scores")
     except Exception as exc:
@@ -727,6 +736,8 @@ async def upload_audio_chunk(
     transcript in memory. On Finish Discussion, the frontend sends a final chunk
     and the accumulated transcript is used for evaluation — no double transcription.
     """
+    import logging
+    _log = logging.getLogger("speaksense.api")
     ext = Path(file.filename or "").suffix.lower()
     if ext not in ALLOWED_AUDIO_TYPES:
         raise HTTPException(
@@ -745,14 +756,19 @@ async def upload_audio_chunk(
     content = await loop.run_in_executor(None, file.file.read)
     await loop.run_in_executor(None, file_path.write_bytes, content)
 
-    logger.info("GD chunk received: session=%s uid=%s size=%d bytes", session_code, current_user["id"], len(content))
+    _log.info("[UPLOAD-CHUNK] Received: session=%s uid=%s filename=%s size=%d bytes",
+              session_code, current_user["id"], file.filename, len(content))
 
     # Transcribe the chunk (beam_size=1 for speed)
     from backend.ai.speech_recognition import transcribe_chunk
     result = await loop.run_in_executor(None, transcribe_chunk, str(file_path))
     chunk_text = result.get("transcript", "") if result.get("success") else ""
-    logger.info("GD chunk transcribed: uid=%s success=%s transcript_len=%d text=%s",
-                current_user["id"], result.get("success"), len(chunk_text), chunk_text[:80])
+    _log.info("[UPLOAD-CHUNK] Transcribed: uid=%s success=%s chunk_len=%d text=%s",
+              current_user["id"], result.get("success"), len(chunk_text), chunk_text[:100])
+
+    if not result.get("success"):
+        _log.warning("[UPLOAD-CHUNK] Transcription FAILED for uid=%s: %s",
+                     current_user["id"], result.get("error", "unknown"))
 
     # Append to accumulated transcript in room state
     state = manager.get_state(session_code)
@@ -767,6 +783,8 @@ async def upload_audio_chunk(
                 existing = ts.transcripts.get(uid, "")
                 ts.transcripts[uid] = (existing + " " + chunk_text).strip()
                 accumulated = ts.transcripts[uid]
+                _log.info("[UPLOAD-CHUNK] Accumulated transcript for uid=%s: %d chars",
+                          uid, len(accumulated))
 
     # Clean up chunk file
     try:
@@ -792,6 +810,8 @@ async def finalize_transcript(
     The frontend calls this after the final upload-chunk when Finish Discussion
     is clicked, before triggering SPEAKER_FINISHED.
     """
+    import logging
+    _log = logging.getLogger("speaksense.api")
     state = manager.get_state(session_code)
     uid = current_user["id"]
     transcript = ""
@@ -804,8 +824,8 @@ async def finalize_transcript(
                 ts = state.team_states[tn]
                 transcript = ts.transcripts.get(uid, "")
 
-    logger.info("Finalize transcript: session=%s uid=%s transcript_len=%d",
-                session_code, uid, len(transcript.strip()))
+    _log.info("[FINALIZE] session=%s uid=%s transcript_len=%d preview=%s",
+              session_code, uid, len(transcript.strip()), transcript.strip()[:100])
     return {
         "transcript": transcript.strip(),
         "message": "Transcript finalized",
@@ -852,7 +872,7 @@ async def _save_evaluation_bg(
     session_code: str, user_id: int, team_number: int, transcript: str, evaluation, logger
 ) -> None:
     """Save evaluation to DB in a background task. Single transaction, single commit."""
-    from backend.database.db import get_connection
+    from backend.database.db import get_connection, _return
     loop = asyncio.get_running_loop()
 
     def _do_save():
@@ -1120,3 +1140,59 @@ def export_session_evaluations(session_code: str, connection: MySQLConnection = 
         "Weaknesses": e.get("weaknesses", "-"),
         "Recommendations": e.get("recommendations", "-")
     } for e in evals]
+
+
+@router.get("/sessions/{session_code}/turns")
+def get_turn_history(
+    session_code: str,
+    current_user: dict = Depends(get_current_user),
+    connection: MySQLConnection = Depends(get_db),
+) -> list[dict]:
+    """Get per-turn history for a GD Live session."""
+    return queries.get_turns_for_session(connection, session_code)
+
+
+@router.get("/sessions/{session_code}/turn-analytics")
+def get_turn_analytics(
+    session_code: str,
+    current_user: dict = Depends(get_current_user),
+    connection: MySQLConnection = Depends(get_db),
+) -> dict:
+    """Get aggregated turn analytics for admin dashboard."""
+    if current_user.get("role") != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only admins can view analytics")
+
+    analytics = queries.get_turn_analytics(connection, session_code)
+    turns = queries.get_turns_for_session(connection, session_code)
+
+    # Compute summary stats
+    total_turns = len(turns)
+    completed_turns = [t for t in turns if t.get("ai_completed")]
+    avg_duration = sum(t.get("duration_seconds", 0) for t in completed_turns) / max(len(completed_turns), 1)
+    avg_score = sum(t.get("overall_score", 0) for t in completed_turns) / max(len(completed_turns), 1)
+
+    return {
+        "session_code": session_code,
+        "total_turns": total_turns,
+        "completed_turns": len(completed_turns),
+        "average_duration_seconds": round(avg_duration, 1),
+        "average_score": round(avg_score, 1),
+        "per_user_analytics": analytics,
+        "turns": [{
+            "turn_number": t["turn_number"],
+            "speaker_order": t["speaker_order"],
+            "user_id": t["user_id"],
+            "name": t.get("name"),
+            "label": t.get("anonymous_label"),
+            "team_number": t["team_number"],
+            "duration_seconds": t.get("duration_seconds", 0),
+            "overall_score": t.get("overall_score", 0),
+            "grammar_score": t.get("grammar_score", 0),
+            "fluency_score": t.get("fluency_score", 0),
+            "pronunciation_score": t.get("pronunciation_score", 0),
+            "confidence_score": t.get("confidence_score", 0),
+            "vocabulary_score": t.get("vocabulary_score", 0),
+            "ai_completed": bool(t.get("ai_completed")),
+            "transcript": t.get("transcript", ""),
+        } for t in turns],
+    }

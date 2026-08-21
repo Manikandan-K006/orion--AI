@@ -453,3 +453,41 @@ export async function exportGdLiveAttendance(sessionCode: string, token: string)
   window.URL.revokeObjectURL(url);
 }
 
+export type TurnRecord = {
+  turn_number: number;
+  speaker_order: number;
+  user_id: number;
+  name: string;
+  label: string;
+  team_number: number;
+  duration_seconds: number;
+  overall_score: number;
+  grammar_score: number;
+  fluency_score: number;
+  pronunciation_score: number;
+  confidence_score: number;
+  vocabulary_score: number;
+  ai_completed: boolean;
+  transcript: string;
+};
+
+export type TurnAnalytics = {
+  session_code: string;
+  total_turns: number;
+  completed_turns: number;
+  average_duration_seconds: number;
+  average_score: number;
+  per_user_analytics: { user_id: number; team_number: number; avg_duration: number; avg_score: number; turns_taken: number }[];
+  turns: TurnRecord[];
+};
+
+export async function getTurnHistory(sessionCode: string, token: string): Promise<TurnRecord[]> {
+  const res = await apiRequest<TurnRecord[]>(`/gd-live/sessions/${sessionCode}/turns`, {}, token);
+  return res;
+}
+
+export async function getTurnAnalytics(sessionCode: string, token: string): Promise<TurnAnalytics> {
+  const res = await apiRequest<TurnAnalytics>(`/gd-live/sessions/${sessionCode}/turn-analytics`, {}, token);
+  return res;
+}
+
