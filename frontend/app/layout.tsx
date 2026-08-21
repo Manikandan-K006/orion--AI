@@ -15,7 +15,7 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body>
+      <head>
         <script
           dangerouslySetInnerHTML={{
             __html: `
@@ -38,7 +38,11 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
                 div.style.boxShadow = '0 10px 15px -3px rgba(0,0,0,0.3)';
                 div.innerHTML = '<strong>Client-side Hydration/Runtime Crash Captured:</strong><br/>' + 
                   e.message + '<br/><br/><strong>Stack Trace:</strong><br/>' + (e.error?.stack || 'No stack trace available');
-                document.body.appendChild(div);
+                if (document.body) {
+                  document.body.appendChild(div);
+                } else {
+                  document.documentElement.appendChild(div);
+                }
               });
               window.addEventListener('unhandledrejection', function(e) {
                 console.error("UNHANDLED REJECTION:", e.reason);
@@ -58,11 +62,17 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
                 div.style.whiteSpace = 'pre-wrap';
                 div.innerHTML = '<strong>Unhandled Promise Rejection:</strong><br/>' + 
                   (e.reason?.message || e.reason || 'No details available') + '<br/><br/><strong>Stack Trace:</strong><br/>' + (e.reason?.stack || 'No stack trace available');
-                document.body.appendChild(div);
+                if (document.body) {
+                  document.body.appendChild(div);
+                } else {
+                  document.documentElement.appendChild(div);
+                }
               });
             `
           }}
         />
+      </head>
+      <body>
         {children}
       </body>
     </html>

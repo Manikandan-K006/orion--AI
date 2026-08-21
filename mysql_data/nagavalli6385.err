@@ -92,3 +92,13 @@
 2026-08-05T05:27:01.604276Z 0 [System] [MY-013602] [Server] Channel mysql_main configured to support TLS. Encrypted connections are now supported for this channel.
 2026-08-05T05:27:01.686786Z 0 [System] [MY-010931] [Server] C:\Program Files\MySQL\MySQL Server 8.4\bin\mysqld.exe: ready for connections. Version: '8.4.9'  socket: ''  port: 3306  MySQL Community Server - GPL.
 2026-08-05T09:12:41.753698Z 32 [Warning] [MY-013360] [Server] Plugin sha256_password reported: ''sha256_password' is deprecated and will be removed in a future release. Please use caching_sha2_password instead'
+2026-08-06T05:42:00.609130Z 0 [System] [MY-015015] [Server] MySQL Server - start.
+2026-08-06T05:42:00.891535Z 0 [System] [MY-010116] [Server] C:\Program Files\MySQL\MySQL Server 8.4\bin\mysqld.exe (mysqld 8.4.9) starting as process 14800
+2026-08-06T05:42:00.999932Z 1 [System] [MY-013576] [InnoDB] InnoDB initialization has started.
+2026-08-06T05:42:01.926475Z 1 [System] [MY-013577] [InnoDB] InnoDB initialization has ended.
+2026-08-06T05:42:02.076430Z 1 [Warning] [MY-012351] [InnoDB] Tablespace 1, name 'sys/sys_config', file '.\sys\sys_config.ibd' is missing!
+2026-08-06T05:42:02.276052Z 0 [System] [MY-010229] [Server] Starting XA crash recovery...
+2026-08-06T05:42:02.282634Z 0 [System] [MY-010232] [Server] XA crash recovery finished.
+2026-08-06T05:42:02.504743Z 0 [Warning] [MY-010068] [Server] CA certificate ca.pem is self signed.
+2026-08-06T05:42:02.505236Z 0 [System] [MY-013602] [Server] Channel mysql_main configured to support TLS. Encrypted connections are now supported for this channel.
+2026-08-06T05:42:02.608017Z 0 [System] [MY-010931] [Server] C:\Program Files\MySQL\MySQL Server 8.4\bin\mysqld.exe: ready for connections. Version: '8.4.9'  socket: ''  port: 3306  MySQL Community Server - GPL.
