@@ -117,7 +117,7 @@ function StudentLivePoller({
   return null;
 }
 
-/** Inline admin control panel shown AFTER hosting â€” keeps the participant cards on
+/** Inline admin control panel shown AFTER hosting — keeps the participant cards on
  *  the page and adds realtime live controls + a live activity feed. No camera. */
 function GdLiveAdminPanel({ code, token, topic, onOpenRoom, onEnd }: {
   code: string;
@@ -175,7 +175,7 @@ function GdLiveAdminPanel({ code, token, topic, onOpenRoom, onEnd }: {
           <span className="flex items-center gap-1.5 text-xs font-semibold text-red-500">
             <span className={`w-2.5 h-2.5 rounded-full bg-red-500 ${paused ? "" : "animate-pulse"}`} /> {paused ? "PAUSED" : "LIVE"}
           </span>
-          <span className="text-sm text-heading font-semibold">{topic || "â€”"}</span>
+          <span className="text-sm text-heading font-semibold">{topic || "—"}</span>
           {timerRunning && <span className="text-sm font-mono text-heading">{Math.floor(timerSeconds / 60).toString().padStart(2, "0")}:{(timerSeconds % 60).toString().padStart(2, "0")}</span>}
           <span className="text-xs text-muted-soft">Round {round}</span>
         </div>
@@ -195,7 +195,7 @@ function GdLiveAdminPanel({ code, token, topic, onOpenRoom, onEnd }: {
       <div className="card p-4">
         <p className="text-xs uppercase tracking-wide text-muted-soft mb-2">Live Activity</p>
         <div className="space-y-1.5 max-h-48 overflow-y-auto text-sm">
-          {activity.length === 0 && <p className="text-muted-soft text-xs">Waiting for activityâ€¦</p>}
+          {activity.length === 0 && <p className="text-muted-soft text-xs">Waiting for activity...</p>}
           {activity.map((a) => (
             <div key={a.id} className="text-xs text-muted-soft">
               <span className="opacity-60 mr-1">{new Date(a.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>{a.text}
@@ -900,7 +900,7 @@ export default function Home() {
       setSoloResult(res);
       setSoloState("RESULT");
       setView("solo-result");
-      setSuccess(`${res.message} â€” Score: ${res.overall_score}`);
+      setSuccess(`${res.message} — Score: ${res.overall_score}`);
       
       const phrase = MOTIVATIONAL_PHRASES[Math.floor(Math.random() * MOTIVATIONAL_PHRASES.length)];
       speak(phrase);
@@ -1009,7 +1009,7 @@ export default function Home() {
     return () => clearInterval(interval);
   }, [view, lbDepartment, lbYear, lbTimeframe, token]);
 
-  // â”€â”€â”€ GD Live Functions â”€â”€â”€
+  // ─── GD Live Functions ───
 
   async function loadGdLiveSessions() {
     try {
@@ -1171,7 +1171,7 @@ export default function Home() {
     finally { setLoading(false); }
   }
 
-  // â”€â”€â”€ Live GD Room helpers â”€â”€â”€
+  // ─── Live GD Room helpers ───
   function openGdLiveRoom() {
     if (!gdLiveAdminViewCode) return;
     setGdLiveRoomCode(gdLiveAdminViewCode);
@@ -1281,9 +1281,9 @@ export default function Home() {
       setGdLivePerf((p) => ({ ...p, hostClickedToResponse: performance.now() - t0 }));
       console.timeStamp?.("admin:hostGdLiveRoom:response");
       // Keep the admin on the participant page: cards stay visible + live controls appear.
-      // Do NOT reload participants here â€” the broadcast (SESSION_STARTED) drives clients,
+      // Do NOT reload participants here — the broadcast (SESSION_STARTED) drives clients,
       // and the admin's live controls are shown via gdLiveRoomActive. This keeps the host
-      // clickâ†’student-screen path under 1s.
+      // click→student-screen path under 1s.
       setGdLiveRoomActive(true);
       setGdLiveIsLiveMeeting(true);
       setGdLiveRoomTopic(res.topic || "");
@@ -1376,7 +1376,7 @@ export default function Home() {
 
 
 
-  // â”€â”€â”€ Solo Practice Functions â”€â”€â”€
+  // ─── Solo Practice Functions ───
 
   async function startSoloPractice() {
     setLoading(true);
@@ -1458,7 +1458,7 @@ export default function Home() {
       setIsSpeakingPhase(false);
       setIsSessionLocked(false);
       setView("solo-result");
-      setSuccess(`${res.message} â€” Score: ${res.overall_score}`);
+      setSuccess(`${res.message} — Score: ${res.overall_score}`);
       // Fetch history
       const history = await apiRequest<SoloSubmitResponse["last_session"][]>("/solo/history", {}, token).catch(() => []);
       setSoloHistory(history);
@@ -1486,7 +1486,7 @@ export default function Home() {
     );
   }
 
-  // â”€â”€â”€ Full-screen GD Live Admin Monitor â”€â”€â”€
+  // ─── Full-screen GD Live Admin Monitor ───
   if (view === "gd-live-monitor" && gdLiveAdminViewCode && user) {
     return (
       <GdLiveAdminMonitor
@@ -1497,7 +1497,7 @@ export default function Home() {
     );
   }
 
-  // â”€â”€â”€ Full-screen GD Live Room (authenticated) â”€â”€â”€
+  // ─── Full-screen GD Live Room (authenticated) ───
   if (view === "gd-live-room" && gdLiveRoomCode && user) {
     return (
       <GdLiveRoom
@@ -1513,8 +1513,8 @@ export default function Home() {
           setGdLiveShowCountdown(false);
           setGdLivePerf((p) => {
             const entryToReady = p.studentReceivedStart ? performance.now() - p.studentReceivedStart : 0;
-            console.log("[GD-Live perf] hostâ†’response(ms):", Math.round(p.hostClickedToResponse || 0),
-              "| student entryâ†’room-ready(ms):", Math.round(entryToReady));
+            console.log("[GD-Live perf] host -> response(ms):", Math.round(p.hostClickedToResponse || 0),
+              "| student entry -> room-ready(ms):", Math.round(entryToReady));
             return { ...p, studentEntryToReady: entryToReady };
           });
         }}
@@ -1737,9 +1737,9 @@ export default function Home() {
             <p className="font-medium text-heading">Mount Zion College of Engineering and Technology</p>
             <p>
               <span className="inline-flex items-center gap-1"><Mail className="w-3.5 h-3.5" /> info@mzcet.in</span>
-              {"  Â·  "}
+              {"  ·  "}
               <span className="inline-flex items-center gap-1"><Phone className="w-3.5 h-3.5" /> 04333 294400</span>
-              {"  Â·  "}
+              {"  ·  "}
               <span className="inline-flex items-center gap-1"><Phone className="w-3.5 h-3.5" /> 73733 44444</span>
 
             </p>
@@ -2104,7 +2104,7 @@ export default function Home() {
                           value={currentPassword}
                           onChange={e => setCurrentPassword(e.target.value)}
                           required
-                          placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
+                          placeholder="••••••••"
                           className="w-full pl-11 pr-11 bg-[var(--bg)] border-[var(--border)] focus:border-indigo-500/50 focus:ring-2 focus:ring-indigo-500/10 rounded-2xl h-12"
                         />
                         <button
@@ -2127,7 +2127,7 @@ export default function Home() {
                           onChange={e => setNewPassword(e.target.value)}
                           required
                           minLength={8}
-                          placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
+                          placeholder="••••••••"
                           className="w-full pl-11 pr-11 bg-[var(--bg)] border-[var(--border)] focus:border-indigo-500/50 focus:ring-2 focus:ring-indigo-500/10 rounded-2xl h-12"
                         />
                         <button
@@ -2151,7 +2151,7 @@ export default function Home() {
                           onChange={e => setConfirmPassword(e.target.value)}
                           required
                           minLength={8}
-                          placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
+                          placeholder="••••••••"
                           className="w-full pl-11 pr-11 bg-[var(--bg)] border-[var(--border)] focus:border-indigo-500/50 focus:ring-2 focus:ring-indigo-500/10 rounded-2xl h-12"
                         />
                         <button
@@ -2282,11 +2282,11 @@ export default function Home() {
                 </h4>
                 <div className="space-y-4 text-xs">
                   <div className="p-4 rounded-2xl bg-indigo-500/5 border border-indigo-500/10">
-                    <h5 className="font-bold text-heading text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5">ðŸš€ Delivery & Pitch Modulation</h5>
+                    <h5 className="font-bold text-heading text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5">🚀 Delivery & Pitch Modulation</h5>
                     <p className="text-muted-soft mt-1 leading-relaxed">Your pitch delivery displays strong speaker authority. Try to reduce speed pauses between sentences by 5-10% to achieve maximum conversational fluency scores.</p>
                   </div>
                   <div className="p-4 rounded-2xl bg-emerald-500/5 border border-emerald-500/10">
-                    <h5 className="font-bold text-heading text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">ðŸ—£ï¸ Accent Clarity & Pronunciation</h5>
+                    <h5 className="font-bold text-heading text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">🗣️ Accent Clarity & Pronunciation</h5>
                     <p className="text-muted-soft mt-1 leading-relaxed">Pronunciation of complex consonant grids is highly accurate. Focus on matching standard vowel lengths to align perfectly with AI assessment markers.</p>
                   </div>
                 </div>
@@ -2816,12 +2816,12 @@ export default function Home() {
                       {soloQuote && (
                         <div className="card p-5 bg-indigo-500/5 dark:bg-indigo-500/10 border border-indigo-500/20 italic relative overflow-hidden group hover:border-indigo-500/40 transition-colors shadow-sm">
                           <div className="absolute -right-6 -bottom-6 w-20 h-20 bg-indigo-500/5 rounded-full blur-xl pointer-events-none" />
-                          <div className="absolute top-2 left-3 text-4xl text-slate-700/40 dark:text-slate-500/20 select-none font-serif">â€œ</div>
+                          <div className="absolute top-2 left-3 text-4xl text-slate-700/40 dark:text-slate-500/20 select-none font-serif">“</div>
                           <p className="text-xs text-body leading-relaxed pl-4 pr-2 font-medium z-10 relative">
                             {soloQuote.quote}
                           </p>
                           <p className="text-right text-[10px] font-bold text-muted-soft mt-2 tracking-wide uppercase">
-                            â€” {soloQuote.author}
+                            — {soloQuote.author}
                           </p>
                         </div>
                       )}
@@ -2873,10 +2873,10 @@ export default function Home() {
                               </div>
 
                               {[
-                                { label: "Grammar & Structure", val: soloHistory[0]?.grammar_score, icon: "ðŸ“", color: "bg-indigo-500", text: "text-indigo-400" },
-                                { label: "Fluency & Speech Rate", val: soloHistory[0]?.fluency_score, icon: "âš¡", color: "bg-purple-500", text: "text-purple-400" },
-                                { label: "Pronunciation & Clarity", val: soloHistory[0]?.accent_score, icon: "ðŸ—£ï¸", color: "bg-cyan-500", text: "text-cyan-400" },
-                                { label: "Confidence & Delivery", val: soloHistory[0]?.delivery_score, icon: "ðŸš€", color: "bg-emerald-500", text: "text-emerald-400" },
+                                { label: "Grammar & Structure", val: soloHistory[0]?.grammar_score, icon: "📝", color: "bg-indigo-500", text: "text-indigo-400" },
+                                { label: "Fluency & Speech Rate", val: soloHistory[0]?.fluency_score, icon: "⚡", color: "bg-purple-500", text: "text-purple-400" },
+                                { label: "Pronunciation & Clarity", val: soloHistory[0]?.accent_score, icon: "🗣️", color: "bg-cyan-500", text: "text-cyan-400" },
+                                { label: "Confidence & Delivery", val: soloHistory[0]?.delivery_score, icon: "🚀", color: "bg-emerald-500", text: "text-emerald-400" },
                               ].map((skill) => (
                                 <div key={skill.label} className="space-y-1.5">
                                   <div className="flex items-center justify-between text-[11px]">
@@ -3111,7 +3111,7 @@ export default function Home() {
                                 </span>
                               </div>
                               <p className="text-xs text-muted-soft mt-1">
-                                {s.participant_count || 0} participants joined Â· {s.team_count || 0} teams active
+                                {s.participant_count || 0} participants joined · {s.team_count || 0} teams active
                               </p>
                             </div>
                             <div className="flex items-center gap-2">
@@ -3150,7 +3150,7 @@ export default function Home() {
                     <h2 className="text-base font-bold text-heading flex items-center gap-2"><Trophy className="w-5 h-5 text-amber-500" /> Leaderboard</h2>
                     <span className="flex items-center gap-1.5 text-[10px] font-bold text-emerald-500 bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20 shadow-sm">
                       <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-                      LIVE REAL-TIME {lbLastUpdated ? `â€¢ ${lbLastUpdated}` : ""}
+                      LIVE REAL-TIME {lbLastUpdated ? `• ${lbLastUpdated}` : ""}
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
@@ -3300,7 +3300,7 @@ export default function Home() {
                         <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${a.rank === 1 ? "bg-amber-500 text-slate-950" : a.rank === 2 ? "bg-slate-400 text-slate-950" : a.rank === 3 ? "bg-orange-500 text-slate-950" : "surface-2 text-body"}`}>{a.rank}</div>
                         <div className="flex-1 min-w-0">
                           <p className="text-xs font-bold text-heading truncate">{a.name}</p>
-                          <p className="text-[10px] text-muted-soft">{a.department} Â· {a.year}</p>
+                          <p className="text-[10px] text-muted-soft">{a.department} · {a.year}</p>
                         </div>
                         <div className="text-right shrink-0">
                           <p className="text-xs font-bold text-emerald-500">{a.total_credits}</p>
@@ -3314,7 +3314,7 @@ export default function Home() {
             </div>
           )}
 
-          {/* â”€â”€â”€ Solo Practice â”€â”€â”€ */}
+          {/* ─── Solo Practice ─── */}
           {view === "solo-practice" && !soloSession && (
             <div className="card p-8 text-center max-w-md mx-auto my-12 border-dashed">
               <Loader2 className="h-8 w-8 animate-spin mx-auto text-indigo-500 mb-3" />
@@ -3403,14 +3403,14 @@ export default function Home() {
             </div>
           )}
 
-          {/* â”€â”€â”€ Solo Session (Prep + Speaking) â”€â”€â”€ */}
+          {/* ─── Solo Session (Prep + Speaking) ─── */}
           {view === "solo-session" && soloSession && (
             <div className="max-w-3xl mx-auto space-y-4">
               <div className="card p-6">
                 <div className="flex items-center justify-between mb-4">
                   <div>
                     <h2 className="text-xl font-bold text-heading">{soloSession.topic}</h2>
-                    <p className="text-sm text-muted-soft">Session #{soloSession.session_number} Â· Solo Practice</p>
+                    <p className="text-sm text-muted-soft">Session #{soloSession.session_number} · Solo Practice</p>
                   </div>
                   <div className="flex gap-2">
                     {soloState === "RECORDING" && (
@@ -3432,9 +3432,9 @@ export default function Home() {
                   }`}>
                     <p className="text-sm font-semibold text-body mb-2">
                       {soloState === "PREPARING"
-                        ? (prepSeconds > 0 ? "Preparation Phase â€” Think & Take Notes" : "Preparation Complete!")
+                        ? (prepSeconds > 0 ? "Preparation Phase — Think & Take Notes" : "Preparation Complete!")
                         : soloState === "RECORDING"
-                        ? "Speaking Phase â€” Deliver Your Thoughts"
+                        ? "Speaking Phase — Deliver Your Thoughts"
                         : soloState === "FINALIZING"
                         ? "Finalizing transcript..."
                         : "Evaluating performance..."}
@@ -3543,14 +3543,14 @@ export default function Home() {
             </div>
           )}
 
-          {/* â”€â”€â”€ Solo Result â”€â”€â”€ */}
+          {/* ─── Solo Result ─── */}
           {view === "solo-result" && soloResult && soloSession && (
             <div className="space-y-6 animate-in fade-in duration-300">
               {/* Quote */}
               {soloQuote && (
                 <div className="card border-purple-500/30 p-4 text-center">
                   <p className="text-sm text-heading/80 italic">"{soloQuote.quote}"</p>
-                  <p className="text-xs text-purple-300/60 mt-1">â€” {soloQuote.author}</p>
+                  <p className="text-xs text-purple-300/60 mt-1">— {soloQuote.author}</p>
                 </div>
               )}
 
@@ -3664,7 +3664,7 @@ export default function Home() {
             </div>
           )}
 
-          {/* â”€â”€â”€ GD Live (Join) â”€â”€â”€ */}
+          {/* ─── GD Live (Join) ─── */}
           {view === "gd-live" && user?.role !== "admin" && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="card p-6">
@@ -3693,16 +3693,16 @@ export default function Home() {
               <div className="card border-amber-500/30 p-6">
                 <h2 className="text-lg font-semibold text-heading mb-4 flex items-center gap-2"><Shield className="w-5 h-5 text-amber-400" /> Anonymous & Private</h2>
                 <ul className="space-y-3 text-sm text-body">
-                  <li className="flex items-start gap-2">âœ“ Your name and email are hidden from other participants</li>
-                  <li className="flex items-start gap-2">âœ“ Everyone joins one shared discussion hosted by your admin</li>
-                  <li className="flex items-start gap-2">âœ“ Only admins can view your identity, department, and year</li>
-                  <li className="flex items-start gap-2">âœ“ Topics are basic opinion/debate subjects everyone can talk about</li>
+                  <li className="flex items-start gap-2">✓ Your name and email are hidden from other participants</li>
+                  <li className="flex items-start gap-2">✓ Everyone joins one shared discussion hosted by your admin</li>
+                  <li className="flex items-start gap-2">✓ Only admins can view your identity, department, and year</li>
+                  <li className="flex items-start gap-2">✓ Topics are basic opinion/debate subjects everyone can talk about</li>
                 </ul>
               </div>
             </div>
           )}
 
-          {/* â”€â”€â”€ GD Live Admin â”€â”€â”€ */}
+          {/* ─── GD Live Admin ─── */}
           {view === "gd-live-admin" && user?.role === "admin" && (
             <div className="space-y-6">
               {/* Sub Navigation */}
@@ -3867,7 +3867,7 @@ export default function Home() {
                       {gdLiveLeaderboard.length > 0 && gdLiveLeaderboardViewCode === sess.session_code && (
                         <div className="mt-6">
                           <h4 className="text-sm font-semibold text-heading mb-3 flex items-center gap-2">
-                            <Trophy className="w-4 h-4 text-amber-400" /> Leaderboard â€” Session {sess.session_code}
+                            <Trophy className="w-4 h-4 text-amber-400" /> Leaderboard — Session {sess.session_code}
                           </h4>
                           <table className="ent-table">
                             <thead>
@@ -4222,7 +4222,7 @@ export default function Home() {
               )}
             </div>
           )}
-          {/* â”€â”€â”€ GD Live Admin â€” Full Page Participant View â”€â”€â”€ */}
+          {/* ─── GD Live Admin — Full Page Participant View ─── */}
           {view === "gd-live-admin-view" && user?.role === "admin" && (
             <div className="space-y-6">
               <div className="card p-6">
@@ -4233,7 +4233,7 @@ export default function Home() {
                       <p>OTP : <code className="font-mono font-bold text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded text-sm tracking-wider">{gdLiveAdminViewCode}</code></p>
                       <p className="flex items-center gap-3">
                         <span className="text-emerald-400 font-bold">Joined : {joinedParticipants.length}</span>
-                        <span className="text-slate-600">â€¢</span>
+                        <span className="text-slate-600">•</span>
                         <span className="text-slate-400 font-bold">Not Joined : {notJoinedCount}</span>
                       </p>
                     </div>
@@ -4242,7 +4242,7 @@ export default function Home() {
                     {gdLiveIsLiveMeeting ? (
                       <div className="flex items-center gap-2">
                         <span className="flex items-center gap-1.5 text-xs font-semibold text-red-500 px-3 h-11 rounded-xl surface-2 border border-red-500/40">
-                          <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse" /> LIVE â€” Meeting in progress
+                          <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse" /> LIVE — Meeting in progress
                         </span>
                         <Button onClick={() => hostGdLiveRoom(gdLiveAdminViewCode)} disabled={loading} variant="secondary" className="h-11 text-xs">
                           Re-Host / Re-assign Teams
@@ -4356,14 +4356,14 @@ export default function Home() {
             </div>
           )}
 
-          {/* â”€â”€â”€ GD Live Student View â”€â”€â”€ */}
+          {/* ─── GD Live Student View ─── */}
           {view === "gd-live" && user?.role === "admin" && (
             <div className="card p-6 text-center">
               <p className="text-muted-soft text-sm">Use the Admin portal to manage GD Live sessions.</p>
             </div>
           )}
 
-          {/* â”€â”€â”€ GD Live Session (Waiting for Host) â”€â”€â”€ */}
+          {/* ─── GD Live Session (Waiting for Host) ─── */}
           {view === "gd-live-session" && gdLiveSession && (
             <div className="max-w-3xl mx-auto">
               <StudentLiveWaiter
@@ -4445,7 +4445,7 @@ export default function Home() {
             </div>
           )}
 
-          {/* â”€â”€â”€ Solo Practice Rules Modal â”€â”€â”€ */}
+          {/* ─── Solo Practice Rules Modal ─── */}
           {soloRulesOpen && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => setSoloRulesOpen(false)}>
               <div className="card w-full max-w-lg max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
@@ -4459,14 +4459,14 @@ export default function Home() {
                     "Answer using your own words.",
                     "Avoid reading directly from notes or another screen.",
                     "Maintain eye contact with the camera as much as possible.",
-                    "Avoid excessive filler words such as 'um', 'uh', and 'like'.",
+                    "Avoid excessive filler words such as \"um\", \"uh\", and \"like\".",
                     "Complete your response within the allotted time.",
                     "Wait until the timer finishes before stopping.",
                     "Speak clearly at a moderate pace.",
                     "Do not interrupt the recording once it has started.",
                     "Review your AI feedback after completing the session.",
                   ].map((rule, i) => (
-                    <p key={i} className="flex items-start gap-2"><span className="text-amber-400 shrink-0">â€¢</span> {rule}</p>
+                    <p key={i} className="flex items-start gap-2"><span className="text-amber-400 shrink-0">•</span> {rule}</p>
                   ))}
                 </div>
                 <div className="flex justify-end gap-3">
@@ -4479,7 +4479,7 @@ export default function Home() {
             </div>
           )}
 
-          {/* â”€â”€â”€ GD Live Rules Modal â”€â”€â”€ */}
+          {/* ─── GD Live Rules Modal ─── */}
           {gdRulesOpen && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => setGdRulesOpen(false)}>
               <div className="card w-full max-w-lg max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
@@ -4501,7 +4501,7 @@ export default function Home() {
                     "Follow the moderator's instructions.",
                     "Complete the discussion within the allotted time.",
                   ].map((rule, i) => (
-                    <p key={i} className="flex items-start gap-2"><span className="text-amber-400 shrink-0">â€¢</span> {rule}</p>
+                    <p key={i} className="flex items-start gap-2"><span className="text-amber-400 shrink-0">•</span> {rule}</p>
                   ))}
                 </div>
                 <div className="flex justify-end gap-3">
