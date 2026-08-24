@@ -11,7 +11,7 @@ import GdLiveRoom from "@/components/GdLiveRoom";
 import GdLiveAdminMonitor from "@/components/GdLiveAdminMonitor";
 import { useGdLiveWs, GDLiveWsMessage } from "@/lib/useGdLiveWs";
 import { useVoiceAnnouncement } from "@/services/voice/useVoiceAnnouncement";
-import { AllTimeAchiever, ComprehensiveLeaderboard, GDLiveLeaderboardEntry, LeaderboardRanking, LeaderboardStats, Progress, SoloQuote, SoloStartResponse, SoloSubmitResponse, User, apiRequest, hostGdLiveMeeting, endGdLiveMeeting, getGdLiveState, changePassword, getApiUrl, downloadGdLivePdfReport, downloadGdLiveExcelReport, exportGdLiveAttendance } from "@/lib/api";
+import { AllTimeAchiever, ComprehensiveLeaderboard, GDLiveLeaderboardEntry, LeaderboardRanking, LeaderboardStats, Progress, SoloQuote, SoloStartResponse, SoloSubmitResponse, User, apiRequest, hostGdLiveMeeting, endGdLiveMeeting, getGdLiveState, changePassword, getApiUrl, downloadGdLivePdfReport, downloadGdLiveExcelReport, exportGdLiveAttendance, downloadOverallPdfReport } from "@/lib/api";
 
 function speak(text: string) {
   if (typeof window === "undefined" || !window.speechSynthesis) return;
@@ -2217,12 +2217,17 @@ export default function Home() {
                     <p className="text-xs text-muted-soft mt-1">Export official Mount Zion communication analysis certificate and report summary.</p>
                   </div>
                   <Button
-                    onClick={() => {
+                    onClick={async () => {
                       setPdfLoading(true);
-                      setTimeout(() => {
+                      setMessage("");
+                      try {
+                        await downloadOverallPdfReport(token);
+                        setSuccess("Overall Report PDF downloaded successfully!");
+                      } catch (err: any) {
+                        setMessage(err.message || "Failed to download PDF report. Please try again.");
+                      } finally {
                         setPdfLoading(false);
-                        setSuccess("Report summary PDF generated and download triggered successfully!");
-                      }, 1800);
+                      }
                     }}
                     disabled={pdfLoading}
                     className="w-full btn-primary h-11 text-xs mt-6"

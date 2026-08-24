@@ -6,7 +6,7 @@ from mysql.connector import MySQLConnection
 
 from backend.database import queries
 from backend.database.db import get_db
-from backend.reporting import generate_pdf_report, generate_gd_live_pdf_report, generate_gd_live_excel_report
+from backend.reporting import generate_pdf_report, generate_gd_live_pdf_report, generate_gd_live_excel_report, generate_overall_pdf_report
 from backend.security import get_current_user
 
 router = APIRouter(prefix="/reports", tags=["Reports"])
@@ -56,6 +56,48 @@ def download_report(
         path=str(report_path),
         media_type="application/pdf",
         filename=f"interview_report_{session_id}.pdf",
+    )
+
+
+@router.get("/overall/pdf")
+def download_overall_pdf(
+    current_user: dict = Depends(get_current_user),
+    connection: MySQLConnection = Depends(get_db),
+) -> FileResponse:
+    """Generate and stream the Overall Report & Analytics PDF for the current user."""
+    user_id = current_user["id"]
+    student_name = current_user.get("name", "Student")
+    register_number = current_user.get("register_number", "")
+
+    # Fetch aggregated progress
+    progress_row = queries.get_progress(connection, user_id)
+    progress_data = dict(progress_row) if progress_row else {}
+
+    # Fetch solo practice history (most recent 10 completed sessions)
+    solo_history = queries.get_solo_history(connection, user_id)
+
+    # Count completed GD Live sessions for this user
+    gd_row = queries.fetch_one(
+        connection,
+        "SELECT COUNT(DISTINCT session_code) AS cnt FROM gd_live_evaluations WHERE user_id = %s",
+        (user_id,),
+    )
+    gd_sessions_completed = int((gd_row or {}).get("cnt") or 0)
+
+    path = generate_overall_pdf_report(
+        user_id=user_id,
+        student_name=student_name,
+        register_number=register_number,
+        progress=progress_data,
+        solo_history=solo_history,
+        gd_sessions_completed=gd_sessions_completed,
+    )
+
+    return FileResponse(
+        path=path,
+        media_type="application/pdf",
+        filename=f"overall_report_{student_name.replace(' ', '_')}.pdf",
+        headers={"Content-Disposition": f'attachment; filename="overall_report_{student_name.replace(" ", "_")}.pdf"'},
     )
 
 

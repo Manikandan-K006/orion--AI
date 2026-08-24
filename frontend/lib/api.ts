@@ -377,6 +377,25 @@ export async function downloadReport(sessionId: number, token: string) {
   window.URL.revokeObjectURL(url);
 }
 
+export async function downloadOverallPdfReport(token: string) {
+  const response = await fetch(`${getApiUrl()}/reports/overall/pdf`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.detail || "Overall report download failed");
+  }
+  const blob = await response.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "overall_report.pdf";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  window.URL.revokeObjectURL(url);
+}
+
 export async function changePassword(payload: { current_password: string; new_password: string }, token: string) {
   return apiRequest<{ message: string }>(
     `/change-password`,
