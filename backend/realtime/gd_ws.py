@@ -113,37 +113,45 @@ async def broadcast_participants(session_code: str) -> None:
 
 
 def _compute_scores_sync(evaluation) -> dict:
-    relevance = min(100, evaluation.grammar_score * 0.3 + evaluation.fluency_score * 0.3 + evaluation.confidence_score * 0.4)
-    quality = min(100, evaluation.vocabulary_score * 0.5 + evaluation.overall_score * 0.5)
-    accent = evaluation.pronunciation_score
-    overall = round((evaluation.grammar_score + evaluation.fluency_score + accent + relevance + quality) / 5, 2)
+    """Score aggregation using direct AI module outputs — no re-derivation.
+
+    Uses evaluation.overall_score (already weighted by evaluation.py),
+    evaluation.topic_relevance_score (real TF-IDF analysis), and
+    evaluation.content_quality_score (real content analysis).
+    Weaknesses and tips come from the AI analysis, not from fixed thresholds.
+    """
+    overall = round(evaluation.overall_score, 2)
     points = round(overall * 0.5, 2)
-    weaknesses = []
-    tips = []
-    if evaluation.grammar_score < 70:
-        weaknesses.append("Grammar needs improvement")
-        tips.append("Practice sentence construction and verb tenses")
-    if evaluation.fluency_score < 70:
-        weaknesses.append("Fluency needs improvement")
-        tips.append("Speak slowly and use filler words naturally")
-    if evaluation.pronunciation_score < 70:
-        weaknesses.append("Pronunciation needs improvement")
-        tips.append("Practice difficult words and tongue twisters")
-    if evaluation.confidence_score < 70:
-        weaknesses.append("Confidence needs improvement")
-        tips.append("Maintain steady pace and practice eye contact")
-    if evaluation.vocabulary_score < 70:
-        weaknesses.append("Vocabulary needs improvement")
-        tips.append("Read widely and learn new words daily")
-    if not weaknesses:
-        weaknesses.append("Great overall performance!")
-        tips.append("Keep up the good work and challenge yourself with harder topics")
+    # Use AI-generated weaknesses and recommendations directly
+    weaknesses_list = list(evaluation.weaknesses) if evaluation.weaknesses else []
+    tips_list = list(evaluation.recommendations) if evaluation.recommendations else []
+    # Supplement only if AI produced no specific feedback
+    if not weaknesses_list:
+        if evaluation.grammar_score < 60:
+            weaknesses_list.append("Grammar needs improvement")
+            tips_list.append("Practice sentence construction and verb tenses")
+        if evaluation.fluency_score < 60:
+            weaknesses_list.append("Fluency needs improvement")
+            tips_list.append("Reduce filler words and improve speaking continuity")
+        if evaluation.confidence_score < 60:
+            weaknesses_list.append("Confidence needs improvement")
+            tips_list.append("Use assertive language and reduce hesitant phrases")
+        if evaluation.vocabulary_score < 60:
+            weaknesses_list.append("Vocabulary needs improvement")
+            tips_list.append("Incorporate domain-specific and advanced vocabulary")
+    if not weaknesses_list:
+        weaknesses_list.append("Good overall performance!")
+        tips_list.append("Keep up the good work and challenge yourself with harder topics")
     return {
-        "overall": overall, "points": points,
-        "fluency": evaluation.fluency_score, "grammar": evaluation.grammar_score,
-        "accent": accent, "relevance": relevance, "quality": quality,
-        "weaknesses": "; ".join(weaknesses),
-        "tips": "; ".join(tips),
+        "overall": overall,
+        "points": points,
+        "fluency": round(evaluation.fluency_score, 1),
+        "grammar": round(evaluation.grammar_score, 1),
+        "accent": round(evaluation.pronunciation_score, 1),
+        "relevance": round(evaluation.topic_relevance_score, 1),   # Real TF-IDF topic relevance
+        "quality": round(evaluation.content_quality_score, 1),     # Real content quality
+        "weaknesses": "; ".join(weaknesses_list),
+        "tips": "; ".join(tips_list),
     }
 
 
@@ -169,6 +177,59 @@ def _save_evaluation_db(session_code: str, user_id: int, team_number: int, trans
 import re
 import random
 import time
+
+# ── Behavioral signal patterns for real teamwork/leadership tracking ──────────
+# These patterns are matched against CHAT_MESSAGE text sent during the GD session.
+# Matched signals update ts.agree_disagree_votes and ts.relevant_points_count,
+# which are then used in compile_and_broadcast_final_summary to compute
+# teamwork and leadership scores from actual participant behavior.
+_AGREE_RX = re.compile(
+    r'\b(agree|support|second that|building on|aligned|good point|exactly|'
+    r'absolutely|well said|that\'s right|you\'re right|i concur)\b', re.IGNORECASE)
+_DISAGREE_RX = re.compile(
+    r'\b(disagree|on the contrary|counter that|alternative view|'
+    r'i differ|but consider|not necessarily|i\'d argue|different perspective)\b', re.IGNORECASE)
+_QUESTION_RX = re.compile(
+    r'(?:\?)|(?:\b(what do you think|how can|why should|do you agree|'
+    r'could you explain|can you clarify|would you say|your thoughts)\b)', re.IGNORECASE)
+_SUMMARIZE_RX = re.compile(
+    r'\b(in conclusion|to summarize|to sum up|let me conclude|'
+    r'in summary|wrapping up|to wrap|overall then)\b', re.IGNORECASE)
+_GUIDE_RX = re.compile(
+    r'\b(let us discuss|we should focus|moving on to|turning to|'
+    r'let\'s talk about|i\'d like to raise|let me bring up|'
+    r'going back to the topic|i\'d like to add a point)\b', re.IGNORECASE)
+
+
+def _update_chat_signals(ts: "TeamState", user_id: int, text: str) -> None:
+    """Parse a CHAT_MESSAGE and update real teamwork/leadership signal counters.
+
+    Signals tracked:
+    - agree_disagree_votes[uid]["agree"]     : count of agreement expressions
+    - agree_disagree_votes[uid]["disagree"]  : count of counter-argument expressions
+    - agree_disagree_votes[uid]["questions"] : count of questions posed to the group
+    - relevant_points_count[uid]             : count of summaries or topic-guidance acts
+    - consensus_claimed_by                   : uid of first participant to attempt summary
+    """
+    if not text.strip():
+        return
+    entry = ts.agree_disagree_votes.setdefault(
+        user_id, {"agree": 0, "disagree": 0, "questions": 0}
+    )
+    if _AGREE_RX.search(text):
+        entry["agree"] = entry.get("agree", 0) + 1
+    if _DISAGREE_RX.search(text):
+        entry["disagree"] = entry.get("disagree", 0) + 1
+    if _QUESTION_RX.search(text):
+        entry["questions"] = entry.get("questions", 0) + 1
+    # Leadership: summarization and topic-guidance acts
+    if _SUMMARIZE_RX.search(text):
+        ts.relevant_points_count[user_id] = ts.relevant_points_count.get(user_id, 0) + 1
+        if ts.consensus_claimed_by is None:
+            ts.consensus_claimed_by = user_id  # First to summarize gets leadership credit
+    if _GUIDE_RX.search(text):
+        ts.relevant_points_count[user_id] = ts.relevant_points_count.get(user_id, 0) + 1
+
 
 def generate_follow_up_question(name: str, transcript: str, topic: str) -> str:
     text = transcript.lower()
@@ -224,28 +285,63 @@ async def compile_and_broadcast_final_summary(session_code: str, team_number: in
 
     for uid, member in ts.members.items():
         db_eval = team_evals.get(uid)
-        mem_eval = ts.evaluations.get(uid, {
-            "overall_score": 75.0, "grammar_score": 75.0, "confidence_score": 75.0,
-            "fluency_score": 75.0, "vocabulary_score": 75.0, "pronunciation_score": 75.0,
-        })
+        # Use in-memory eval as fallback — no hardcoded 75/80/85 placeholders
+        mem_eval = ts.evaluations.get(uid, {})
 
-        overall_val = float(db_eval["overall_score"] if db_eval else mem_eval.get("overall_score", 75.0))
-        grammar_val = float(db_eval["grammar_score"] if db_eval else mem_eval.get("grammar_score", 75.0))
-        fluency_val = float(db_eval["fluency_score"] if db_eval else mem_eval.get("fluency_score", 75.0))
-        pronunciation_val = float(db_eval["accent_score"] if db_eval else mem_eval.get("pronunciation_score", 75.0))
-        relevance_val = float(db_eval["relevance_score"] if db_eval else mem_eval.get("relevance_score", 75.0))
-        vocab_val = float(db_eval["content_quality"] if db_eval else mem_eval.get("vocabulary_score", 75.0))
+        # ── Scores from DB (saved AI evaluation) or in-memory (TURN_EVALUATED) ──
+        overall_val = float(db_eval["overall_score"] if db_eval else mem_eval.get("overall_score") or 0.0)
+        grammar_val = float(db_eval["grammar_score"] if db_eval else mem_eval.get("grammar_score") or 0.0)
+        fluency_val = float(db_eval["fluency_score"] if db_eval else mem_eval.get("fluency_score") or 0.0)
+        pronunciation_val = float(db_eval["accent_score"] if db_eval else mem_eval.get("pronunciation_score") or 0.0)
+        relevance_val = float(db_eval["relevance_score"] if db_eval else mem_eval.get("relevance_score") or 0.0)
+        vocab_val = float(db_eval["content_quality"] if db_eval else mem_eval.get("vocabulary_score") or 0.0)
+        confidence_val = float(
+            (db_eval.get("confidence_score") or 0.0) if db_eval
+            else (mem_eval.get("confidence_score") or 0.0)
+        )
+        originality_val = float(
+            (db_eval.get("originality_score") or 0.0) if db_eval
+            else (mem_eval.get("originality_score") or 0.0)
+        )
+        critical_thinking_val = float(
+            (db_eval.get("critical_thinking_score") or 0.0) if db_eval
+            else (mem_eval.get("critical_thinking_score") or 0.0)
+        )
+        topic_understanding_val = float(
+            (db_eval.get("topic_understanding_score") or 0.0) if db_eval
+            else (mem_eval.get("topic_understanding_score") or 0.0)
+        )
 
-        originality_val = float(db_eval.get("originality_score") if db_eval and db_eval.get("originality_score") else mem_eval.get("originality_score", 82.0))
-        critical_thinking_val = float(db_eval.get("critical_thinking_score") if db_eval and db_eval.get("critical_thinking_score") else mem_eval.get("critical_thinking_score", 84.0))
-        topic_understanding_val = float(db_eval.get("topic_understanding_score") if db_eval and db_eval.get("topic_understanding_score") else mem_eval.get("topic_understanding_score", 85.0))
-
+        # Derived: communication = average of speech quality scores
         communication_val = round((fluency_val + pronunciation_val + grammar_val) / 3, 1)
-        listening_val = max(55.0, min(95.0, 92 - ts.interruption_counts.get(uid, 0) * 8))
-        teamwork_val = max(50.0, min(96.0, 75 + len(ts.agree_disagree_votes.get(uid, {}).get("agree", set())) * 5))
-        leadership_val = max(50.0, min(96.0, 70 + (10 if uid == ts.consensus_claimed_by else 0) + (ts.relevant_points_count.get(uid, 0) * 3)))
-        confidence_val = float(db_eval.get("confidence_score") if db_eval and db_eval.get("confidence_score") else mem_eval.get("confidence_score", 80.0))
         creativity_val = round((originality_val + critical_thinking_val) / 2, 1)
+
+        # ── Behavioral scores from real tracked session signals ──────────────
+        # interruption_counts: populated in LIVE_SPEECH handler when non-current-speaker sends speech
+        interruption_count = ts.interruption_counts.get(uid, 0)
+        # Listening: starts at 90, each interruption deducts 8 points, floor 40
+        listening_val = max(40.0, min(95.0, 90.0 - interruption_count * 8.0))
+
+        # agree_disagree_votes: populated in _update_chat_signals via CHAT_MESSAGE
+        entry = ts.agree_disagree_votes.get(uid, {"agree": 0, "disagree": 0, "questions": 0})
+        agree_count = entry.get("agree", 0)
+        disagree_count = entry.get("disagree", 0)
+        question_count = entry.get("questions", 0)
+        # Teamwork: constructive interactions (agree +4, counter-argument +3, question +3)
+        interaction_score = agree_count * 4 + disagree_count * 3 + question_count * 3
+        teamwork_val = max(40.0, min(96.0, 50.0 + interaction_score))
+
+        # relevant_points_count: populated by _update_chat_signals for summaries/guidance
+        # consensus_claimed_by: first participant to attempt a summary
+        relevant_points = ts.relevant_points_count.get(uid, 0)
+        leadership_val = max(40.0, min(96.0,
+            50.0
+            + (10 if uid == ts.consensus_claimed_by else 0)
+            + relevant_points * 5
+        ))
+
+        # ── Speaking time from real timer tracking ───────────────────────────
+        speaking_sec = int(ts.speaking_durations.get(uid, 0.0))
 
         results.append({
             "user_id": uid,
@@ -264,10 +360,14 @@ async def compile_and_broadcast_final_summary(session_code: str, team_number: in
             "critical_thinking": critical_thinking_val,
             "creativity": creativity_val,
             "topic_understanding": topic_understanding_val,
-            "speaking_time": f"{int(ts.speaking_durations.get(uid, 0.0))}s",
-            "interruption_count": ts.interruption_counts.get(uid, 0),
-            "relevant_points": ts.relevant_points_count.get(uid, 0),
-            "off_topic_count": ts.off_topic_count.get(uid, 0)
+            "speaking_time": f"{speaking_sec}s",
+            "speaking_time_sec": speaking_sec,
+            "interruption_count": interruption_count,
+            "relevant_points": relevant_points,
+            "off_topic_count": ts.off_topic_count.get(uid, 0),
+            "agree_count": agree_count,
+            "disagree_count": disagree_count,
+            "question_count": question_count,
         })
 
     results.sort(key=lambda r: r["overall_score"], reverse=True)
@@ -392,6 +492,10 @@ def check_ai_moderator_rules(user_id: int, name: str, text: str, topic: str) -> 
     return None
 
 
+# DEPRECATED: This function computes scores using hardcoded arithmetic formulas
+# (e.g., WPM = words*4, confidence = 72 + words//8 * 3) that have no connection
+# to actual audio timing or real speech behavior. It is NOT called in the current
+# turn-based evaluation flow. Do NOT use in production.
 def calculate_live_metrics(text: str) -> dict:
     words = re.findall(r'\b\w+\b', text.lower())
     total_words = len(words)
@@ -459,8 +563,8 @@ def _save_evaluation_db_detailed(session_code: str, user_id: int, team_number: i
                 "critical_thinking_score": float(result.critical_thinking_score),
                 "topic_understanding_score": float(result.topic_understanding_score),
                 "voice_clarity_score": float(result.pronunciation_score),
-                "body_language_score": 85.0,
-                "eye_contact_score": 85.0,
+                "body_language_score": None,   # Not measurable without video analysis
+                "eye_contact_score": None,      # Not measurable without gaze tracking
                 "filler_words_count": result.filler_count,
                 "speech_speed_wpm": int(result.wpm),
                 "pauses_count": result.long_pause_count,
@@ -480,8 +584,8 @@ def _save_evaluation_db_detailed(session_code: str, user_id: int, team_number: i
             critical_thinking_score=result.critical_thinking_score,
             topic_understanding_score=result.topic_understanding_score,
             voice_clarity_score=result.pronunciation_score,
-            body_language_score=85.0,
-            eye_contact_score=85.0,
+            body_language_score=None,   # Not measurable without video analysis
+            eye_contact_score=None,      # Not measurable without gaze tracking
             confidence_score=result.confidence_score,
             filler_words_count=result.filler_count,
             speech_speed_wpm=int(result.wpm),
@@ -517,21 +621,21 @@ async def wait_and_broadcast_results(session_code: str, team_number: int, ts: Te
             "user_id": uid,
             "name": member.get("name"),
             "label": member.get("label"),
-            "overall_score": float(db_eval["overall_score"] if db_eval else mem_eval.get("overall_score", 70.0)),
-            "grammar_score": float(db_eval["grammar_score"] if db_eval else mem_eval.get("grammar_score", 70.0)),
-            "confidence_score": float(db_eval["confidence_score"] if db_eval else mem_eval.get("confidence_score", 70.0)),
-            "fluency_score": float(db_eval["fluency_score"] if db_eval else mem_eval.get("fluency_score", 70.0)),
-            "vocabulary_score": float(db_eval["content_quality"] if db_eval else mem_eval.get("vocabulary_score", 70.0)),
-            "pronunciation_score": float(db_eval["accent_score"] if db_eval else mem_eval.get("pronunciation_score", 70.0)),
-            "originality_score": float(db_eval.get("originality_score") if db_eval else mem_eval.get("originality_score", 75.0)),
-            "critical_thinking_score": float(db_eval.get("critical_thinking_score") if db_eval else mem_eval.get("critical_thinking_score", 75.0)),
-            "topic_understanding_score": float(db_eval.get("topic_understanding_score") if db_eval else mem_eval.get("topic_understanding_score", 75.0)),
-            "voice_clarity_score": float(db_eval.get("voice_clarity_score") if db_eval else mem_eval.get("voice_clarity_score", 75.0)),
-            "body_language_score": float(db_eval.get("body_language_score") if db_eval else mem_eval.get("body_language_score", 85.0)),
-            "eye_contact_score": float(db_eval.get("eye_contact_score") if db_eval else mem_eval.get("eye_contact_score", 85.0)),
-            "filler_words_count": int(db_eval.get("filler_words_count") if db_eval else mem_eval.get("filler_words_count", 0)),
-            "speech_speed_wpm": int(db_eval.get("speech_speed_wpm") if db_eval else mem_eval.get("speech_speed_wpm", 0)),
-            "pauses_count": int(db_eval.get("pauses_count") if db_eval else mem_eval.get("pauses_count", 0)),
+            "overall_score": float(db_eval["overall_score"] if db_eval else mem_eval.get("overall_score", 0.0)),
+            "grammar_score": float(db_eval["grammar_score"] if db_eval else mem_eval.get("grammar_score", 0.0)),
+            "confidence_score": float(db_eval["confidence_score"] if db_eval else mem_eval.get("confidence_score", 0.0)),
+            "fluency_score": float(db_eval["fluency_score"] if db_eval else mem_eval.get("fluency_score", 0.0)),
+            "vocabulary_score": float(db_eval["content_quality"] if db_eval else mem_eval.get("vocabulary_score", 0.0)),
+            "pronunciation_score": float(db_eval["accent_score"] if db_eval else mem_eval.get("pronunciation_score", 0.0)),
+            "originality_score": float(db_eval.get("originality_score") if db_eval and db_eval.get("originality_score") is not None else mem_eval.get("originality_score", 0.0)),
+            "critical_thinking_score": float(db_eval.get("critical_thinking_score") if db_eval and db_eval.get("critical_thinking_score") is not None else mem_eval.get("critical_thinking_score", 0.0)),
+            "topic_understanding_score": float(db_eval.get("topic_understanding_score") if db_eval and db_eval.get("topic_understanding_score") is not None else mem_eval.get("topic_understanding_score", 0.0)),
+            "voice_clarity_score": float(db_eval.get("voice_clarity_score") if db_eval and db_eval.get("voice_clarity_score") is not None else mem_eval.get("voice_clarity_score", 0.0)),
+            "body_language_score": float(db_eval.get("body_language_score")) if db_eval and db_eval.get("body_language_score") is not None else mem_eval.get("body_language_score", None),
+            "eye_contact_score": float(db_eval.get("eye_contact_score")) if db_eval and db_eval.get("eye_contact_score") is not None else mem_eval.get("eye_contact_score", None),
+            "filler_words_count": int(db_eval.get("filler_words_count") if db_eval and db_eval.get("filler_words_count") is not None else mem_eval.get("filler_words_count", 0)),
+            "speech_speed_wpm": int(db_eval.get("speech_speed_wpm") if db_eval and db_eval.get("speech_speed_wpm") is not None else mem_eval.get("speech_speed_wpm", 0)),
+            "pauses_count": int(db_eval.get("pauses_count") if db_eval and db_eval.get("pauses_count") is not None else mem_eval.get("pauses_count", 0)),
             "weaknesses": db_eval.get("weaknesses") if db_eval else mem_eval.get("weaknesses", ""),
             "tips": db_eval.get("improvement_tips") if db_eval else mem_eval.get("tips", ""),
             "strengths": db_eval.get("strengths") if db_eval else mem_eval.get("strengths", ""),
@@ -950,6 +1054,13 @@ async def gd_live_socket(
                         ts.live_previews[user_id] = text
                         if not ts.transcripts.get(user_id, "").strip():
                             ts.transcripts[user_id] = text
+                        # Track interruptions: if the turn timer is running and this user
+                        # is NOT the designated current speaker, count it as an interruption
+                        current_speaker = ts.get_current_speaker_id()
+                        if ts.timer_running and current_speaker and current_speaker != user_id:
+                            ts.interruption_counts[user_id] = (
+                                ts.interruption_counts.get(user_id, 0) + 1
+                            )
                         await manager.broadcast_to_team(session_code, team_number, "LIVE_SPEECH_BROADCAST", {
                             "user_id": user_id,
                             "text": text
@@ -969,6 +1080,18 @@ async def gd_live_socket(
 
                         ts.transcripts[user_id] = transcript
 
+                        # ── Track actual speaking duration from session timer ──────
+                        elapsed_sec = max(1.0, time.time() - ts.turn_start_time)
+                        ts.speaking_durations[user_id] = (
+                            ts.speaking_durations.get(user_id, 0.0) + elapsed_sec
+                        )
+                        # Compute real WPM from actual elapsed time + word count
+                        word_count_spoken = len(re.findall(r'\b\w+\b', transcript))
+                        real_wpm = round((word_count_spoken / elapsed_sec) * 60.0, 1) if elapsed_sec > 0 else 0.0
+                        real_wpm = max(0.0, min(400.0, real_wpm))  # Sanity cap
+                        logger.info("[SPEAKER_FINISHED] uid=%s elapsed=%.1fs words=%d real_wpm=%.1f",
+                                    user_id, elapsed_sec, word_count_spoken, real_wpm)
+
                         loop = asyncio.get_running_loop()
                         try:
                             result = await loop.run_in_executor(None, evaluate_transcript, transcript, None, ts.topic)
@@ -976,20 +1099,26 @@ async def gd_live_socket(
                         except Exception as exc:
                             logger.error("AI evaluation failed: %s", exc)
                             scores = {
-                                "overall": 75.0, "fluency": 75.0, "grammar": 75.0,
-                                "accent": 75.0, "relevance": 75.0, "quality": 75.0,
-                                "points": 37.5,
-                                "weaknesses": "Evaluation fallback", "tips": "Speak clearly and elaborate"
+                                "overall": 0.0, "fluency": 0.0, "grammar": 0.0,
+                                "accent": 0.0, "relevance": 0.0, "quality": 0.0,
+                                "points": 0.0,
+                                "weaknesses": "Evaluation failed — transcript may be too short.",
+                                "tips": "Speak clearly for at least 30 seconds."
                             }
                             result = None
 
                         eval_data = {
                             "overall_score": float(scores["overall"]),
-                            "grammar_score": float(result.grammar_score) if result else 75.0,
-                            "confidence_score": float(result.confidence_score) if result else 75.0,
-                            "fluency_score": float(result.fluency_score) if result else 75.0,
-                            "vocabulary_score": float(result.vocabulary_score) if result else 75.0,
-                            "pronunciation_score": float(result.pronunciation_score) if result else 75.0,
+                            "grammar_score": float(result.grammar_score) if result else 0.0,
+                            "confidence_score": float(result.confidence_score) if result else 0.0,
+                            "fluency_score": float(result.fluency_score) if result else 0.0,
+                            "vocabulary_score": float(result.vocabulary_score) if result else 0.0,
+                            "pronunciation_score": float(result.pronunciation_score) if result else 0.0,
+                            "topic_relevance_score": float(result.topic_relevance_score) if result else 0.0,
+                            "content_quality_score": float(result.content_quality_score) if result else 0.0,
+                            # Real WPM measured from actual speaking duration
+                            "wpm": real_wpm,
+                            "speaking_duration_sec": round(elapsed_sec, 1),
                         }
                         if result:
                             eval_data.update({
@@ -1045,6 +1174,14 @@ async def gd_live_socket(
 
             if event not in _RELAY_EVENTS:
                 continue
+
+            # Track behavioral signals from CHAT_MESSAGE before relaying.
+            # This updates teamwork (agree/disagree/questions) and leadership
+            # (summarization/topic-guidance) counters for real score computation.
+            if event == "CHAT_MESSAGE" and team_number:
+                ts = state.team_states.get(team_number)
+                if ts:
+                    _update_chat_signals(ts, user_id, payload.get("text", ""))
 
             is_admin = role == "admin"
             sender_id = user_id

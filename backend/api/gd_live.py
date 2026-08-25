@@ -517,8 +517,8 @@ def _evaluate_live_participant(
         critical_thinking_score=result.critical_thinking_score,
         topic_understanding_score=result.topic_understanding_score,
         voice_clarity_score=result.pronunciation_score,
-        body_language_score=85.0,
-        eye_contact_score=85.0,
+        body_language_score=None,   # Not measurable without video analysis
+        eye_contact_score=None,      # Not measurable without gaze tracking
         filler_words_count=result.filler_count,
         speech_speed_wpm=int(result.wpm),
         pauses_count=result.long_pause_count,
@@ -833,38 +833,45 @@ async def finalize_transcript(
 
 
 def _compute_scores(evaluation) -> dict:
-    """Shared score computation used by save and broadcast. Avoids duplication."""
-    relevance = min(100, evaluation.grammar_score * 0.3 + evaluation.fluency_score * 0.3 + evaluation.confidence_score * 0.4)
-    quality = min(100, evaluation.vocabulary_score * 0.5 + evaluation.overall_score * 0.5)
-    accent = evaluation.pronunciation_score
-    overall = round((evaluation.grammar_score + evaluation.fluency_score + accent + relevance + quality) / 5, 2)
+    """Score aggregation using direct AI module outputs — no re-derivation.
+
+    Uses evaluation.overall_score (already weighted by evaluation.py),
+    evaluation.topic_relevance_score (real TF-IDF analysis), and
+    evaluation.content_quality_score (real content analysis).
+    Weaknesses and tips come from the AI analysis, not from fixed thresholds.
+    """
+    overall = round(evaluation.overall_score, 2)
     points = round(overall * 0.5, 2)
-    weaknesses = []
-    tips = []
-    if evaluation.grammar_score < 70:
-        weaknesses.append("Grammar needs improvement")
-        tips.append("Practice sentence construction and verb tenses")
-    if evaluation.fluency_score < 70:
-        weaknesses.append("Fluency needs improvement")
-        tips.append("Speak slowly and use filler words naturally")
-    if evaluation.pronunciation_score < 70:
-        weaknesses.append("Pronunciation needs improvement")
-        tips.append("Practice difficult words and tongue twisters")
-    if evaluation.confidence_score < 70:
-        weaknesses.append("Confidence needs improvement")
-        tips.append("Maintain steady pace and practice eye contact")
-    if evaluation.vocabulary_score < 70:
-        weaknesses.append("Vocabulary needs improvement")
-        tips.append("Read widely and learn new words daily")
-    if not weaknesses:
-        weaknesses.append("Great overall performance!")
-        tips.append("Keep up the good work and challenge yourself with harder topics")
+    # Use AI-generated weaknesses and recommendations directly
+    weaknesses_list = list(evaluation.weaknesses) if evaluation.weaknesses else []
+    tips_list = list(evaluation.recommendations) if evaluation.recommendations else []
+    # Supplement only if AI produced no specific feedback
+    if not weaknesses_list:
+        if evaluation.grammar_score < 60:
+            weaknesses_list.append("Grammar needs improvement")
+            tips_list.append("Practice sentence construction and verb tenses")
+        if evaluation.fluency_score < 60:
+            weaknesses_list.append("Fluency needs improvement")
+            tips_list.append("Reduce filler words and improve speaking continuity")
+        if evaluation.confidence_score < 60:
+            weaknesses_list.append("Confidence needs improvement")
+            tips_list.append("Use assertive language and reduce hesitant phrases")
+        if evaluation.vocabulary_score < 60:
+            weaknesses_list.append("Vocabulary needs improvement")
+            tips_list.append("Incorporate domain-specific and advanced vocabulary")
+    if not weaknesses_list:
+        weaknesses_list.append("Good overall performance!")
+        tips_list.append("Keep up the good work and challenge yourself with harder topics")
     return {
-        "overall": overall, "points": points,
-        "fluency": evaluation.fluency_score, "grammar": evaluation.grammar_score,
-        "accent": accent, "relevance": relevance, "quality": quality,
-        "weaknesses": "; ".join(weaknesses),
-        "tips": "; ".join(tips),
+        "overall": overall,
+        "points": points,
+        "fluency": round(evaluation.fluency_score, 1),
+        "grammar": round(evaluation.grammar_score, 1),
+        "accent": round(evaluation.pronunciation_score, 1),
+        "relevance": round(evaluation.topic_relevance_score, 1),   # Real TF-IDF topic relevance
+        "quality": round(evaluation.content_quality_score, 1),     # Real content quality
+        "weaknesses": "; ".join(weaknesses_list),
+        "tips": "; ".join(tips_list),
     }
 
 
@@ -888,8 +895,8 @@ async def _save_evaluation_bg(
                 critical_thinking_score=evaluation.critical_thinking_score,
                 topic_understanding_score=evaluation.topic_understanding_score,
                 voice_clarity_score=evaluation.pronunciation_score,
-                body_language_score=85.0,
-                eye_contact_score=85.0,
+                body_language_score=None,   # Not measurable without video analysis
+                eye_contact_score=None,      # Not measurable without gaze tracking
                 confidence_score=evaluation.confidence_score,
                 filler_words_count=evaluation.filler_count,
                 speech_speed_wpm=int(evaluation.wpm),
