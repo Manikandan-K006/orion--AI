@@ -1,5 +1,4 @@
 import time
-import pytest
 from unittest.mock import MagicMock
 
 # Import helper functions from gd_ws
