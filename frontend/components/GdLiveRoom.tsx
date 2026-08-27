@@ -26,6 +26,35 @@ interface UseWebRTCReturn {
   micEnabled: boolean;
 }
 
+function VideoPlayer({ stream, muted = false }: { stream: MediaStream | null; muted?: boolean }) {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+
+  useEffect(() => {
+    if (videoRef.current && stream) {
+      videoRef.current.srcObject = stream;
+      videoRef.current.play().catch(() => {});
+    }
+  }, [stream]);
+
+  if (!stream) {
+    return (
+      <div className="w-full h-full flex items-center justify-center bg-slate-950">
+        <User className="w-8 h-8 text-slate-700" />
+      </div>
+    );
+  }
+
+  return (
+    <video
+      ref={videoRef}
+      autoPlay
+      playsInline
+      muted={muted}
+      className="w-full h-full object-cover"
+    />
+  );
+}
+
 function useWebRTC({ sessionCode, token, userId, send, subscribe }: UseWebRTCOptions): UseWebRTCReturn {
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [remoteStreams, setRemoteStreams] = useState<Map<number, MediaStream>>(new Map());
@@ -37,52 +66,83 @@ function useWebRTC({ sessionCode, token, userId, send, subscribe }: UseWebRTCOpt
   const getOrCreatePC = useCallback((peerId: number) => {
     if (pcsRef.current.has(peerId)) return pcsRef.current.get(peerId)!;
     const pc = new RTCPeerConnection({
-      iceServers: [{ urls: "stun:stun.l.google.com:19302" }, { urls: "stun:stun1.l.google.com:19302" }],
+      iceServers: [
+        { urls: "stun:stun.l.google.com:19302" },
+        { urls: "stun:stun1.l.google.com:19302" },
+        { urls: "stun:stun2.l.google.com:19302" }
+      ],
     });
+
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach((track) => {
-        pc.addTrack(track, localStreamRef.current!);
+        try {
+          pc.addTrack(track, localStreamRef.current!);
+        } catch (e) {
+          console.warn("[WebRTC] addTrack warning:", e);
+        }
       });
     }
+
     pc.onicecandidate = (e) => {
       if (e.candidate) {
         send("WEBRTC_ICE_CANDIDATE", { target_user_id: peerId, candidate: e.candidate.toJSON() });
       }
     };
+
     pc.ontrack = (e) => {
-      setRemoteStreams((prev) => {
-        const next = new Map(prev);
-        next.set(peerId, e.streams[0]);
-        return next;
-      });
+      console.log("[WebRTC] Received remote track from peer:", peerId, e.streams);
+      if (e.streams && e.streams[0]) {
+        setRemoteStreams((prev) => {
+          const next = new Map(prev);
+          next.set(peerId, e.streams[0]);
+          return next;
+        });
+      }
     };
+
     pcsRef.current.set(peerId, pc);
     return pc;
   }, [send]);
 
   const createOffer = useCallback(async (peerId: number) => {
-    const pc = getOrCreatePC(peerId);
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
-    send("WEBRTC_OFFER", { target_user_id: peerId, offer: pc.localDescription!.toJSON() });
+    try {
+      const pc = getOrCreatePC(peerId);
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      send("WEBRTC_OFFER", { target_user_id: peerId, offer: pc.localDescription!.toJSON() });
+    } catch (err) {
+      console.error("[WebRTC] createOffer failed for peer:", peerId, err);
+    }
   }, [getOrCreatePC, send]);
 
   const handleOffer = useCallback(async (peerId: number, offer: RTCSessionDescriptionInit) => {
-    const pc = getOrCreatePC(peerId);
-    await pc.setRemoteDescription(new RTCSessionDescription(offer));
-    const answer = await pc.createAnswer();
-    await pc.setLocalDescription(answer);
-    send("WEBRTC_ANSWER", { target_user_id: peerId, answer: pc.localDescription!.toJSON() });
+    try {
+      const pc = getOrCreatePC(peerId);
+      await pc.setRemoteDescription(new RTCSessionDescription(offer));
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      send("WEBRTC_ANSWER", { target_user_id: peerId, answer: pc.localDescription!.toJSON() });
+    } catch (err) {
+      console.error("[WebRTC] handleOffer failed for peer:", peerId, err);
+    }
   }, [getOrCreatePC, send]);
 
   const handleAnswer = useCallback(async (peerId: number, answer: RTCSessionDescriptionInit) => {
-    const pc = pcsRef.current.get(peerId);
-    if (pc) await pc.setRemoteDescription(new RTCSessionDescription(answer));
+    try {
+      const pc = pcsRef.current.get(peerId);
+      if (pc) await pc.setRemoteDescription(new RTCSessionDescription(answer));
+    } catch (err) {
+      console.error("[WebRTC] handleAnswer failed for peer:", peerId, err);
+    }
   }, []);
 
   const handleIceCandidate = useCallback(async (peerId: number, candidate: RTCIceCandidateInit) => {
-    const pc = pcsRef.current.get(peerId);
-    if (pc) await pc.addIceCandidate(new RTCIceCandidate(candidate));
+    try {
+      const pc = pcsRef.current.get(peerId);
+      if (pc) await pc.addIceCandidate(new RTCIceCandidate(candidate));
+    } catch (err) {
+      console.error("[WebRTC] handleIceCandidate failed for peer:", peerId, err);
+    }
   }, []);
 
   useEffect(() => {
@@ -91,6 +151,13 @@ function useWebRTC({ sessionCode, token, userId, send, subscribe }: UseWebRTCOpt
       stream = s;
       localStreamRef.current = s;
       setLocalStream(s);
+      pcsRef.current.forEach((pc) => {
+        s.getTracks().forEach((track) => {
+          if (!pc.getSenders().some((sender) => sender.track === track)) {
+            pc.addTrack(track, s);
+          }
+        });
+      });
     }).catch((err) => {
       console.warn("[WebRTC] getUserMedia failed:", err);
       navigator.mediaDevices.getUserMedia({ audio: true }).then((s) => {
@@ -127,13 +194,18 @@ function useWebRTC({ sessionCode, token, userId, send, subscribe }: UseWebRTCOpt
   useEffect(() => {
     if (!localStream) return;
     const handler = (msg: GDLiveWsMessage) => {
-      if (msg.event === "TEAM_STATE_UPDATED" || msg.event === "STATE_SYNC") {
+      if (msg.event === "TEAM_STATE_UPDATED" || msg.event === "STATE_SYNC" || msg.event === "PARTICIPANT_JOINED") {
         const members = msg.payload?.members || msg.payload?.state?.members || [];
         members.forEach((m: any) => {
-          if (m.user_id !== userId && !pcsRef.current.has(m.user_id)) {
+          if (m.user_id && m.user_id !== userId && !pcsRef.current.has(m.user_id)) {
             createOffer(m.user_id);
           }
         });
+        if (msg.event === "PARTICIPANT_JOINED" && msg.payload?.user_id && msg.payload.user_id !== userId) {
+          if (!pcsRef.current.has(msg.payload.user_id)) {
+            createOffer(msg.payload.user_id);
+          }
+        }
       }
     };
     const unsub = subscribe(handler);
@@ -162,6 +234,7 @@ function useWebRTC({ sessionCode, token, userId, send, subscribe }: UseWebRTCOpt
 
   return { localStream, remoteStreams, toggleCamera, toggleMic, cameraEnabled, micEnabled };
 }
+
 
 interface CircularProgressProps {
   percent: number;
@@ -1445,13 +1518,7 @@ export default function GdLiveRoom({
                 <div className="grid grid-cols-2 gap-3">
                   {/* Local Video Tile */}
                   <div className={`relative rounded-xl overflow-hidden border-2 aspect-video bg-slate-950 ${isMyTurn ? "border-indigo-500 shadow-lg shadow-indigo-500/20" : "border-slate-800"}`}>
-                    {localStream ? (
-                      <video ref={(el) => { if (el) el.srcObject = localStream; }} autoPlay muted playsInline className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center bg-slate-950">
-                        <User className="w-8 h-8 text-slate-700" />
-                      </div>
-                    )}
+                    <VideoPlayer stream={cameraEnabled ? localStream : null} muted={true} />
                     <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-2">
                       <div className="flex items-center justify-between">
                         <span className="text-[10px] font-bold text-white truncate">You</span>
@@ -1473,7 +1540,7 @@ export default function GdLiveRoom({
                     return (
                       <div key={m.user_id} className={`relative rounded-xl overflow-hidden border-2 aspect-video bg-slate-950 ${isSpeaker ? "border-indigo-500 shadow-lg shadow-indigo-500/20" : "border-slate-800"}`}>
                         {stream && camOn ? (
-                          <video ref={(el) => { if (el) el.srcObject = stream; }} autoPlay playsInline className="w-full h-full object-cover" />
+                          <VideoPlayer stream={stream} muted={false} />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center bg-slate-950">
                             <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-650 flex items-center justify-center text-white font-black text-sm">

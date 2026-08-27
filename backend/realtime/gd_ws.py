@@ -872,6 +872,18 @@ class GDLiveConnectionManager:
         except Exception as exc:
             logger.warning("send_personal failed: %s", exc)
 
+    async def send_to_user(self, session_code: str, target_user_id: int, event: str, payload: Any = None) -> None:
+        async with self._lock:
+            room = self._rooms.get(session_code, {})
+            target_ws = None
+            for ci in room.values():
+                if ci.user_id == target_user_id:
+                    target_ws = ci.ws
+                    break
+        if target_ws:
+            await self.send_personal(target_ws, event, payload)
+
+
     async def broadcast(self, session_code: str, event: str, payload: Any = None) -> None:
         async with self._lock:
             room = self._rooms.get(session_code, {})
@@ -1323,6 +1335,17 @@ async def gd_live_socket(
                     {"user_id": sender_id, "name": name,
                      "label": state.participants.get(sender_id, {}).get("label"),
                      "text": text[:1000]})
+            elif event in ("WEBRTC_OFFER", "WEBRTC_ANSWER", "WEBRTC_ICE_CANDIDATE"):
+                target_uid = payload.get("target_user_id")
+                if target_uid:
+                    relay_payload = {**payload, "from_user_id": sender_id}
+                    await manager.send_to_user(session_code, target_uid, event, relay_payload)
+            elif event in ("CAMERA_STATUS", "MIC_STATUS"):
+                relay_payload = {**payload, "user_id": sender_id}
+                if team_number:
+                    await manager.broadcast_to_team(session_code, team_number, event, relay_payload)
+                else:
+                    await manager.broadcast(session_code, event, relay_payload)
             elif event in ("START_GD", "PAUSE_GD", "RESUME_GD", "END_GD",
                            "RESET_TIMER", "MUTE_PARTICIPANT", "REMOVE_PARTICIPANT"):
                 if not is_admin:
