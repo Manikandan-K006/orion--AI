@@ -161,12 +161,11 @@ def transcribe_audio(audio_path: str, preprocess: bool = True) -> dict:
         }
     except Exception as exc:
         logger.warning("Whisper speech recognition failed: %s\n%s", exc, traceback.format_exc())
-        fallback_transcript = "I strongly believe that coding and communication skills should be taught from school level to build logical thinking and future career readiness."
         return {
             "audio_path": audio_path,
-            "transcript": fallback_transcript,
-            "message": "Transcription completed using Speech Analytics Engine",
-            "success": True,
+            "transcript": "",
+            "message": f"Speech recognition error: {exc}",
+            "success": False,
         }
 
 
@@ -290,13 +289,11 @@ def transcribe_chunk_slice(audio_path: str, start_time: float) -> dict:
             except Exception:
                 pass
         
-        fallback_transcript = "I strongly believe that coding and communication skills should be taught from school level to build logical thinking and future career readiness."
-        returned_transcript = fallback_transcript if start_time == 0.0 else ""
         return {
             "audio_path": audio_path,
-            "transcript": returned_transcript,
-            "success": True,
-            "message": f"Transcription fallback activated due to error: {exc}",
+            "transcript": "",
+            "success": False,
+            "error": f"Transcription error: {exc}",
         }
 
 
