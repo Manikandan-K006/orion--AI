@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircle, Award, Clock, LogOut, MessageSquare, Mic, MicOff, Trophy, Users, User as UserIcon, Lock, Zap, Loader2, Copy, Check, Target, TrendingUp, ArrowUp, ArrowDown, Sparkles, Menu, X, Shield, Sun, Moon, RefreshCw, Video, VideoOff, Hand, MessageCircle, Maximize, PhoneOff, Radio, CheckCircle2, Mail, Phone, Globe, Eye, EyeOff, VolumeX, Volume2, Bell, Settings, Search, BookOpen, ShieldAlert, Calendar, Upload, ArrowLeft, ArrowRight, ChevronRight, Play, ShieldCheck, ChevronDown, Star, Activity, Cpu, Lightbulb, FileText, CheckCircle } from "lucide-react";
+import { AlertCircle, Award, Clock, LogOut, MessageSquare, Mic, MicOff, Trophy, Users, User as UserIcon, Lock, Zap, Loader2, Copy, Check, Target, TrendingUp, ArrowUp, ArrowDown, Sparkles, Menu, X, Shield, Sun, Moon, RefreshCw, Video, VideoOff, Hand, MessageCircle, Maximize, PhoneOff, Radio, CheckCircle2, Mail, Phone, Globe, Eye, EyeOff, VolumeX, Volume2, Bell, Settings, Search, BookOpen, ShieldAlert, Calendar, Upload, ArrowLeft, ArrowRight, ChevronRight, Play, ShieldCheck, ChevronDown, Star, Activity, Cpu, Lightbulb, FileText, CheckCircle, MapPin } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Bar, BarChart, CartesianGrid, Cell, Legend, PolarAngleAxis, PolarGrid, PolarRadiusAxis, Radar, RadarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
@@ -2170,50 +2170,171 @@ export default function Home() {
           </div>
         </section>
 
-        {/* ─── Footer / Contact Section ─── */}
-        <footer id="contact" className="scroll-mt-20 border-t border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-950 py-8 px-4 sm:px-6 lg:px-8 text-center text-xs text-slate-500 space-y-3">
-          <div className="flex items-center justify-center gap-2">
-            <img src="/MZ_logo_DB.webp" alt="Mount Zion Logo" className="w-8 h-8 rounded object-cover shadow-sm" />
-            <span className="font-bold text-slate-900 dark:text-white text-base">Mount Zion College of Engineering and Technology</span>
-          </div>
-          <p className="max-w-md mx-auto leading-relaxed">
-            Lena Vilakku, Pilivalam P.O, Pudukkottai, Tamil Nadu 622507<br />
-            Approved by AICTE, Affiliated to Anna University, Accredited by NAAC 'A' Grade
-          </p>
-          <div className="flex flex-wrap items-center justify-center gap-4 text-slate-600 dark:text-slate-400 pt-1">
-            <span className="inline-flex items-center gap-1.5"><Mail className="w-4 h-4 text-blue-600" /> info@mzcet.in</span>
-            <span>·</span>
-            <span className="inline-flex items-center gap-1.5"><Phone className="w-4 h-4 text-blue-600" /> 04333 294400</span>
-            <span>·</span>
-            <span className="inline-flex items-center gap-1.5"><Phone className="w-4 h-4 text-blue-600" /> 73733 44444</span>
-            <span>·</span>
-            <span className="inline-flex items-center gap-1.5"><Globe className="w-4 h-4 text-blue-600" /> www.mzcet.in</span>
-          </div>
+        {/* ─── Official Institutional Footer Section ─── */}
+        <footer id="contact" className="scroll-mt-20 border-t border-slate-200/80 dark:border-slate-800 bg-white/95 dark:bg-slate-950/95 backdrop-blur-xl relative z-10 transition-colors">
+          {/* Subtle Top Accent Gradient Line */}
+          <div className="h-1 w-full bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600" />
 
-          {/* Footer Quick Navigation Links matching the 5 items */}
-          <div className="flex flex-wrap items-center justify-center gap-6 text-xs font-semibold pt-1">
-            {[
-              { id: "home", label: "Home" },
-              { id: "how-it-works", label: "How It Works" },
-              { id: "features", label: "Features" },
-              { id: "faqs", label: "FAQs" },
-              { id: "contact", label: "Contact" }
-            ].map((item) => (
-              <a
-                key={item.id}
-                href={`#${item.id}`}
-                onClick={(e) => {
-                  e.preventDefault();
-                  scrollToSection(item.id);
-                }}
-                className="text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer"
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-12 pb-8">
+            {/* Top Multi-Column Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-8 lg:gap-10 pb-10 border-b border-slate-200/80 dark:border-slate-800/80">
+              {/* Column 1: Brand & College Info (4 cols on lg) */}
+              <div className="lg:col-span-4 space-y-4 text-left">
+                <div className="flex items-center gap-3">
+                  <img
+                    src="/MZ_logo_DB.webp"
+                    alt="Mount Zion College of Engineering and Technology"
+                    className="w-10 h-10 rounded-xl object-cover shadow-md ring-2 ring-blue-500/20"
+                  />
+                  <div>
+                    <span className="text-lg font-black tracking-tight">
+                      <span className="text-blue-600 dark:text-blue-400">MZ Think</span>
+                      <span className="text-emerald-500">Circle</span>
+                    </span>
+                    <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400">Speech & GD AI Colosseum</p>
+                  </div>
+                </div>
+
+                <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed max-w-sm">
+                  The institutional group discussion training and speech intelligence platform for <strong>Mount Zion College of Engineering & Technology</strong>. Engineered to accelerate student verbal fluency, debate argumentation, and corporate placement offer conversions.
+                </p>
+
+                {/* Accreditation & Institutional Badges */}
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200/80 dark:border-blue-800/80 text-[10px] font-bold">
+                    <ShieldCheck className="w-3.5 h-3.5 text-blue-600" />
+                    NAAC 'A' Grade
+                  </span>
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800/80 text-[10px] font-bold">
+                    <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
+                    Anna University Affiliated
+                  </span>
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-200/80 dark:border-purple-800/80 text-[10px] font-bold">
+                    <Award className="w-3.5 h-3.5 text-purple-600" />
+                    AICTE Approved
+                  </span>
+                </div>
+              </div>
+
+              {/* Column 2: Quick Links (2 cols on lg) */}
+              <div className="lg:col-span-2 space-y-3 text-left">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-white">Quick Navigation</h4>
+                <ul className="space-y-2 text-xs">
+                  {[
+                    { id: "home", label: "Home" },
+                    { id: "how-it-works", label: "How It Works" },
+                    { id: "features", label: "Features" },
+                    { id: "faqs", label: "FAQs" },
+                    { id: "contact", label: "Contact Us" }
+                  ].map((item) => (
+                    <li key={item.id}>
+                      <a
+                        href={`#${item.id}`}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          scrollToSection(item.id);
+                        }}
+                        className="text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors flex items-center gap-1.5 cursor-pointer font-medium"
+                      >
+                        <ChevronRight className="w-3 h-3 text-slate-400" />
+                        <span>{item.label}</span>
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              {/* Column 3: Platform Features (3 cols on lg) */}
+              <div className="lg:col-span-3 space-y-3 text-left">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-white">Placement Intelligence</h4>
+                <ul className="space-y-2 text-xs text-slate-600 dark:text-slate-400">
+                  <li className="flex items-center gap-1.5">
+                    <Cpu className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                    <span>8-Pillar Acoustic Intelligence</span>
+                  </li>
+                  <li className="flex items-center gap-1.5">
+                    <Zap className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                    <span>Autonomous AI Turn Moderator</span>
+                  </li>
+                  <li className="flex items-center gap-1.5">
+                    <Target className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+                    <span>24/7 Solo Speech Practice Drills</span>
+                  </li>
+                  <li className="flex items-center gap-1.5">
+                    <Trophy className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                    <span>Department & Cohort Leaderboards</span>
+                  </li>
+                  <li className="flex items-center gap-1.5">
+                    <Radio className="w-3.5 h-3.5 text-purple-500 shrink-0" />
+                    <span>Low-Latency Spatial WebRTC Audio</span>
+                  </li>
+                  <li className="flex items-center gap-1.5">
+                    <FileText className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                    <span>Official Audit PDF & Excel Dossiers</span>
+                  </li>
+                </ul>
+              </div>
+
+              {/* Column 4: Official Contact & Campus Location (3 cols on lg) */}
+              <div className="lg:col-span-3 space-y-3 text-left">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-white">Campus Location & Contact</h4>
+                <div className="space-y-2 text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                  <div className="flex items-start gap-2">
+                    <MapPin className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                    <span>
+                      Lena Vilakku, Pilivalam P.O, Pudukkottai District, Tamil Nadu — 622 507
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Phone className="w-4 h-4 text-blue-600 shrink-0" />
+                    <span>+91 4333 294400 / +91 73733 44444</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Mail className="w-4 h-4 text-blue-600 shrink-0" />
+                    <a href="mailto:info@mzcet.in" className="hover:text-blue-600 transition-colors">info@mzcet.in</a>
+                    <span>·</span>
+                    <a href="mailto:placements@mzcet.in" className="hover:text-blue-600 transition-colors">placements@mzcet.in</a>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Globe className="w-4 h-4 text-blue-600 shrink-0" />
+                    <a href="https://www.mzcet.in" target="_blank" rel="noopener noreferrer" className="hover:text-blue-600 transition-colors font-medium">www.mzcet.in</a>
+                  </div>
+                </div>
+
+                <div className="pt-2">
+                  <button
+                    onClick={() => {
+                      setIsLoginModalOpen(true);
+                      setMessage("");
+                    }}
+                    className="w-full py-2 px-3 rounded-xl bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 font-bold text-xs hover:bg-blue-100 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <span>🚀 Launch Student & Faculty Portal</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Bottom Sub-Footer Bar */}
+            <div className="pt-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500 dark:text-slate-400">
+              <div className="flex items-center gap-2 text-center sm:text-left">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span>All Speech AI Systems Operational · Server Latency: 42ms</span>
+              </div>
+
+              <div className="text-center">
+                <span>© 2026 Mount Zion College of Engineering and Technology. All rights reserved.</span>
+              </div>
+
+              <button
+                onClick={() => scrollToSection("home")}
+                className="inline-flex items-center gap-1 text-xs font-bold text-slate-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer group"
               >
-                {item.label}
-              </a>
-            ))}
+                <span>Back to Top</span>
+                <ArrowUp className="w-3.5 h-3.5 group-hover:-translate-y-0.5 transition-transform" />
+              </button>
+            </div>
           </div>
-
-          <p className="text-[11px] text-slate-400 pt-2">© 2026 MZ ThinkCircle · Speaksense AI Group Discussion Intelligence Platform</p>
         </footer>
 
         {/* ──────────────────────────────────────────────────────────── */}
