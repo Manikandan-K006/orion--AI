@@ -1,8 +1,8 @@
 "use client";
 
-import { AlertCircle, Award, Clock, LogOut, MessageSquare, Mic, MicOff, Trophy, Users, User as UserIcon, Lock, Zap, Loader2, Copy, Check, Target, TrendingUp, ArrowUp, ArrowDown, Sparkles, Menu, X, Shield, Sun, Moon, RefreshCw, Video, VideoOff, Hand, MessageCircle, Maximize, PhoneOff, Radio, CheckCircle2, Mail, Phone, Globe, Eye, EyeOff, VolumeX, Volume2, Bell, Settings, Search, BookOpen, ShieldAlert, Calendar, Upload } from "lucide-react";
+import { AlertCircle, Award, Clock, LogOut, MessageSquare, Mic, MicOff, Trophy, Users, User as UserIcon, Lock, Zap, Loader2, Copy, Check, Target, TrendingUp, ArrowUp, ArrowDown, Sparkles, Menu, X, Shield, Sun, Moon, RefreshCw, Video, VideoOff, Hand, MessageCircle, Maximize, PhoneOff, Radio, CheckCircle2, Mail, Phone, Globe, Eye, EyeOff, VolumeX, Volume2, Bell, Settings, Search, BookOpen, ShieldAlert, Calendar, Upload, ArrowLeft, ArrowRight, ChevronRight, Play, ShieldCheck, ChevronDown, Star, Activity, Cpu, Lightbulb, FileText, CheckCircle } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { Bar, BarChart, CartesianGrid, Cell, Legend, PolarAngleAxis, PolarGrid, Radar, RadarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, Cell, Legend, PolarAngleAxis, PolarGrid, PolarRadiusAxis, Radar, RadarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -266,6 +266,11 @@ export default function Home() {
   const [adminRegisterNumber, setAdminRegisterNumber] = useState("");
   const [adminPassword, setAdminPassword] = useState("");
   const [loginTab, setLoginTab] = useState<"student" | "admin">("student");
+  const [loginRoleTab, setLoginRoleTab] = useState<"student" | "admin" | "principal" | "coordinator">("student");
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+  const [pendingGdRedirect, setPendingGdRedirect] = useState(false);
+  const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(0);
+  const [activeTopicCategory, setActiveTopicCategory] = useState<"all" | "tech" | "placement" | "society">("all");
   const [theme, setTheme] = useState<"light" | "dark">("dark");
   const [mounted, setMounted] = useState(false);
   const [notifications, setNotifications] = useState<Array<{ id: string | number; time: string; icon: string; title: string; desc: string; read: boolean }>>([
@@ -273,6 +278,34 @@ export default function Home() {
     { id: 2, time: "12 hours ago", icon: "Target", title: "Daily Practice Goal Reminder", desc: "Build consistency by completing a 2-minute solo AI speaking session on public speech fundamentals.", read: true },
     { id: 3, time: "1 day ago", icon: "Sparkles", title: "AI Skill Analysis Complete", desc: "A new skill analysis radar matrix is available based on your latest solo practice performance topic.", read: true },
   ]);
+
+  const [activeNav, setActiveNav] = useState<string>("home");
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const sections = ["contact", "faqs", "features", "how-it-works", "home"];
+      const scrollPos = window.scrollY + 140;
+      for (const s of sections) {
+        const el = document.getElementById(s);
+        if (el && el.offsetTop <= scrollPos) {
+          setActiveNav(s);
+          break;
+        }
+      }
+    };
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  const scrollToSection = (id: string) => {
+    setActiveNav(id);
+    const element = document.getElementById(id);
+    if (element) {
+      const yOffset = -70;
+      const y = element.getBoundingClientRect().top + window.pageYOffset + yOffset;
+      window.scrollTo({ top: y, behavior: "smooth" });
+    }
+  };
 
   useEffect(() => {
     setMounted(true);
@@ -664,10 +697,11 @@ export default function Home() {
     loginLockRef.current = true;
     console.time("Login-Total");
 
-    const rn = loginTab === "student" ? studentRegisterNumber : adminRegisterNumber;
-    const pw = loginTab === "student" ? (studentPassword || "Password123") : adminPassword;
-    if (!rn.trim()) {
-      setMessage("Enter your register number / SPR number");
+    const isStudent = loginRoleTab === "student" || loginTab === "student";
+    const rn = (isStudent ? studentRegisterNumber : adminRegisterNumber).trim();
+    const pw = isStudent ? (studentPassword || "Password123") : adminPassword;
+    if (!rn) {
+      setMessage(`Enter your ${isStudent ? "register number" : "SPR / Faculty ID"}`);
       loginLockRef.current = false;
       return;
     }
@@ -677,15 +711,25 @@ export default function Home() {
       console.time("Login-API-Request");
       const res = await apiRequest<{ access_token: string; user: User }>("/login/register-number", {
         method: "POST",
-        body: JSON.stringify({ register_number: rn, password: loginTab === "student" ? (pw || "Password123") : pw })
+        body: JSON.stringify({ register_number: rn, password: isStudent ? (pw || "Password123") : pw })
       });
       console.timeEnd("Login-API-Request");
 
       localStorage.setItem("mzgd_token", res.access_token);
       setToken(res.access_token);
       setUser(res.user);
-      setView("dashboard");
+      setIsLoginModalOpen(false);
       voice.announceLogin();
+
+      if (pendingGdRedirect && gdLiveCode.trim()) {
+        setPendingGdRedirect(false);
+        setView("gd-live");
+        setTimeout(() => {
+          joinGdLive();
+        }, 300);
+      } else {
+        setView("dashboard");
+      }
 
       // Lazy load dashboard data in the background
       loadDashboardData(res.access_token, res.user);
@@ -1645,115 +1689,682 @@ export default function Home() {
 
   if (!user) {
     return (
-      <div className={`min-h-screen flex items-center justify-center relative overflow-hidden ${theme === "dark" ? "dark" : ""}`}>
-        {/* Theme-based animated background */}
-        <div className="fixed inset-0 z-0">
-          <img
-            src={theme === "dark" ? "/login_dark_bg.jpeg" : "/new_light_BG.jpeg"}
-            alt=""
-            className="w-full h-full object-cover"
+      <div className={`min-h-screen relative overflow-x-hidden ${theme === "dark" ? "dark" : ""}`}>
+        {/* ─── Premium Aurora Mesh & Subtle Vignette Grid Background (Replaces Dot Pattern) ─── */}
+        <div className="fixed inset-0 z-0 bg-[#f8fafc] dark:bg-[#070b12] transition-colors pointer-events-none overflow-hidden">
+          {/* Subtle Modern Linear Grid with Soft Radial Mask Fade */}
+          <div
+            className="absolute inset-0 opacity-40 dark:opacity-20"
+            style={{
+              backgroundImage:
+                theme === "dark"
+                  ? "linear-gradient(to right, rgba(148, 163, 184, 0.08) 1px, transparent 1px), linear-gradient(to bottom, rgba(148, 163, 184, 0.08) 1px, transparent 1px)"
+                  : "linear-gradient(to right, rgba(100, 116, 139, 0.12) 1px, transparent 1px), linear-gradient(to bottom, rgba(100, 116, 139, 0.12) 1px, transparent 1px)",
+              backgroundSize: "48px 48px",
+              maskImage: "radial-gradient(ellipse 80% 60% at 50% 25%, black 40%, transparent 90%)",
+              WebkitMaskImage: "radial-gradient(ellipse 80% 60% at 50% 25%, black 40%, transparent 90%)"
+            }}
           />
-          <div className="absolute inset-0 backdrop-blur-[2px]" style={{ background: theme === "dark" ? "rgba(15,23,42,0.45)" : "rgba(248,250,252,0.35)" }} />
+
+          {/* Ambient Radiant Aurora Glow Orbs */}
+          <div className="absolute -top-[20%] left-1/2 -translate-x-1/2 w-[1000px] h-[600px] bg-gradient-to-b from-indigo-500/15 via-blue-500/10 to-transparent blur-[140px] rounded-full pointer-events-none" />
+          <div className="absolute top-[10%] -left-[10%] w-[500px] h-[500px] bg-gradient-to-tr from-sky-400/12 to-transparent blur-[120px] rounded-full pointer-events-none" />
+          <div className="absolute top-[15%] -right-[10%] w-[550px] h-[550px] bg-gradient-to-tl from-purple-500/12 to-transparent blur-[130px] rounded-full pointer-events-none" />
+          <div className="absolute top-[65%] left-1/2 -translate-x-1/2 w-[800px] h-[450px] bg-gradient-to-t from-blue-600/8 via-indigo-600/5 to-transparent blur-[140px] rounded-full pointer-events-none" />
         </div>
 
-        {/* Theme toggle */}
-        <button onClick={toggleTheme} className="fixed top-4 right-4 z-20 p-2.5 rounded-xl btn-secondary" suppressHydrationWarning>
-          {theme === "dark" ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-        </button>
-        <div className="relative z-10 w-full max-w-sm md:max-w-md mx-3 md:mx-4 animate-fade-up">
-          <div className="text-center mb-6 md:mb-10">
-            <div className="icon-badge icon-purple mx-auto mb-3 md:mb-5" style={{ width: "72px", height: "72px" }}>
-              <img src="/MZ_logo_DB.webp" alt="Mount Zion Logo" className="w-12 h-12 rounded-xl object-cover" />
+        {/* ─── Top Sticky Navbar (Screenshot 1) ─── */}
+        <header className="sticky top-0 z-40 w-full border-b border-slate-200/80 dark:border-slate-800/80 bg-white/85 dark:bg-slate-950/85 backdrop-blur-md transition-colors">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            {/* Logo + Brand (Without plus symbol) */}
+            <div className="flex items-center gap-2.5">
+              <img
+                src="/MZ_logo_DB.webp"
+                alt="Mount Zion Logo"
+                className="w-9 h-9 rounded-lg object-cover shadow-sm"
+              />
+              <span className="font-extrabold text-xl tracking-tight text-slate-900 dark:text-white">
+                MZ ThinkCircle
+              </span>
             </div>
-            <h1 className="text-2xl md:text-4xl font-bold mb-1 md:mb-2 text-heading">MZ ThinkCircle</h1>
-            <p className="text-xs md:text-base text-muted-soft">AI Group Discussion Platform</p>
+
+            {/* Navigation links (ONLY 5 items matching user request: Home, How It Works, Features, FAQs, Contact) */}
+            <nav className="hidden md:flex items-center gap-8 text-sm font-medium">
+              {[
+                { id: "home", label: "Home" },
+                { id: "how-it-works", label: "How It Works" },
+                { id: "features", label: "Features" },
+                { id: "faqs", label: "FAQs" },
+                { id: "contact", label: "Contact" }
+              ].map((item) => {
+                const isActive = activeNav === item.id;
+                return (
+                  <a
+                    key={item.id}
+                    href={`#${item.id}`}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      scrollToSection(item.id);
+                    }}
+                    className={`transition-all duration-200 cursor-pointer ${
+                      isActive
+                        ? "text-blue-600 dark:text-blue-400 font-bold"
+                        : "text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
+                    }`}
+                  >
+                    {item.label}
+                  </a>
+                );
+              })}
+            </nav>
+
+            {/* Right Controls */}
+            <div className="flex items-center gap-3">
+              <button
+                onClick={toggleTheme}
+                className="w-10 h-10 rounded-xl border border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 text-slate-700 dark:text-slate-200 flex items-center justify-center hover:scale-105 transition-transform shadow-sm"
+                title="Toggle light/dark theme"
+              >
+                {theme === "dark" ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-indigo-600" />}
+              </button>
+              <button
+                onClick={() => {
+                  setIsLoginModalOpen(true);
+                  setMessage("");
+                }}
+                className="h-10 px-5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm shadow-md shadow-blue-500/20 transition-all flex items-center gap-1.5"
+              >
+                <span>Login</span>
+              </button>
+            </div>
           </div>
-          <div className="card">
-            {/* Login tabs */}
-            <div className="flex mb-6 rounded-xl p-1 surface-2">
-              <button
-                onClick={() => { setLoginTab("student"); setMessage(""); }}
-                className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium rounded-lg transition-all duration-300 ${loginTab === "student" ? "btn-primary" : "text-muted-soft hover:text-heading"
-                  }`}
-              >
-                <Users className="w-4 h-4" /> Student Login
-              </button>
-              <button
-                onClick={() => { setLoginTab("admin"); setMessage(""); }}
-                className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium rounded-lg transition-all duration-300 ${loginTab === "admin" ? "btn-primary" : "text-muted-soft hover:text-heading"
-                  }`}
-              >
-                <Shield className="w-4 h-4" /> Admin Login
-              </button>
+        </header>
+
+        {/* ─── Full-Viewport Hero Section ─── */}
+        <section
+          id="home"
+          className="relative z-10 min-h-[calc(100vh-4rem)] flex flex-col justify-center items-center py-6 px-4 sm:px-6 lg:px-8 max-w-6xl mx-auto text-center scroll-mt-16"
+        >
+          {/* Ambient Glow Aura */}
+          <div className="pointer-events-none absolute -top-12 left-1/2 -translate-x-1/2 w-[700px] h-[360px] bg-gradient-to-tr from-blue-500/15 via-indigo-500/20 to-purple-500/15 blur-[130px] rounded-full" />
+
+          <div className="w-full space-y-6 sm:space-y-7 flex flex-col items-center my-auto">
+            {/* Institutional Pill Badge */}
+            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold bg-blue-50/90 dark:bg-blue-950/60 border border-blue-200/90 dark:border-blue-800/80 text-blue-700 dark:text-blue-300 shadow-sm animate-fade-in">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span>AI Group Discussion & Speech Intelligence — Mount Zion College</span>
             </div>
-            <div className="space-y-4 md:space-y-5">
-              <div>
-                <label className="block text-xs md:text-sm font-medium mb-1 md:mb-1.5 text-heading">
-                  {loginTab === "student" ? "Register Number" : "SPR Number"}
-                </label>
-                <Input
-                  placeholder={loginTab === "student" ? "911724205001" : "12345"}
-                  value={loginTab === "student" ? studentRegisterNumber : adminRegisterNumber}
-                  onChange={(e) => loginTab === "student" ? setStudentRegisterNumber(e.target.value) : setAdminRegisterNumber(e.target.value)}
-                  className="inp w-full"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1.5 text-heading">Password</label>
-                <Input
-                  type="password"
-                  placeholder={loginTab === "student" ? "Default: Password123" : "Mzorator@admin"}
-                  value={loginTab === "student" ? studentPassword : adminPassword}
-                  onChange={(e) => loginTab === "student" ? setStudentPassword(e.target.value) : setAdminPassword(e.target.value)}
-                  className="inp w-full"
-                />
-              </div>
-              {loginTab === "admin" && (
-                <div className="rounded-lg p-3 surface-2 border border-amber-500/30">
-                  <p className="text-xs text-amber-600 dark:text-amber-400">
-                    <Shield className="w-3 h-3 inline mr-1" />
-                    Admin demo: SPR <code className="text-heading font-mono">12345</code> / Password <code className="text-heading font-mono">Mzorator@admin</code>
-                  </p>
-                </div>
-              )}
-              <Button
-                className="group relative w-full btn-primary h-12 text-lg font-semibold"
-                onClick={handleLogin}
-                disabled={loading}
+
+            {/* Subtitle & Title */}
+            <div className="space-y-2.5 max-w-4xl">
+              <p className="text-xs sm:text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">
+                Mount Zion College of Engineering And Technology
+              </p>
+              <h1 className="text-3xl sm:text-5xl md:text-6xl font-extrabold tracking-tight text-slate-900 dark:text-white leading-[1.12]">
+                <span className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 bg-clip-text text-transparent">
+                  Master Campus Group Discussions
+                </span>
+                <br />
+                <span className="text-slate-900 dark:text-white">With Real-Time Speech AI</span>
+              </h1>
+            </div>
+
+            <p className="text-sm sm:text-base text-slate-600 dark:text-slate-300 max-w-3xl mx-auto font-medium leading-relaxed">
+              Articulate with confidence, master turn-taking dynamics, and receive instantaneous 8-pillar acoustic feedback. Engineered for campus recruitment and Tier-1 placement rounds.
+            </p>
+
+            {/* Primary Action Buttons */}
+            <div className="flex flex-wrap items-center justify-center gap-3.5 pt-1">
+              <button
+                onClick={() => {
+                  setIsLoginModalOpen(true);
+                  setMessage("");
+                }}
+                className="h-12 px-8 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm sm:text-base shadow-xl shadow-blue-600/25 transition-all flex items-center gap-2 hover:-translate-y-0.5 cursor-pointer"
               >
-                {loading ? (
-                  <Loader2 className="h-5 w-5 animate-spin mx-auto" />
-                ) : (
-                  <span className="flex items-center justify-center gap-2">
-                    <Sparkles className="w-5 h-5" />
-                    <span>Enter GD Portal</span>
+                <span>🚀 Enter Live GD Arena</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+              <a
+                href="#how-it-works"
+                onClick={(e) => {
+                  e.preventDefault();
+                  scrollToSection("how-it-works");
+                }}
+                className="h-12 px-7 rounded-xl bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold text-sm sm:text-base border border-slate-200 dark:border-slate-800 shadow-sm transition-all flex items-center gap-2 cursor-pointer"
+              >
+                <span>See How It Works</span>
+              </a>
+            </div>
+
+            {/* ─── 4-Card Placement Telemetry Stats Row ─── */}
+            <div className="pt-4 w-full max-w-5xl mx-auto">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+                {[
+                  { number: "50+", label: "Campus GD Topics", sub: "TCS, Zoho, Infosys prompts", icon: BookOpen, color: "text-blue-600" },
+                  { number: "8", label: "Speech AI Pillars", sub: "Real-time acoustic radar", icon: Cpu, color: "text-indigo-600" },
+                  { number: "<100ms", label: "Ultra Low Latency", sub: "Multi-peer WebRTC audio", icon: Radio, color: "text-purple-600" },
+                  { number: "94.2%", label: "Placement Success", sub: "Tier-1 offer conversions", icon: Trophy, color: "text-emerald-600" }
+                ].map((stat, i) => (
+                  <div key={i} className="p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white/85 dark:bg-slate-900/70 backdrop-blur-xl text-left shadow-sm space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className={`text-2xl sm:text-3xl font-black font-mono ${stat.color}`}>{stat.number}</span>
+                      <stat.icon className="w-5 h-5 text-slate-400" />
+                    </div>
+                    <div className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white">{stat.label}</div>
+                    <div className="text-[11px] text-slate-500 dark:text-slate-400">{stat.sub}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ─── How It Works Section ─── */}
+        <section id="how-it-works" className="scroll-mt-20 py-8 px-4 sm:px-6 lg:px-8 max-w-6xl mx-auto space-y-6">
+          <div className="text-center max-w-2xl mx-auto space-y-1.5">
+            <span className="text-xs font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
+              Campus Placement Pipeline
+            </span>
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white">
+              How It Works: 4 Steps to Placement Mastery
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
+              Simulates authentic corporate placement rounds with AI-guided preparation, live debate, and diagnostic scoring.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            {[
+              {
+                step: "01",
+                title: "Room Entry & Brief",
+                desc: "Enter a 4-digit room code or select from 50+ campus recruitment topics. Receive 2 minutes of prep with suggested thesis points.",
+                tag: "Matchmaking & Prep"
+              },
+              {
+                step: "02",
+                title: "Live Audio Debate",
+                desc: "Take turns speaking with peers over crystal-clear WebRTC audio. Automated AI timekeeper prevents interruptions and ensures balance.",
+                tag: "Spatial WebRTC"
+              },
+              {
+                step: "03",
+                title: "Neural AI Evaluation",
+                desc: "Speech intelligence engine listens to voiceprints, evaluating grammar, articulation, vocabulary, and relevance in real time.",
+                tag: "8-Pillar Scoring"
+              },
+              {
+                step: "04",
+                title: "Dossier & Rankings",
+                desc: "Gain Elo credits, climb department leaderboards across CSE/IT/AIDS/ECE, and download official placement PDF reports.",
+                tag: "Verified Analytics"
+              }
+            ].map((item) => (
+              <div
+                key={item.step}
+                className="p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 bg-white/85 dark:bg-slate-900/60 backdrop-blur-xl space-y-3 shadow-sm hover:shadow-lg transition-all hover:-translate-y-1"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="font-mono text-xs font-black px-2.5 py-1 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800">
+                    STAGE {item.step}
                   </span>
-                )}
-              </Button>
-              {message && (
-                <div className="flex items-center gap-2 rounded-lg p-3 text-sm bg-red-500/10 text-red-600 dark:text-red-300 border border-red-500/30">
-                  <AlertCircle className="h-4 w-4 shrink-0" /> {message}
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{item.tag}</span>
                 </div>
-              )}
+                <h3 className="text-base font-bold text-slate-900 dark:text-white pt-1">{item.title}</h3>
+                <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">{item.desc}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* ─── Features Section ─── */}
+        <section id="features" className="scroll-mt-20 py-8 px-4 sm:px-6 lg:px-8 max-w-6xl mx-auto space-y-6">
+          <div className="text-center max-w-2xl mx-auto space-y-1.5">
+            <span className="text-xs font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
+              State-of-the-Art Architecture
+            </span>
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white">
+              Engineered for Campus GD Excellence
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
+              Purpose-built tools for Mount Zion students and placement coordinators to accelerate oral proficiency.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            {[
+              {
+                icon: Cpu,
+                title: "8-Pillar Acoustic Intelligence",
+                desc: "Calculates scores for grammar accuracy, voice confidence, fluency cadence, pronunciation, topic relevance, reasoning, vocabulary, and delivery.",
+                badge: "Core AI Engine"
+              },
+              {
+                icon: Zap,
+                title: "Autonomous AI Moderator",
+                desc: "Interjects intelligently when discussions stall, introduces provocative counter-arguments, and guarantees equitable candidate speaking distribution.",
+                badge: "Dynamic Moderation"
+              },
+              {
+                icon: Target,
+                title: "Solo AI Practice Simulator",
+                desc: "Practice solo drills 24/7. Get random campus debate prompts, record responses, and receive instantaneous radar calibration and improvement critiques.",
+                badge: "Anytime Drills"
+              },
+              {
+                icon: Trophy,
+                title: "Department & Year Leaderboards",
+                desc: "Competitive ranking across CSE, IT, AIDS, and ECE cohorts. Earn Elo rating points, climb tiers, and showcase verified placement readiness badges.",
+                badge: "Gamified Growth"
+              },
+              {
+                icon: Radio,
+                title: "Low-Latency WebRTC Arena",
+                desc: "Spatial peer-to-peer audio pipeline optimized for Indian college networks with adaptive bitrate, zero echo, and active speaker glow detection.",
+                badge: "Sub-100ms Voice"
+              },
+              {
+                icon: FileText,
+                title: "Institutional Placement Reports",
+                desc: "One-click download of official Anna University and corporate recruitment assessment reports in PDF and Excel formats with student voiceprints.",
+                badge: "Audit & PDF Dossiers"
+              }
+            ].map((f, i) => (
+              <div
+                key={i}
+                className="p-5 rounded-3xl border border-slate-200/80 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 backdrop-blur-xl space-y-3 shadow-sm hover:border-blue-500/40 transition-all hover:-translate-y-0.5"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-blue-50 to-indigo-50 dark:from-blue-950/80 dark:to-indigo-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold shadow-sm">
+                    <f.icon className="w-4 h-4" />
+                  </div>
+                  <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                    {f.badge}
+                  </span>
+                </div>
+                <h3 className="text-base font-bold text-slate-900 dark:text-white">{f.title}</h3>
+                <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 leading-relaxed">{f.desc}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* ─── Trending Campus GD Topics Section ─── */}
+        <section className="scroll-mt-20 py-8 px-4 sm:px-6 lg:px-8 max-w-6xl mx-auto space-y-6">
+          <div className="text-center max-w-2xl mx-auto space-y-1.5">
+            <span className="text-xs font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
+              Campus Placement Practice Library
+            </span>
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white">
+              Trending Campus Recruitment GD Topics
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
+              Curated from recent campus recruitment interview rounds at TCS, Zoho, Cognizant, and Infosys.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {[
+              {
+                title: "Artificial Intelligence in Healthcare: Ethical Frontiers vs Diagnostic Speed",
+                category: "Tech & AI",
+                difficulty: "Advanced",
+                rounds: 42,
+                desc: "Examines ethical dilemmas of algorithmic diagnosis, doctor accountability, and medical data confidentiality."
+              },
+              {
+                title: "Remote vs Hybrid Engineering: Impact on Innovation and Team Cohesion",
+                category: "Workplace",
+                difficulty: "Intermediate",
+                rounds: 58,
+                desc: "Discusses productivity metrics, spontaneous ideation, and junior developer mentoring in distributed tech teams."
+              },
+              {
+                title: "Green Hydrogen & Sustainable Mobility: India's Path to Net Zero by 2070",
+                category: "Socio-Tech",
+                difficulty: "Placement Favorite",
+                rounds: 37,
+                desc: "Evaluates electric vehicles versus hydrogen fuel cells, grid infrastructure, and manufacturing economics."
+              }
+            ].map((topic, i) => (
+              <div
+                key={i}
+                className="p-5 rounded-3xl border border-slate-200/80 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 backdrop-blur-xl shadow-sm hover:shadow-md transition-all flex flex-col justify-between space-y-3.5"
+              >
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300">
+                      {topic.category}
+                    </span>
+                    <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400">
+                      ★ {topic.difficulty}
+                    </span>
+                  </div>
+                  <h3 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white leading-snug">{topic.title}</h3>
+                  <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">{topic.desc}</p>
+                </div>
+
+                <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                  <span className="text-[11px] font-semibold text-slate-500">{topic.rounds} debate rounds</span>
+                  <button
+                    onClick={() => {
+                      setIsLoginModalOpen(true);
+                      setMessage("");
+                    }}
+                    className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
+                  >
+                    <span>Practice Topic</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* ─── Interactive FAQs Accordion Section ─── */}
+        <section id="faqs" className="scroll-mt-20 py-8 px-4 sm:px-6 lg:px-8 max-w-4xl mx-auto space-y-6">
+          <div className="text-center max-w-xl mx-auto space-y-1.5">
+            <span className="text-xs font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
+              Clear Answers
+            </span>
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white">
+              Frequently Asked Questions
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
+              Everything you need to know about the MZ ThinkCircle Group Discussion platform.
+            </p>
+          </div>
+
+          <div className="space-y-2.5">
+            {[
+              {
+                q: "What is Speaksense AI ThinkCircle?",
+                a: "MZ ThinkCircle is an institutional AI speech evaluation platform engineered specifically for Mount Zion College of Engineering and Technology students to master Group Discussions, public speaking, and campus placement interview rounds."
+              },
+              {
+                q: "How does real-time AI evaluation work during a Group Discussion?",
+                a: "Our speech AI listens via WebRTC audio stream, transcribes each participant's turn, and evaluates 8 speech pillars in real-time: Grammar, Fluency, Pronunciation, Confidence, Topic Relevance, Critical Thinking, Originality, and Content Quality."
+              },
+              {
+                q: "Can I practice alone before joining a peer live debate?",
+                a: "Yes! Solo AI Practice Drills allow you to pick or receive a random topic, record your response, and receive instantaneous radar feedback with detailed improvement tips."
+              },
+              {
+                q: "How do I enter an active live GD session?",
+                a: "Click 'Login' or 'Enter Live GD Arena', log in with your college Register Number (default password: Password123), and enter the 4-digit session code provided by your faculty or session host."
+              },
+              {
+                q: "How are the department and college leaderboards calculated?",
+                a: "Every concluded discussion awards Elo performance credits based on your speaking turn ratings, vocabulary richness, consensus building, and articulation scores."
+              },
+              {
+                q: "Can faculty and coordinators download official assessment reports?",
+                a: "Yes, administrators and faculty can export comprehensive student speech analytics, attendance rosters, and radar charts as official PDF and Excel reports."
+              }
+            ].map((faq, idx) => {
+              const isOpen = openFaqIndex === idx;
+              return (
+                <div
+                  key={idx}
+                  className="rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white/85 dark:bg-slate-900/60 backdrop-blur-xl shadow-sm overflow-hidden transition-all"
+                >
+                  <button
+                    type="button"
+                    onClick={() => setOpenFaqIndex(isOpen ? null : idx)}
+                    className="w-full p-4 text-left flex items-center justify-between gap-4 cursor-pointer hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors"
+                  >
+                    <span className="text-sm sm:text-base font-bold text-slate-900 dark:text-white flex items-center gap-2.5">
+                      <span className="w-5 h-5 rounded-md bg-blue-50 dark:bg-blue-950/80 text-blue-600 dark:text-blue-400 flex items-center justify-center text-xs font-bold shrink-0">
+                        {idx + 1}
+                      </span>
+                      {faq.q}
+                    </span>
+                    <ChevronDown className={`w-4 h-4 text-slate-400 shrink-0 transition-transform duration-200 ${isOpen ? "rotate-180 text-blue-600" : ""}`} />
+                  </button>
+                  {isOpen && (
+                    <div className="px-4 pb-4 pt-1 text-xs sm:text-sm text-slate-600 dark:text-slate-400 pl-12 leading-relaxed border-t border-slate-100 dark:border-slate-800/50">
+                      {faq.a}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </section>
+
+        {/* ─── High-Impact Placement Call-to-Action (CTA) Pre-Footer Banner ─── */}
+        <section className="py-6 px-4 sm:px-6 lg:px-8 max-w-5xl mx-auto">
+          <div className="rounded-3xl bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 p-6 sm:p-8 text-center text-white shadow-xl space-y-4 relative overflow-hidden">
+            <div className="pointer-events-none absolute -top-24 -right-24 w-72 h-72 bg-white/10 rounded-full blur-2xl" />
+            <span className="inline-block px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-white/15 backdrop-blur-md">
+              Mount Zion Placement Training 2026
+            </span>
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight">
+              Ready to Ace Your Next Placement GD?
+            </h2>
+            <p className="text-xs sm:text-sm text-blue-100 max-w-2xl mx-auto leading-relaxed">
+              Join 1,200+ Mount Zion engineering students accelerating their speaking confidence and securing dream corporate job offers.
+            </p>
+            <div className="flex flex-wrap items-center justify-center gap-3 pt-1">
+              <button
+                onClick={() => {
+                  setIsLoginModalOpen(true);
+                  setMessage("");
+                }}
+                className="h-11 px-7 rounded-xl bg-white text-blue-600 hover:bg-slate-100 font-extrabold text-sm shadow-xl transition-all hover:scale-105"
+              >
+                🚀 Launch Live GD Arena
+              </button>
+              <button
+                onClick={() => {
+                  setIsLoginModalOpen(true);
+                  setMessage("");
+                }}
+                className="h-11 px-6 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-sm border border-white/20 backdrop-blur-md transition-all"
+              >
+                Start Solo Practice Drill
+              </button>
             </div>
           </div>
+        </section>
 
-          {/* College contact footer */}
-          <div className="mt-6 text-center text-xs text-muted-soft space-y-1">
-            <p className="font-medium text-heading">Mount Zion College of Engineering and Technology</p>
-            <p>
-              <span className="inline-flex items-center gap-1"><Mail className="w-3.5 h-3.5" /> info@mzcet.in</span>
-              {"  ·  "}
-              <span className="inline-flex items-center gap-1"><Phone className="w-3.5 h-3.5" /> 04333 294400</span>
-              {"  ·  "}
-              <span className="inline-flex items-center gap-1"><Phone className="w-3.5 h-3.5" /> 73733 44444</span>
-
-            </p>
-            <p>
-              <span className="inline-flex items-center gap-1"><Globe className="w-3.5 h-3.5" /> www.mzcet.in</span>
-            </p>
+        {/* ─── Footer / Contact Section ─── */}
+        <footer id="contact" className="scroll-mt-20 border-t border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-950 py-8 px-4 sm:px-6 lg:px-8 text-center text-xs text-slate-500 space-y-3">
+          <div className="flex items-center justify-center gap-2">
+            <img src="/MZ_logo_DB.webp" alt="Mount Zion Logo" className="w-8 h-8 rounded object-cover shadow-sm" />
+            <span className="font-bold text-slate-900 dark:text-white text-base">Mount Zion College of Engineering and Technology</span>
           </div>
-        </div>
+          <p className="max-w-md mx-auto leading-relaxed">
+            Lena Vilakku, Pilivalam P.O, Pudukkottai, Tamil Nadu 622507<br />
+            Approved by AICTE, Affiliated to Anna University, Accredited by NAAC 'A' Grade
+          </p>
+          <div className="flex flex-wrap items-center justify-center gap-4 text-slate-600 dark:text-slate-400 pt-1">
+            <span className="inline-flex items-center gap-1.5"><Mail className="w-4 h-4 text-blue-600" /> info@mzcet.in</span>
+            <span>·</span>
+            <span className="inline-flex items-center gap-1.5"><Phone className="w-4 h-4 text-blue-600" /> 04333 294400</span>
+            <span>·</span>
+            <span className="inline-flex items-center gap-1.5"><Phone className="w-4 h-4 text-blue-600" /> 73733 44444</span>
+            <span>·</span>
+            <span className="inline-flex items-center gap-1.5"><Globe className="w-4 h-4 text-blue-600" /> www.mzcet.in</span>
+          </div>
+
+          {/* Footer Quick Navigation Links matching the 5 items */}
+          <div className="flex flex-wrap items-center justify-center gap-6 text-xs font-semibold pt-1">
+            {[
+              { id: "home", label: "Home" },
+              { id: "how-it-works", label: "How It Works" },
+              { id: "features", label: "Features" },
+              { id: "faqs", label: "FAQs" },
+              { id: "contact", label: "Contact" }
+            ].map((item) => (
+              <a
+                key={item.id}
+                href={`#${item.id}`}
+                onClick={(e) => {
+                  e.preventDefault();
+                  scrollToSection(item.id);
+                }}
+                className="text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer"
+              >
+                {item.label}
+              </a>
+            ))}
+          </div>
+
+          <p className="text-[11px] text-slate-400 pt-2">© 2026 MZ ThinkCircle · Speaksense AI Group Discussion Intelligence Platform</p>
+        </footer>
+
+        {/* ──────────────────────────────────────────────────────────── */}
+        {/* LOGIN MODAL (SCREENSHOT 2 - NO PLUS SYMBOL) */}
+        {/* ──────────────────────────────────────────────────────────── */}
+        {isLoginModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+            <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl p-7 sm:p-8 shadow-2xl border border-slate-100 dark:border-slate-800 relative animate-scale-up space-y-6">
+              {/* Back button */}
+              <div className="flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsLoginModalOpen(false);
+                    setMessage("");
+                  }}
+                  className="w-9 h-9 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors"
+                  title="Go back"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                </button>
+                <div className="text-right">
+                  <span className="text-[10px] uppercase font-bold text-slate-400">Mount Zion GD</span>
+                </div>
+              </div>
+
+              {/* Title & Branding (No plus symbol) */}
+              <div className="text-center space-y-1">
+                <h2 className="text-xl font-bold tracking-tight">
+                  <span className="text-blue-600 font-extrabold">MZ Think</span>
+                  <span className="text-emerald-500 font-black">Circle</span>
+                </h2>
+                <h3 className="text-2xl font-black text-slate-900 dark:text-white">Welcome Back</h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">Login to your GD account to continue</p>
+              </div>
+
+              {/* Role Navigation Tabs: Student, Admin, Principal, Coordinator (Screenshot 2) */}
+              <div className="flex border-b border-slate-200 dark:border-slate-800 justify-between px-1">
+                {[
+                  { id: "student", label: "Student" },
+                  { id: "admin", label: "Admin" },
+                  { id: "principal", label: "Principal" },
+                  { id: "coordinator", label: "Coordinator" }
+                ].map((tab) => {
+                  const isActive = loginRoleTab === tab.id;
+                  return (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => {
+                        setLoginRoleTab(tab.id as any);
+                        setLoginTab(tab.id === "student" ? "student" : "admin");
+                        setMessage("");
+                      }}
+                      className={`pb-2.5 text-xs sm:text-sm font-semibold transition-all relative ${
+                        isActive
+                          ? "text-blue-600 dark:text-blue-400 font-bold"
+                          : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                      }`}
+                    >
+                      {tab.label}
+                      {isActive && (
+                        <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 dark:bg-blue-400 rounded-full" />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Form Inputs (Screenshot 2) */}
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
+                    {loginRoleTab === "student" ? "REGISTER NUMBER" : "SPR / FACULTY ID"}
+                  </label>
+                  <Input
+                    placeholder={loginRoleTab === "student" ? "e.g., 911724205001" : "e.g., 12345"}
+                    value={loginRoleTab === "student" ? studentRegisterNumber : adminRegisterNumber}
+                    onChange={(e) =>
+                      loginRoleTab === "student"
+                        ? setStudentRegisterNumber(e.target.value)
+                        : setAdminRegisterNumber(e.target.value)
+                    }
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleLogin();
+                    }}
+                    className="w-full h-12 rounded-xl bg-slate-50/90 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-sm font-mono px-4 text-slate-900 dark:text-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
+                    PASSWORD
+                  </label>
+                  <Input
+                    type="password"
+                    placeholder="Enter your password"
+                    value={loginRoleTab === "student" ? studentPassword : adminPassword}
+                    onChange={(e) =>
+                      loginRoleTab === "student"
+                        ? setStudentPassword(e.target.value)
+                        : setAdminPassword(e.target.value)
+                    }
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleLogin();
+                    }}
+                    className="w-full h-12 rounded-xl bg-slate-50/90 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-sm px-4 text-slate-900 dark:text-white"
+                  />
+                </div>
+
+                {/* Quick Auto-fill Demo Helpers & Forgot Password */}
+                <div className="flex items-center justify-between text-xs pt-0.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (loginRoleTab === "student") {
+                        setStudentRegisterNumber("911724205001");
+                        setStudentPassword("Password123");
+                      } else {
+                        setAdminRegisterNumber("12345");
+                        setAdminPassword("Mzorator@admin");
+                      }
+                    }}
+                    className="text-blue-600 dark:text-blue-400 hover:underline font-semibold text-[11px]"
+                  >
+                    Auto-fill demo {loginRoleTab === "student" ? "(911724205001)" : "(12345)"}
+                  </button>
+
+                  <span className="text-blue-600 dark:text-blue-400 hover:underline font-semibold cursor-pointer text-[11px]">
+                    Forgot password?
+                  </span>
+                </div>
+
+                {message && (
+                  <div className="flex items-center gap-2 rounded-xl p-3 text-xs bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/25">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>{message}</span>
+                  </div>
+                )}
+
+                <Button
+                  onClick={handleLogin}
+                  disabled={loading}
+                  className="w-full h-12 bg-blue-600 hover:bg-blue-500 text-white font-bold text-base rounded-xl shadow-lg shadow-blue-600/25 border-0 transition-all"
+                >
+                  {loading ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : "Login"}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }

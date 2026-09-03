@@ -70,7 +70,7 @@ export default function ReportsView({
     setPdfLoading(true);
     setMessage("");
     try {
-      await downloadOverallPdfReport(token);
+      await downloadOverallPdfReport(token || "");
       setSuccess("Overall Speech Analytics PDF report downloaded successfully!");
     } catch (err: any) {
       setMessage(err.message || "Failed to download PDF report. Please try again.");

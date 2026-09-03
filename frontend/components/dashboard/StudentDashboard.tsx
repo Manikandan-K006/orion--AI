@@ -28,7 +28,12 @@ import {
   Compass,
   Star,
   Layers,
-  ArrowUpRight
+  ArrowUpRight,
+  MessageSquare,
+  Lock,
+  Unlock,
+  CheckCircle2,
+  Play
 } from "lucide-react";
 import {
   Radar,
@@ -128,13 +133,38 @@ export default function StudentDashboard({
     setTimeout(() => setCopiedCode(null), 2000);
   };
 
+  // Recommended GD Topics
+  const trendingTopics = [
+    {
+      title: "AI in Higher Education: Personalized Learning vs Academic Integrity",
+      category: "Technology",
+      difficulty: "Intermediate",
+      duration: "3 mins",
+      accent: "from-indigo-500 to-purple-600"
+    },
+    {
+      title: "Remote vs Hybrid Engineering Work: Impact on Innovation & Collaboration",
+      category: "Corporate Careers",
+      difficulty: "Advanced",
+      duration: "3 mins",
+      accent: "from-cyan-500 to-blue-600"
+    },
+    {
+      title: "Green Mobility Transition: Are Developing Nations Ready for 100% EVs?",
+      category: "Sustainability",
+      difficulty: "Analytical",
+      duration: "3 mins",
+      accent: "from-emerald-500 to-teal-600"
+    }
+  ];
+
   return (
     <div className="space-y-6 animate-fade-up">
       {/* ──────────────────────────────────────────────────────────── */}
       {/* PENDING SPEECH RECOVERY ALERT (IF APPLICABLE) */}
       {/* ──────────────────────────────────────────────────────────── */}
       {gdLivePendingFinish && (
-        <div className="relative overflow-hidden rounded-2xl border-2 border-rose-500/30 bg-gradient-to-r from-rose-50/80 via-white to-amber-50/80 dark:from-rose-950/30 dark:via-slate-900/80 dark:to-amber-950/20 p-5 shadow-lg backdrop-blur-xl">
+        <div className="relative overflow-hidden rounded-2xl border-2 border-rose-500/30 bg-gradient-to-r from-rose-50/90 via-white to-amber-50/90 dark:from-rose-950/40 dark:via-slate-900/90 dark:to-amber-950/30 p-5 shadow-lg backdrop-blur-xl">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 rounded-2xl bg-rose-500 text-white flex items-center justify-center shrink-0 shadow-lg shadow-rose-500/30 animate-pulse">
@@ -179,7 +209,7 @@ export default function StudentDashboard({
       {/* ──────────────────────────────────────────────────────────── */}
       {/* HERO SECTION: MODERN CLEAN GD ARENA HUB */}
       {/* ──────────────────────────────────────────────────────────── */}
-      <div className="relative overflow-hidden rounded-3xl border border-slate-200/80 dark:border-indigo-500/20 bg-gradient-to-br from-white/90 via-indigo-50/40 to-purple-50/40 dark:from-slate-900/90 dark:via-indigo-950/40 dark:to-slate-900/90 p-6 md:p-8 backdrop-blur-2xl shadow-xl shadow-slate-200/40 dark:shadow-none">
+      <div className="relative overflow-hidden rounded-3xl border border-slate-200/90 dark:border-indigo-500/20 bg-gradient-to-br from-white via-indigo-50/30 to-purple-50/25 dark:from-slate-900/95 dark:via-indigo-950/40 dark:to-slate-900/90 p-6 md:p-8 backdrop-blur-2xl shadow-xl shadow-slate-200/50 dark:shadow-none">
         {/* Soft Ambient Mesh Orbs */}
         <div className="absolute top-0 right-1/4 w-80 h-80 bg-indigo-500/10 dark:bg-indigo-500/15 rounded-full blur-3xl pointer-events-none -z-10" />
         <div className="absolute bottom-0 right-0 w-72 h-72 bg-purple-500/10 dark:bg-purple-500/15 rounded-full blur-3xl pointer-events-none -z-10" />
@@ -187,7 +217,7 @@ export default function StudentDashboard({
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
           {/* Left Column: Welcome & Persona Info */}
           <div className="lg:col-span-7 space-y-4">
-            {/* Status Badges */}
+            {/* Institutional & Status Badges */}
             <div className="flex flex-wrap items-center gap-2">
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/25 shadow-sm">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
@@ -195,7 +225,7 @@ export default function StudentDashboard({
               </span>
               {user.department && (
                 <span className="px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border border-indigo-500/20">
-                  {user.department} {user.year ? `· ${user.year}` : ""}
+                  {user.department} {user.year ? `· ${user.year}` : ""} {user.section ? `(${user.section})` : ""}
                 </span>
               )}
               <span className={`px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider border ${tierBadge}`}>
@@ -212,33 +242,43 @@ export default function StudentDashboard({
                 </span>
               </h1>
               <p className="text-sm text-slate-600 dark:text-slate-300 mt-2 leading-relaxed max-w-xl font-medium">
-                Enter an active discussion session, test your articulation under AI observation, and climb the cohort leaderboard.
+                Enter an active discussion session, articulate your perspectives under real-time AI observation, and climb the cohort leaderboard.
               </p>
             </div>
 
-            {/* Clean Student Metadata Chips */}
+            {/* Clean Student Metadata Chips with 1-Click Copy */}
             <div className="flex flex-wrap items-center gap-3 pt-1">
-              <div className="flex items-center gap-2 bg-white/80 dark:bg-slate-950/60 px-3.5 py-1.5 rounded-xl border border-slate-200/80 dark:border-slate-800 shadow-sm">
+              <button
+                type="button"
+                onClick={() => user.register_number && handleCopy(user.register_number)}
+                className="flex items-center gap-2 bg-white/90 dark:bg-slate-950/60 px-3.5 py-1.5 rounded-xl border border-slate-200/90 dark:border-slate-800 hover:border-indigo-400 shadow-sm transition-all group"
+                title="Click to copy register number"
+              >
                 <span className="text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400">Reg No:</span>
                 <span className="font-mono text-xs font-bold text-slate-900 dark:text-white">{user.register_number || "—"}</span>
-              </div>
-              <div className="flex items-center gap-2 bg-white/80 dark:bg-slate-950/60 px-3.5 py-1.5 rounded-xl border border-slate-200/80 dark:border-slate-800 shadow-sm">
+                {copiedCode === user.register_number ? (
+                  <Check className="w-3.5 h-3.5 text-emerald-500" />
+                ) : (
+                  <Copy className="w-3 h-3 text-slate-400 group-hover:text-indigo-600 transition-colors" />
+                )}
+              </button>
+              <div className="flex items-center gap-2 bg-white/90 dark:bg-slate-950/60 px-3.5 py-1.5 rounded-xl border border-slate-200/90 dark:border-slate-800 shadow-sm">
                 <span className="text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400">Role:</span>
                 <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400 capitalize">{user.role}</span>
               </div>
-              <div className="flex items-center gap-2 bg-white/80 dark:bg-slate-950/60 px-3.5 py-1.5 rounded-xl border border-slate-200/80 dark:border-slate-800 shadow-sm">
+              <div className="flex items-center gap-2 bg-white/90 dark:bg-slate-950/60 px-3.5 py-1.5 rounded-xl border border-slate-200/90 dark:border-slate-800 shadow-sm">
                 <span className="text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400">Credits:</span>
-                <span className="text-xs font-bold text-amber-600 dark:text-amber-400">{creditPoints} PTS</span>
+                <span className="text-xs font-bold text-amber-600 dark:text-amber-400 font-mono">{creditPoints} PTS</span>
               </div>
             </div>
           </div>
 
           {/* Right Column: Sleek Join Discussion Console */}
           <div className="lg:col-span-5">
-            <div className="rounded-2xl border border-indigo-200/80 dark:border-indigo-500/30 bg-white/95 dark:bg-slate-950/85 backdrop-blur-xl p-6 shadow-xl shadow-indigo-100/50 dark:shadow-none">
+            <div className="rounded-2xl border border-indigo-200/90 dark:border-indigo-500/30 bg-white/95 dark:bg-slate-950/90 backdrop-blur-xl p-6 shadow-xl shadow-indigo-100/50 dark:shadow-none">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold">
+                  <div className="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold shadow-sm">
                     <Zap className="w-4 h-4" />
                   </div>
                   <div>
@@ -247,8 +287,8 @@ export default function StudentDashboard({
                   </div>
                 </div>
                 <span className="flex h-2.5 w-2.5 relative">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
-                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500" />
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
                 </span>
               </div>
 
@@ -260,7 +300,7 @@ export default function StudentDashboard({
                     value={gdLiveCode}
                     onChange={(e) => setGdLiveCode(e.target.value.replace(/\D/g, ""))}
                     onKeyDown={(e) => { if (e.key === "Enter" && gdLiveCode.trim()) joinGdLive(); }}
-                    className="w-full h-14 text-center font-mono text-2xl font-black tracking-[0.35em] uppercase rounded-xl border-2 border-indigo-200 dark:border-indigo-500/40 focus:border-indigo-600 dark:focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/10 bg-slate-50/70 dark:bg-slate-900 text-slate-900 dark:text-white placeholder:text-slate-400 placeholder:tracking-normal placeholder:text-sm shadow-inner"
+                    className="w-full h-14 text-center font-mono text-2xl font-black tracking-[0.35em] uppercase rounded-xl border-2 border-indigo-200 dark:border-indigo-500/40 focus:border-indigo-600 dark:focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/10 bg-slate-50/80 dark:bg-slate-900 text-slate-900 dark:text-white placeholder:text-slate-400 placeholder:tracking-normal placeholder:text-sm shadow-inner"
                   />
                   {gdLiveCode.length === 4 && (
                     <span className="absolute right-4 top-1/2 -translate-y-1/2 text-emerald-500 dark:text-emerald-400">
@@ -272,7 +312,7 @@ export default function StudentDashboard({
                 <Button
                   onClick={joinGdLive}
                   disabled={loading || !gdLiveCode.trim()}
-                  className="w-full h-12 text-sm font-bold rounded-xl bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-600 hover:from-indigo-500 hover:to-purple-500 text-white shadow-lg shadow-indigo-600/25 border-0 flex items-center justify-center gap-2 transition-all duration-200"
+                  className="w-full h-12 text-sm font-bold rounded-xl bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-600 hover:opacity-90 text-white shadow-lg shadow-indigo-600/25 border-0 flex items-center justify-center gap-2 transition-all duration-200"
                 >
                   {loading ? (
                     <Loader2 className="w-5 h-5 animate-spin" />
@@ -302,7 +342,6 @@ export default function StudentDashboard({
                       </span>
                     </div>
                     <Button
-                      size="sm"
                       onClick={() => setGdLiveCode(activeSessions[0].session_code)}
                       className="h-7 text-[10px] font-bold px-3 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm border-0"
                     >
@@ -321,7 +360,7 @@ export default function StudentDashboard({
       {/* ──────────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Metric 1: Average Speaking Score */}
-        <div className="rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white/70 dark:bg-slate-900/60 p-5 backdrop-blur-xl shadow-sm hover:shadow-md transition-all duration-200 hover:-translate-y-0.5">
+        <div className="rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white/80 dark:bg-slate-900/70 p-5 backdrop-blur-xl shadow-sm hover:shadow-md transition-all duration-200 hover:-translate-y-0.5">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
               Average Score
@@ -330,23 +369,25 @@ export default function StudentDashboard({
               <Trophy className="w-4 h-4" />
             </div>
           </div>
-          <div className="mt-3 flex items-baseline gap-1.5">
-            <span className="text-3xl font-black text-slate-900 dark:text-white">
-              {progress && progress.average_score != null ? `${Number(progress.average_score).toFixed(1)}` : "0.0"}
+          <div className="mt-3 flex items-baseline gap-1">
+            <span className="text-3xl font-black text-slate-900 dark:text-white font-mono">
+              {progress && progress.average_score != null ? `${Number(progress.average_score).toFixed(1)}%` : "0.0%"}
             </span>
-            <span className="text-xs font-bold text-slate-400">%</span>
           </div>
           <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1.5 mt-3.5 overflow-hidden">
             <div
               className="bg-purple-600 dark:bg-purple-500 h-1.5 rounded-full transition-all duration-700"
-              style={{ width: `${progress?.average_score || 0}%` }}
+              style={{ width: `${progress?.average_score || 10}%` }}
             />
           </div>
-          <span className="text-[10px] text-slate-500 dark:text-slate-400 mt-2 block">Weighted evaluation rating</span>
+          <div className="flex items-center justify-between mt-2 text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+            <span>Weighted evaluation</span>
+            <span className="text-purple-600 dark:text-purple-400 font-bold">Target: 80%+</span>
+          </div>
         </div>
 
         {/* Metric 2: Credit / Elo Points */}
-        <div className="rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white/70 dark:bg-slate-900/60 p-5 backdrop-blur-xl shadow-sm hover:shadow-md transition-all duration-200 hover:-translate-y-0.5">
+        <div className="rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white/80 dark:bg-slate-900/70 p-5 backdrop-blur-xl shadow-sm hover:shadow-md transition-all duration-200 hover:-translate-y-0.5">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
               Credit Points
@@ -356,7 +397,7 @@ export default function StudentDashboard({
             </div>
           </div>
           <div className="mt-3 flex items-baseline gap-1.5">
-            <span className="text-3xl font-black text-slate-900 dark:text-white">
+            <span className="text-3xl font-black text-slate-900 dark:text-white font-mono">
               {progress && typeof progress.total_credits === "number" ? Math.round(progress.total_credits) : 0}
             </span>
             <span className="text-xs font-bold text-amber-600 dark:text-amber-400">PTS</span>
@@ -364,14 +405,17 @@ export default function StudentDashboard({
           <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1.5 mt-3.5 overflow-hidden">
             <div
               className="bg-amber-500 h-1.5 rounded-full transition-all duration-700"
-              style={{ width: `${Math.min(100, (creditPoints / 500) * 100)}%` }}
+              style={{ width: `${Math.min(100, Math.max(8, (creditPoints / 500) * 100))}%` }}
             />
           </div>
-          <span className="text-[10px] text-slate-500 dark:text-slate-400 mt-2 block">Accumulated discussion credits</span>
+          <div className="flex items-center justify-between mt-2 text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+            <span>Accumulated credits</span>
+            <span className="text-amber-600 dark:text-amber-400 font-bold">+25 PTS/GD</span>
+          </div>
         </div>
 
         {/* Metric 3: Group Discussions Completed */}
-        <div className="rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white/70 dark:bg-slate-900/60 p-5 backdrop-blur-xl shadow-sm hover:shadow-md transition-all duration-200 hover:-translate-y-0.5">
+        <div className="rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white/80 dark:bg-slate-900/70 p-5 backdrop-blur-xl shadow-sm hover:shadow-md transition-all duration-200 hover:-translate-y-0.5">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
               GD Matches
@@ -381,22 +425,25 @@ export default function StudentDashboard({
             </div>
           </div>
           <div className="mt-3 flex items-baseline gap-1.5">
-            <span className="text-3xl font-black text-slate-900 dark:text-white">
+            <span className="text-3xl font-black text-slate-900 dark:text-white font-mono">
               {completedSessions.length}
             </span>
-            <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">done</span>
+            <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">matches</span>
           </div>
           <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1.5 mt-3.5 overflow-hidden">
             <div
               className="bg-emerald-500 h-1.5 rounded-full transition-all duration-700"
-              style={{ width: `${Math.min(100, completedSessions.length * 10)}%` }}
+              style={{ width: `${Math.min(100, Math.max(8, completedSessions.length * 10))}%` }}
             />
           </div>
-          <span className="text-[10px] text-slate-500 dark:text-slate-400 mt-2 block">Completed team sessions</span>
+          <div className="flex items-center justify-between mt-2 text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+            <span>Completed debates</span>
+            <span className="text-emerald-600 dark:text-emerald-400 font-bold">Multiplayer</span>
+          </div>
         </div>
 
         {/* Metric 4: Solo Practice Drills */}
-        <div className="rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white/70 dark:bg-slate-900/60 p-5 backdrop-blur-xl shadow-sm hover:shadow-md transition-all duration-200 hover:-translate-y-0.5">
+        <div className="rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white/80 dark:bg-slate-900/70 p-5 backdrop-blur-xl shadow-sm hover:shadow-md transition-all duration-200 hover:-translate-y-0.5">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
               Solo AI Drills
@@ -406,18 +453,21 @@ export default function StudentDashboard({
             </div>
           </div>
           <div className="mt-3 flex items-baseline gap-1.5">
-            <span className="text-3xl font-black text-slate-900 dark:text-white">
+            <span className="text-3xl font-black text-slate-900 dark:text-white font-mono">
               {soloHistory.length}
             </span>
-            <span className="text-xs font-bold text-cyan-600 dark:text-cyan-400">sessions</span>
+            <span className="text-xs font-bold text-cyan-600 dark:text-cyan-400">drills</span>
           </div>
           <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1.5 mt-3.5 overflow-hidden">
             <div
               className="bg-cyan-500 h-1.5 rounded-full transition-all duration-700"
-              style={{ width: `${Math.min(100, soloHistory.length * 10)}%` }}
+              style={{ width: `${Math.min(100, Math.max(8, soloHistory.length * 10))}%` }}
             />
           </div>
-          <span className="text-[10px] text-slate-500 dark:text-slate-400 mt-2 block">Solo mock speaking rounds</span>
+          <div className="flex items-center justify-between mt-2 text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+            <span>Impromptu rounds</span>
+            <span className="text-cyan-600 dark:text-cyan-400 font-bold">AI Coach</span>
+          </div>
         </div>
       </div>
 
@@ -428,7 +478,7 @@ export default function StudentDashboard({
         {/* Left Column (5 Cols): Oratory Tier Card & Quick Launchers */}
         <div className="lg:col-span-5 space-y-6">
           {/* Tier & XP Progression Card */}
-          <div className="rounded-3xl border border-slate-200/80 dark:border-slate-800 bg-white/70 dark:bg-slate-900/60 p-6 backdrop-blur-xl shadow-sm relative overflow-hidden">
+          <div className="rounded-3xl border border-slate-200/90 dark:border-slate-800 bg-white/80 dark:bg-slate-900/70 p-6 backdrop-blur-xl shadow-sm relative overflow-hidden">
             <div className="flex items-center gap-4 mb-4">
               <div className={`w-14 h-14 rounded-2xl bg-gradient-to-tr ${tierGradient} flex items-center justify-center text-white shadow-xl shadow-indigo-500/20 shrink-0`}>
                 <Flame className="w-7 h-7 animate-pulse" />
@@ -440,7 +490,7 @@ export default function StudentDashboard({
                   <span className="px-2.5 py-0.5 rounded-md text-[10px] font-black bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
                     Tier {levelNum}
                   </span>
-                  <span className="text-xs text-slate-500 dark:text-slate-400 font-semibold">
+                  <span className="text-xs text-slate-500 dark:text-slate-400 font-semibold font-mono">
                     {xpPoints.toLocaleString()} XP
                   </span>
                 </div>
@@ -450,14 +500,14 @@ export default function StudentDashboard({
             <div className="space-y-2 mt-4 pt-4 border-t border-slate-100 dark:border-slate-800">
               <div className="flex justify-between items-center text-xs">
                 <span className="text-slate-600 dark:text-slate-400 font-semibold">Tier Progress</span>
-                <span className="font-bold text-slate-900 dark:text-white">
+                <span className="font-bold text-slate-900 dark:text-white font-mono">
                   {xpPoints.toLocaleString()} / {nextLevelPoints.toLocaleString()} XP
                 </span>
               </div>
               <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2.5 overflow-hidden">
                 <div
                   className="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-500 h-2.5 rounded-full transition-all duration-700"
-                  style={{ width: `${levelProgress}%` }}
+                  style={{ width: `${Math.max(5, levelProgress)}%` }}
                 />
               </div>
               <p className="text-[11px] text-slate-500 dark:text-slate-400 text-right italic font-medium">
@@ -465,6 +515,44 @@ export default function StudentDashboard({
                   ? `${(nextLevelPoints - xpPoints).toLocaleString()} XP needed to reach next tier`
                   : "You have achieved top tier orator mastery!"}
               </p>
+            </div>
+
+            {/* Tier Perks Checklist */}
+            <div className="mt-4 pt-3.5 border-t border-slate-100 dark:border-slate-800 space-y-2 text-xs">
+              <span className="text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400 tracking-wider block mb-1">
+                Tier Perks & Capabilities
+              </span>
+              <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                <span>Standard Turn-Based Live GD Colosseum (Active)</span>
+              </div>
+              <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400">
+                <Lock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                <span>AI Moderator Real-time Inquiries (Unlocks at Tier 2)</span>
+              </div>
+              <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400">
+                <Lock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                <span>Inter-Department Championship (Unlocks at Tier 3)</span>
+              </div>
+            </div>
+
+            {/* Daily Booster Mission */}
+            <div className="mt-4 p-3.5 rounded-2xl bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-200/80 dark:border-indigo-500/30 flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <span className="text-[10px] font-black uppercase text-indigo-700 dark:text-indigo-400 tracking-wide flex items-center gap-1">
+                  <Sparkles className="w-3 h-3 text-amber-500" /> Daily Oratory Mission
+                </span>
+                <p className="text-xs font-bold text-slate-900 dark:text-white truncate mt-0.5">
+                  Complete 1 Solo AI Drill (+1,000 XP)
+                </p>
+              </div>
+              <Button
+                onClick={startSoloPractice}
+                className="h-8 px-3 rounded-xl text-[11px] font-bold bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm border-0 shrink-0 flex items-center gap-1"
+              >
+                <span>Start Drill</span>
+                <ArrowRight className="w-3 h-3" />
+              </Button>
             </div>
           </div>
 
@@ -474,7 +562,7 @@ export default function StudentDashboard({
               onClick={startSoloPractice}
               className="flex flex-col justify-between p-5 rounded-2xl border border-cyan-200/80 dark:border-cyan-500/20 bg-gradient-to-br from-cyan-50/70 via-white to-transparent dark:from-cyan-950/20 dark:via-transparent dark:to-transparent hover:border-cyan-400 dark:hover:border-cyan-500/50 hover:shadow-md transition-all duration-200 text-left group"
             >
-              <div className="w-10 h-10 rounded-xl bg-cyan-100 dark:bg-cyan-950/60 text-cyan-600 dark:text-cyan-400 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+              <div className="w-10 h-10 rounded-xl bg-cyan-100 dark:bg-cyan-950/60 text-cyan-600 dark:text-cyan-400 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform shadow-sm">
                 <Target className="w-5 h-5" />
               </div>
               <div>
@@ -492,7 +580,7 @@ export default function StudentDashboard({
               onClick={() => loadLeaderboard("ALL", "ALL", "all")}
               className="flex flex-col justify-between p-5 rounded-2xl border border-amber-200/80 dark:border-amber-500/20 bg-gradient-to-br from-amber-50/70 via-white to-transparent dark:from-amber-950/20 dark:via-transparent dark:to-transparent hover:border-amber-400 dark:hover:border-amber-500/50 hover:shadow-md transition-all duration-200 text-left group"
             >
-              <div className="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+              <div className="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform shadow-sm">
                 <Trophy className="w-5 h-5" />
               </div>
               <div>
@@ -509,7 +597,7 @@ export default function StudentDashboard({
 
           {/* Motivational Quote */}
           {soloQuote && (
-            <div className="rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white/70 dark:bg-slate-900/60 p-5 backdrop-blur-xl relative overflow-hidden shadow-sm">
+            <div className="rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white/80 dark:bg-slate-900/70 p-5 backdrop-blur-xl relative overflow-hidden shadow-sm">
               <div className="flex items-start gap-3">
                 <Sparkles className="w-5 h-5 text-indigo-500 shrink-0 mt-0.5" />
                 <div>
@@ -527,7 +615,7 @@ export default function StudentDashboard({
 
         {/* Right Column (7 Cols): UNIFIED INTELLIGENCE CARD WITH INTEGRATED TABS */}
         <div className="lg:col-span-7">
-          <div className="rounded-3xl border border-slate-200/80 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 p-6 backdrop-blur-xl shadow-sm space-y-6">
+          <div className="rounded-3xl border border-slate-200/90 dark:border-slate-800 bg-white/90 dark:bg-slate-900/70 p-6 backdrop-blur-xl shadow-sm space-y-6">
             {/* Integrated Header with Segmented Navigation Tabs */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100 dark:border-slate-800">
               <div>
@@ -541,7 +629,7 @@ export default function StudentDashboard({
               </div>
 
               {/* Integrated Modern Segmented Pill Tabs */}
-              <div className="flex items-center gap-1 p-1 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-100/70 dark:bg-slate-950/70 shrink-0">
+              <div className="flex items-center gap-1 p-1 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-100/80 dark:bg-slate-950/70 shrink-0">
                 <button
                   onClick={() => setActiveTab("skills")}
                   className={`py-1.5 px-3 rounded-lg text-xs font-bold transition-all duration-200 flex items-center gap-1.5 ${
@@ -586,7 +674,7 @@ export default function StudentDashboard({
                 {latestSolo ? (
                   <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
                     {/* Radar Chart */}
-                    <div className="md:col-span-6 h-60 relative flex items-center justify-center">
+                    <div className="md:col-span-6 h-64 relative flex items-center justify-center">
                       <ResponsiveContainer width="100%" height="100%">
                         <RadarChart
                           data={[
@@ -634,7 +722,7 @@ export default function StudentDashboard({
                         <div key={item.label} className="space-y-1.5">
                           <div className="flex justify-between items-center text-xs">
                             <span className="font-semibold text-slate-800 dark:text-slate-200">{item.label}</span>
-                            <span className={`font-black ${item.text}`}>
+                            <span className={`font-bold font-mono ${item.text}`}>
                               {item.val != null ? `${Number(item.val).toFixed(0)}/100` : "N/A"}
                             </span>
                           </div>
@@ -656,15 +744,88 @@ export default function StudentDashboard({
                     </div>
                   </div>
                 ) : (
-                  <div className="py-12 text-center rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/20">
-                    <Target className="w-10 h-10 text-slate-400 mx-auto mb-2" />
-                    <p className="text-sm font-bold text-slate-900 dark:text-white">No Speaking Data Yet</p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto mt-1 font-medium">
-                      Complete your first solo practice session or live group discussion to generate your voice radar.
-                    </p>
-                    <Button onClick={startSoloPractice} className="mt-4 h-9 text-xs font-bold rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm border-0">
-                      Start Solo Practice Now
-                    </Button>
+                  /* BEAUTIFULLY DESIGNED BASELINE PREVIEW FOR NEW STUDENTS */
+                  <div className="space-y-5">
+                    <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
+                      {/* Target Competency Radar Preview */}
+                      <div className="md:col-span-6 h-64 relative flex items-center justify-center">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <RadarChart
+                            data={[
+                              { metric: "Grammar", value: 85 },
+                              { metric: "Fluency", value: 82 },
+                              { metric: "Pronunciation", value: 84 },
+                              { metric: "Confidence", value: 80 },
+                              { metric: "Topic Intel", value: 86 },
+                              { metric: "Reasoning", value: 82 },
+                            ]}
+                          >
+                            <PolarGrid stroke="var(--border)" strokeDasharray="3 3" />
+                            <PolarAngleAxis
+                              dataKey="metric"
+                              tick={{ fontSize: 10, fill: "var(--heading)", fontWeight: 700 }}
+                            />
+                            <Radar
+                              name="Target Standard"
+                              dataKey="value"
+                              stroke="#6366f1"
+                              fill="#6366f1"
+                              fillOpacity={0.25}
+                              strokeWidth={2}
+                              strokeDasharray="4 4"
+                            />
+                          </RadarChart>
+                        </ResponsiveContainer>
+                      </div>
+
+                      {/* Institutional Benchmark Targets */}
+                      <div className="md:col-span-6 space-y-3">
+                        <div className="flex items-center justify-between pb-1 border-b border-slate-100 dark:border-slate-800">
+                          <span className="text-xs font-bold text-slate-900 dark:text-white">Institutional Competency Target</span>
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800">
+                            Calibrating
+                          </span>
+                        </div>
+
+                        {[
+                          { label: "Grammar & Structure", target: 85, color: "bg-indigo-600" },
+                          { label: "Fluency & Tempo", target: 82, color: "bg-purple-600" },
+                          { label: "Pronunciation & Clarity", target: 84, color: "bg-cyan-600" },
+                          { label: "Confidence & Delivery", target: 80, color: "bg-emerald-600" },
+                        ].map((b) => (
+                          <div key={b.label} className="space-y-1">
+                            <div className="flex justify-between items-center text-xs">
+                              <span className="text-slate-700 dark:text-slate-300 font-medium">{b.label}</span>
+                              <span className="font-bold text-slate-500 dark:text-slate-400 font-mono text-[11px]">Benchmark: {b.target}%</span>
+                            </div>
+                            <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2 overflow-hidden">
+                              <div className={`${b.color} h-2 rounded-full opacity-60`} style={{ width: `${b.target}%` }} />
+                            </div>
+                          </div>
+                        ))}
+
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400 pt-1 leading-relaxed">
+                          Complete 1 solo practice drill or join a live discussion round to unlock your live personal voiceprint!
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-4 rounded-2xl bg-gradient-to-r from-indigo-50/90 via-purple-50/50 to-white dark:from-slate-950/60 dark:via-indigo-950/30 dark:to-slate-950/60 border border-indigo-200/80 dark:border-indigo-500/30">
+                      <div className="flex items-center gap-2.5">
+                        <Sparkles className="w-5 h-5 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                        <div>
+                          <p className="text-xs font-bold text-slate-900 dark:text-white">Ready to calibrate your radar?</p>
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400">Takes only 2 minutes with automated speech critique.</p>
+                        </div>
+                      </div>
+                      <Button
+                        onClick={startSoloPractice}
+                        className="h-9 px-4 text-xs font-bold rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/20 border-0 shrink-0 flex items-center gap-1.5"
+                      >
+                        <Play className="w-3.5 h-3.5 fill-current" />
+                        <span>Start First Solo Drill</span>
+                      </Button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -674,19 +835,31 @@ export default function StudentDashboard({
             {activeTab === "sessions" && (
               <div className="space-y-3">
                 {completedSessions.length === 0 ? (
-                  <div className="py-12 text-center rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/20">
-                    <Users className="w-10 h-10 text-slate-400 mx-auto mb-2" />
-                    <p className="text-sm font-bold text-slate-900 dark:text-white">No Attended GD History Found</p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                      Enter an active room code above to join your first live group discussion.
-                    </p>
+                  <div className="py-10 text-center rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-950/40 p-6 space-y-3">
+                    <div className="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mx-auto shadow-sm">
+                      <Users className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-slate-900 dark:text-white">No Live GD Matches Attended Yet</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto mt-1">
+                        Ask your instructor or room host for a 4-digit session code, or enter any active room from the top console.
+                      </p>
+                    </div>
+                    {activeSessions.length > 0 && (
+                      <Button
+                        onClick={() => setGdLiveCode(activeSessions[0].session_code)}
+                        className="h-9 text-xs font-bold px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm border-0"
+                      >
+                        Join Active Room #{activeSessions[0].session_code}
+                      </Button>
+                    )}
                   </div>
                 ) : (
                   <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
                     {completedSessions.map((s: any) => (
                       <div
                         key={s.session_code || s.id}
-                        className="p-4 rounded-2xl bg-slate-50/60 dark:bg-slate-950/40 border border-slate-200/80 dark:border-slate-800 hover:border-indigo-500/40 transition-all duration-200 flex items-center justify-between gap-4"
+                        className="p-4 rounded-2xl bg-slate-50/70 dark:bg-slate-950/40 border border-slate-200/80 dark:border-slate-800 hover:border-indigo-500/40 transition-all duration-200 flex items-center justify-between gap-4"
                       >
                         <div>
                           <div className="flex items-center gap-2">
@@ -727,14 +900,18 @@ export default function StudentDashboard({
             {activeTab === "solo" && (
               <div className="space-y-3">
                 {soloHistory.length === 0 ? (
-                  <div className="py-12 text-center rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/20">
-                    <Target className="w-10 h-10 text-slate-400 mx-auto mb-2" />
-                    <p className="text-sm font-bold text-slate-900 dark:text-white">No Solo Drills Yet</p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                      Start a solo drill to practice impromptu speech delivery with real-time AI critique.
-                    </p>
-                    <Button onClick={startSoloPractice} className="mt-4 h-9 text-xs font-bold rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm border-0">
-                      Start Solo Drill
+                  <div className="py-10 text-center rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-950/40 p-6 space-y-3">
+                    <div className="w-12 h-12 rounded-2xl bg-cyan-50 dark:bg-cyan-950/60 text-cyan-600 dark:text-cyan-400 flex items-center justify-center mx-auto shadow-sm">
+                      <Target className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-slate-900 dark:text-white">No Solo Practice History Found</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto mt-1">
+                        Solo drills let you practice impromptu speech delivery with real-time AI critique on grammar, pauses, and speech pace.
+                      </p>
+                    </div>
+                    <Button onClick={startSoloPractice} className="h-9 text-xs font-bold rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm border-0">
+                      Start Solo Drill Now
                     </Button>
                   </div>
                 ) : (
@@ -742,7 +919,7 @@ export default function StudentDashboard({
                     {soloHistory.map((s: any) => (
                       <div
                         key={s.id || s.session_number}
-                        className="p-4 rounded-2xl bg-slate-50/60 dark:bg-slate-950/40 border border-slate-200/80 dark:border-slate-800 hover:border-indigo-500/40 transition-all duration-200 space-y-2"
+                        className="p-4 rounded-2xl bg-slate-50/70 dark:bg-slate-950/40 border border-slate-200/80 dark:border-slate-800 hover:border-indigo-500/40 transition-all duration-200 space-y-2"
                       >
                         <div className="flex justify-between items-start gap-2">
                           <div className="flex-1">
@@ -753,7 +930,7 @@ export default function StudentDashboard({
                               {s.topic}
                             </h4>
                           </div>
-                          <div className="px-2.5 py-1 rounded-xl bg-amber-100 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400 text-xs font-black shrink-0">
+                          <div className="px-2.5 py-1 rounded-xl bg-amber-100 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400 text-xs font-black shrink-0 font-mono">
                             {(s.overall_score != null ? Number(s.overall_score) : 0).toFixed(1)} / 100
                           </div>
                         </div>
@@ -769,7 +946,7 @@ export default function StudentDashboard({
                             <Clock className="w-3 h-3" />
                             {new Date(s.created_at || Date.now()).toLocaleDateString()}
                           </span>
-                          <span>Grammar: {s.grammar_score || 0}% · Fluency: {s.fluency_score || 0}%</span>
+                          <span className="font-mono">Grammar: {s.grammar_score || 0}% · Fluency: {s.fluency_score || 0}%</span>
                         </div>
                       </div>
                     ))}
@@ -778,6 +955,67 @@ export default function StudentDashboard({
               </div>
             )}
           </div>
+        </div>
+      </div>
+
+      {/* ──────────────────────────────────────────────────────────── */}
+      {/* RECOMMENDED GD TOPICS FOR PRACTICE */}
+      {/* ──────────────────────────────────────────────────────────── */}
+      <div className="rounded-3xl border border-slate-200/90 dark:border-slate-800 bg-white/80 dark:bg-slate-900/70 p-6 backdrop-blur-xl shadow-sm space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div>
+            <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <Compass className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+              Recommended GD Topics for Practice
+            </h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              Current cohort debating prompts curated for technical and campus recruitment rounds
+            </p>
+          </div>
+          <Button
+            onClick={startSoloPractice}
+            variant="ghost"
+            className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 p-0 h-auto self-start sm:self-auto flex items-center gap-1"
+          >
+            <span>Explore All Topics</span>
+            <ChevronRight className="w-3.5 h-3.5" />
+          </Button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {trendingTopics.map((topic, idx) => (
+            <div
+              key={idx}
+              className="p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-950/50 hover:border-indigo-400 dark:hover:border-indigo-500/50 hover:shadow-md transition-all duration-200 flex flex-col justify-between group"
+            >
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-800">
+                    {topic.category}
+                  </span>
+                  <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 flex items-center gap-1">
+                    <Clock className="w-3 h-3" /> {topic.duration}
+                  </span>
+                </div>
+                <h4 className="text-xs font-bold text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors leading-snug">
+                  {topic.title}
+                </h4>
+              </div>
+
+              <div className="pt-3.5 mt-3 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between">
+                <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400">
+                  {topic.difficulty}
+                </span>
+                <button
+                  onClick={startSoloPractice}
+                  className="text-xs font-bold text-indigo-600 dark:text-indigo-400 group-hover:translate-x-0.5 transition-transform flex items-center gap-1"
+                >
+                  <span>Practice Now</span>
+                  <ArrowRight className="w-3 h-3" />
+                </button>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     </div>

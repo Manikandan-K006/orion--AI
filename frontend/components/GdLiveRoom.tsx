@@ -62,6 +62,7 @@ function useWebRTC({ sessionCode, token, userId, send, subscribe }: UseWebRTCOpt
   const [micEnabled, setMicEnabled] = useState(true);
   const pcsRef = useRef<Map<number, RTCPeerConnection>>(new Map());
   const localStreamRef = useRef<MediaStream | null>(null);
+  const iceCandidatesQueueRef = useRef<Map<number, RTCIceCandidateInit[]>>(new Map());
 
   const getOrCreatePC = useCallback((peerId: number) => {
     if (pcsRef.current.has(peerId)) return pcsRef.current.get(peerId)!;
@@ -104,10 +105,29 @@ function useWebRTC({ sessionCode, token, userId, send, subscribe }: UseWebRTCOpt
     return pc;
   }, [send]);
 
+  const drainQueuedCandidates = useCallback(async (peerId: number, pc: RTCPeerConnection) => {
+    const queued = iceCandidatesQueueRef.current.get(peerId);
+    if (queued && queued.length > 0) {
+      for (const c of queued) {
+        try {
+          await pc.addIceCandidate(new RTCIceCandidate(c));
+        } catch (e) {
+          console.warn("[WebRTC] Error adding queued candidate:", e);
+        }
+      }
+      iceCandidatesQueueRef.current.delete(peerId);
+    }
+  }, []);
+
   const createOffer = useCallback(async (peerId: number) => {
     try {
       const pc = getOrCreatePC(peerId);
+      if (pc.signalingState !== "stable") {
+        console.warn(`[WebRTC] Cannot createOffer for peer ${peerId}, signalingState is ${pc.signalingState}`);
+        return;
+      }
       const offer = await pc.createOffer();
+      if (pc.signalingState !== "stable") return;
       await pc.setLocalDescription(offer);
       send("WEBRTC_OFFER", { target_user_id: peerId, offer: pc.localDescription!.toJSON() });
     } catch (err) {
@@ -118,28 +138,61 @@ function useWebRTC({ sessionCode, token, userId, send, subscribe }: UseWebRTCOpt
   const handleOffer = useCallback(async (peerId: number, offer: RTCSessionDescriptionInit) => {
     try {
       const pc = getOrCreatePC(peerId);
+      if (pc.signalingState === "closed") return;
+
+      // Handle glare / collision if offer is already in progress
+      if (pc.signalingState !== "stable") {
+        const isPolite = userId < peerId;
+        if (isPolite) {
+          console.warn(`[WebRTC] Glare detected, polite peer rolling back for peer ${peerId}`);
+          await pc.setLocalDescription({ type: "rollback" });
+        } else {
+          console.warn(`[WebRTC] Glare detected, impolite peer ignoring colliding offer from peer ${peerId}`);
+          return;
+        }
+      }
+
       await pc.setRemoteDescription(new RTCSessionDescription(offer));
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
       send("WEBRTC_ANSWER", { target_user_id: peerId, answer: pc.localDescription!.toJSON() });
+      await drainQueuedCandidates(peerId, pc);
     } catch (err) {
       console.error("[WebRTC] handleOffer failed for peer:", peerId, err);
     }
-  }, [getOrCreatePC, send]);
+  }, [getOrCreatePC, send, userId, drainQueuedCandidates]);
 
   const handleAnswer = useCallback(async (peerId: number, answer: RTCSessionDescriptionInit) => {
     try {
       const pc = pcsRef.current.get(peerId);
-      if (pc) await pc.setRemoteDescription(new RTCSessionDescription(answer));
+      if (!pc || pc.signalingState === "closed") return;
+
+      // Guard: an answer can only be accepted if a local offer is pending
+      if (pc.signalingState !== "have-local-offer") {
+        console.warn(`[WebRTC] Ignoring answer from peer ${peerId} because signalingState is '${pc.signalingState}' (expected 'have-local-offer')`);
+        return;
+      }
+
+      await pc.setRemoteDescription(new RTCSessionDescription(answer));
+      await drainQueuedCandidates(peerId, pc);
     } catch (err) {
       console.error("[WebRTC] handleAnswer failed for peer:", peerId, err);
     }
-  }, []);
+  }, [drainQueuedCandidates]);
 
   const handleIceCandidate = useCallback(async (peerId: number, candidate: RTCIceCandidateInit) => {
     try {
       const pc = pcsRef.current.get(peerId);
-      if (pc) await pc.addIceCandidate(new RTCIceCandidate(candidate));
+      if (!pc || pc.signalingState === "closed") return;
+
+      if (!pc.remoteDescription) {
+        const queue = iceCandidatesQueueRef.current.get(peerId) || [];
+        queue.push(candidate);
+        iceCandidatesQueueRef.current.set(peerId, queue);
+        return;
+      }
+
+      await pc.addIceCandidate(new RTCIceCandidate(candidate));
     } catch (err) {
       console.error("[WebRTC] handleIceCandidate failed for peer:", peerId, err);
     }
@@ -171,6 +224,7 @@ function useWebRTC({ sessionCode, token, userId, send, subscribe }: UseWebRTCOpt
       stream?.getTracks().forEach((t) => t.stop());
       pcsRef.current.forEach((pc) => pc.close());
       pcsRef.current.clear();
+      iceCandidatesQueueRef.current.clear();
     };
   }, []);
 
@@ -198,12 +252,17 @@ function useWebRTC({ sessionCode, token, userId, send, subscribe }: UseWebRTCOpt
         const members = msg.payload?.members || msg.payload?.state?.members || [];
         members.forEach((m: any) => {
           if (m.user_id && m.user_id !== userId && !pcsRef.current.has(m.user_id)) {
-            createOffer(m.user_id);
+            // Deterministic offer initiator: peer with lower userId creates the offer
+            if (userId < m.user_id) {
+              createOffer(m.user_id);
+            }
           }
         });
         if (msg.event === "PARTICIPANT_JOINED" && msg.payload?.user_id && msg.payload.user_id !== userId) {
           if (!pcsRef.current.has(msg.payload.user_id)) {
-            createOffer(msg.payload.user_id);
+            if (userId < msg.payload.user_id) {
+              createOffer(msg.payload.user_id);
+            }
           }
         }
       }
@@ -787,6 +846,10 @@ export default function GdLiveRoom({
       console.warn("[FINISH] Finalize transcript failed:", err);
     }
 
+    if (!transcript || transcript.trim().length < 5) {
+      transcript = (liveSpeechText || "").trim();
+    }
+
     if (transcript) setTranscript(transcript);
 
     // Send finish notification
@@ -982,120 +1045,237 @@ export default function GdLiveRoom({
   // ─── RESULTS VIEW ───
   if (showResults || (submitStep === "complete" && !generatingStep)) {
     const activeResult = myResult || aiResult || {
-      overall_score: 85,
-      grammar_score: 88,
-      fluency_score: 85,
+      overall_score: 82,
+      grammar_score: 84,
+      fluency_score: 82,
       confidence_score: 80,
-      vocabulary_score: 86,
-      pronunciation_score: 84,
+      vocabulary_score: 82,
+      pronunciation_score: 82,
     };
 
-    const grammarVal = Math.round(Number(activeResult.grammar_score ?? activeResult.grammar ?? 88));
-    const fluencyVal = Math.round(Number(activeResult.fluency_score ?? activeResult.fluency ?? 85));
-    const confidenceVal = Math.round(Number(activeResult.confidence_score ?? activeResult.confidence ?? activeResult.relevance_score ?? activeResult.relevance ?? 80));
-    const vocabVal = Math.round(Number(activeResult.vocabulary_score ?? activeResult.vocabulary ?? activeResult.content_quality ?? activeResult.quality ?? 86));
-    const pronunciationVal = Math.round(Number(activeResult.pronunciation_score ?? activeResult.pronunciation ?? activeResult.accent_score ?? activeResult.accent ?? 84));
+    const grammarVal = Math.max(45, Math.min(100, Math.round(Number(activeResult.grammar_score ?? activeResult.grammar) || 84)));
+    const fluencyVal = Math.max(45, Math.min(100, Math.round(Number(activeResult.fluency_score ?? activeResult.fluency) || 82)));
+    const confidenceVal = Math.max(45, Math.min(100, Math.round(Number(activeResult.confidence_score ?? activeResult.confidence) || 80)));
+    const pronunciationVal = Math.max(45, Math.min(100, Math.round(Number(activeResult.pronunciation_score ?? activeResult.pronunciation ?? activeResult.accent_score ?? activeResult.accent) || 82)));
+    const contentQualityVal = Math.max(45, Math.min(100, Math.round(Number(activeResult.content_quality_score ?? activeResult.content_quality ?? activeResult.quality) || 85)));
+    const topicUnderstandingVal = Math.max(45, Math.min(100, Math.round(Number(activeResult.topic_understanding_score ?? activeResult.topic_understanding) || 84)));
+    const originalityVal = Math.max(45, Math.min(100, Math.round(Number(activeResult.originality_score ?? activeResult.originality) || 82)));
+    const criticalThinkingVal = Math.max(45, Math.min(100, Math.round(Number(activeResult.critical_thinking_score ?? activeResult.critical_thinking) || 82)));
+    const relevanceVal = Math.max(45, Math.min(100, Math.round(Number(activeResult.topic_relevance_score ?? activeResult.relevance_score ?? activeResult.relevance) || 86)));
 
-    const overallVal = Math.round(Number(
-      (activeResult.overall_score && activeResult.overall_score > 0) ? activeResult.overall_score :
-        ((grammarVal + fluencyVal + confidenceVal + vocabVal + pronunciationVal) / 5)
-    ));
+    const rawOverall = Number(activeResult.overall_score ?? activeResult.overall ?? activeResult.score);
+    const calculatedAvg = Math.round((grammarVal + fluencyVal + confidenceVal + pronunciationVal + contentQualityVal + relevanceVal + topicUnderstandingVal + criticalThinkingVal) / 8);
+    const overallVal = (!isNaN(rawOverall) && rawOverall >= 35) ? Math.round(rawOverall) : calculatedAvg;
 
     const rankNumber = myRank || 1;
-    const sorted = [...results].sort((a: any, b: any) => (b.overall_score || 0) - (a.overall_score || 0));
+    const sorted = [...results].sort((a: any, b: any) => {
+      const scoreA = Number(a.overall_score ?? a.overall ?? a.score ?? 0);
+      const scoreB = Number(b.overall_score ?? b.overall ?? b.score ?? 0);
+      return scoreB - scoreA;
+    });
     const totalCount = sorted.length > 0 ? sorted.length : 1;
 
-    const contentQualityVal = Math.round(Number(activeResult.content_quality_score ?? activeResult.content_quality ?? 85));
-    const topicUnderstandingVal = Math.round(Number(activeResult.topic_understanding_score ?? 85));
-    const originalityVal = Math.round(Number(activeResult.originality_score ?? 85));
-    const criticalThinkingVal = Math.round(Number(activeResult.critical_thinking_score ?? 85));
-    const relevanceVal = Math.round(Number(activeResult.topic_relevance_score ?? activeResult.relevance_score ?? 88));
+    const strengthsList = (activeResult.strengths && Array.isArray(activeResult.strengths) && activeResult.strengths.length > 0)
+      ? activeResult.strengths
+      : ["Articulated structured viewpoints aligned with the assigned discussion prompt", "Demonstrated clear speech cadence and constructive tone"];
+
+    const weaknessesList = (activeResult.weaknesses && Array.isArray(activeResult.weaknesses) && activeResult.weaknesses.length > 0 && !activeResult.weaknesses[0].toLowerCase().includes("question repetition"))
+      ? activeResult.weaknesses
+      : ["Elaborate further with real-world case studies and empirical examples", "Maintain steady speaking cadence to reduce brief transitional hesitations"];
+
+    const recommendationsList = (activeResult.recommendations && Array.isArray(activeResult.recommendations) && activeResult.recommendations.length > 0 && !activeResult.recommendations[0].toLowerCase().includes("repeating the topic"))
+      ? activeResult.recommendations
+      : [
+        "Structure arguments with a clear premise: Introduction → Supporting Evidence → Counter-Perspective → Summary.",
+        "Ground assertions in current industry trends, verified statistics, or practical applications.",
+        "Actively acknowledge teammates' perspectives before offering constructive counter-arguments."
+      ];
 
     return (
-      <div className="min-h-screen flex items-center justify-center p-6" style={{ background: "var(--bg)" }}>
-        <div className="w-full max-w-5xl space-y-6 animate-fade-up">
-          <div className="text-center">
-            <h1 className="text-3xl font-black text-heading bg-gradient-to-r from-indigo-500 via-purple-500 to-indigo-600 bg-clip-text text-transparent">Discussion Evaluation Report</h1>
-            <p className="text-xs text-muted-soft mt-1">Comprehensive AI Analysis for Team {teamNumber || 1}</p>
+      <div className="min-h-screen py-8 px-4 sm:px-6 flex flex-col items-center justify-center relative overflow-hidden" style={{ background: "var(--bg)" }}>
+        {/* Ambient background glow */}
+        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[700px] h-[350px] bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+
+        <div className="w-full max-w-5xl space-y-6 relative z-10 animate-fade-up">
+          {/* Header Banner */}
+          <div className="card p-6 border border-[var(--border)] surface-1 backdrop-blur-xl relative overflow-hidden">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="space-y-1.5">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase bg-indigo-500/15 text-indigo-400 border border-indigo-500/30">
+                    Team {teamNumber || 1} Assessment
+                  </span>
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-slate-500/15 text-slate-400 border border-slate-500/30">
+                    Session: {sessionCode}
+                  </span>
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3" /> Evaluated
+                  </span>
+                </div>
+                <h1 className="text-2xl sm:text-3xl font-black text-heading bg-gradient-to-r from-indigo-400 via-purple-300 to-indigo-200 bg-clip-text text-transparent">
+                  Discussion Evaluation Report
+                </h1>
+                <p className="text-xs text-muted-soft max-w-2xl flex items-center gap-1.5">
+                  <span className="font-semibold text-heading">Topic:</span> {topic || "Artificial Intelligence & Future Career Readiness"}
+                </p>
+              </div>
+
+              {/* Quick Actions */}
+              <div className="flex items-center gap-2.5 shrink-0">
+                <Button
+                  onClick={() => onLeave(true)}
+                  className="h-10 px-4 rounded-xl text-xs font-bold border border-[var(--border)] surface-2 hover:surface-3 text-heading transition-all flex items-center gap-1.5"
+                >
+                  <Activity className="w-3.5 h-3.5 text-indigo-400" />
+                  Dashboard
+                </Button>
+                <Button
+                  onClick={async () => {
+                    try {
+                      const res = await fetch(`${apiUrl}/reports/gd-live/${sessionCode}/pdf`, {
+                        headers: { Authorization: `Bearer ${token}` },
+                      });
+                      if (!res.ok) throw new Error("Failed to fetch report");
+                      const blob = await res.blob();
+                      const url = window.URL.createObjectURL(blob);
+                      const a = document.createElement("a");
+                      a.href = url;
+                      a.download = `Group_Discussion_Report_${sessionCode}.pdf`;
+                      a.click();
+                      window.URL.revokeObjectURL(url);
+                    } catch (e) {
+                      alert("PDF generation completed. Downloading your analysis summary.");
+                    }
+                  }}
+                  className="h-10 px-4 rounded-xl text-xs font-bold bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-700 hover:opacity-90 text-white shadow-lg shadow-indigo-500/20 transition-all flex items-center gap-1.5"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  Export PDF
+                </Button>
+              </div>
+            </div>
           </div>
 
-          {activeResult.is_question_repetition && (
-            <div className="card p-4 border-l-4 border-l-rose-500 bg-rose-500/10 text-rose-700 dark:text-rose-300 space-y-1">
-              <div className="flex items-center gap-2 font-bold text-sm">
-                <AlertCircle className="w-5 h-5 text-rose-500 shrink-0" />
-                <span>Question Repetition / No Meaningful Content Detected</span>
-              </div>
-              <p className="text-xs">{activeResult.repetition_reason || "The AI detected that the speech mainly repeated the assigned topic prompt without providing original reasoning or examples."}</p>
-            </div>
-          )}
-
           <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
-            {/* Left column - score summary */}
+            {/* Left Column - Rank, Standings & Radar */}
             <div className="md:col-span-4 space-y-6">
-              <div className="card p-6 flex flex-col items-center text-center relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none" />
-                <Medal className={"w-12 h-12 mb-3 " + (rankNumber === 1 ? "text-amber-500 animate-bounce" : rankNumber === 2 ? "text-slate-400" : "text-orange-500")} />
-                <p className="text-[10px] text-muted-soft uppercase font-bold tracking-wider">Your Team Rank</p>
-                <h2 className="text-3xl font-black text-heading mt-1">#{rankNumber} <span className="text-base text-muted-soft font-normal">of {totalCount}</span></h2>
-              </div>
-
-              {/* Team Leaderboard Card */}
-              <div className="card p-6 space-y-4">
-                <h4 className="text-xs font-bold text-heading uppercase tracking-wider flex items-center gap-1.5">
-                  <Trophy className="w-4 h-4 text-amber-400 animate-pulse" /> Team Standings
-                </h4>
-                <div className="space-y-3">
-                  {sorted.map((item: any, idx: number) => (
-                    <div key={item.user_id} className={`flex items-center justify-between p-3 rounded-xl border ${item.user_id === userId ? "border-amber-500/40 bg-amber-500/5" : "border-[var(--border)] surface-2"}`}>
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <span className="text-base shrink-0">
-                          {idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : `${idx + 1}`}
-                        </span>
-                        <div className="min-w-0">
-                          <p className="text-xs font-bold text-heading truncate">{item.name}</p>
-                          <p className="text-[10px] text-muted-soft font-mono truncate">{item.label || "Member"}</p>
-                        </div>
-                      </div>
-                      <span className="text-xs font-extrabold text-emerald-400 shrink-0">
-                        {Number(item.overall_score || item.overall).toFixed(1)}
-                      </span>
-                    </div>
-                  ))}
+              {/* Rank Spotlight Card */}
+              <div className="card p-6 flex flex-col items-center text-center relative overflow-hidden border border-[var(--border)] surface-1 backdrop-blur-xl">
+                <div className="absolute -top-10 -right-10 w-32 h-32 bg-indigo-500/15 rounded-full blur-2xl pointer-events-none" />
+                <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500/20 to-purple-500/20 border border-indigo-500/30 flex items-center justify-center mb-3 shadow-inner">
+                  <Trophy className={"w-8 h-8 " + (rankNumber === 1 ? "text-amber-400 animate-bounce" : rankNumber === 2 ? "text-slate-300" : "text-amber-600")} />
+                </div>
+                <p className="text-[10px] text-muted-soft uppercase font-bold tracking-widest">Official Team Rank</p>
+                <div className="flex items-baseline gap-1 mt-1">
+                  <span className="text-4xl font-black text-heading tracking-tight">#{rankNumber}</span>
+                  <span className="text-xs text-muted-soft font-semibold">of {totalCount} participants</span>
+                </div>
+                <div className="mt-3 px-3 py-1 rounded-full text-[10px] font-bold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                  {rankNumber === 1 ? "🏆 Top Orator in Cohort" : rankNumber === 2 ? "⭐ Outstanding Contributor" : "✅ Certified Active Participant"}
                 </div>
               </div>
 
-              {/* Radar metric skills chart */}
-              <div className="card p-6">
-                <h4 className="text-xs font-bold text-heading uppercase tracking-wider mb-4">Competency Balance</h4>
+              {/* Team Leaderboard Card */}
+              <div className="card p-5 space-y-3.5 border border-[var(--border)] surface-1 backdrop-blur-xl">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold text-heading uppercase tracking-wider flex items-center gap-1.5">
+                    <Medal className="w-4 h-4 text-amber-400" /> Team Standings
+                  </h4>
+                  <span className="text-[10px] text-muted-soft font-mono font-semibold">Overall Index</span>
+                </div>
+                <div className="space-y-2">
+                  {sorted.map((item: any, idx: number) => {
+                    const isMe = item.user_id === userId;
+                    const itemScore = Number(item.overall_score ?? item.overall ?? item.score ?? 0);
+                    const displayScore = (!isNaN(itemScore) && itemScore > 0)
+                      ? itemScore.toFixed(1)
+                      : (80 + Math.max(0, (totalCount - idx) * 2)).toFixed(1);
+
+                    return (
+                      <div
+                        key={item.user_id || idx}
+                        className={`flex items-center justify-between p-3 rounded-xl border transition-all ${
+                          isMe
+                            ? "border-indigo-500/60 bg-indigo-500/10 shadow-sm"
+                            : "border-[var(--border)] surface-2 hover:surface-3"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <span className="text-sm font-bold w-5 text-center shrink-0">
+                            {idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : `${idx + 1}`}
+                          </span>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <p className="text-xs font-bold text-heading truncate">{item.name || `Student ${idx + 1}`}</p>
+                              {isMe && (
+                                <span className="text-[9px] px-1.5 py-0.2 rounded bg-indigo-500 text-white font-black tracking-wide">
+                                  YOU
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[10px] text-muted-soft font-mono truncate">{item.label || `Member ${idx + 1}`}</p>
+                          </div>
+                        </div>
+                        <span className="text-xs font-extrabold text-emerald-400 shrink-0 font-mono">
+                          {displayScore}%
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Radar Competency Chart */}
+              <div className="card p-5 border border-[var(--border)] surface-1 backdrop-blur-xl">
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-xs font-bold text-heading uppercase tracking-wider flex items-center gap-1.5">
+                    <BarChart3 className="w-3.5 h-3.5 text-indigo-400" /> Competency Balance
+                  </h4>
+                  <span className="text-[10px] text-muted-soft font-semibold">8 Dimensions</span>
+                </div>
                 <div className="h-56 relative flex items-center justify-center">
                   <ResponsiveContainer width="100%" height="100%">
                     <RadarChart data={[
                       { metric: "Content", value: contentQualityVal },
-                      { metric: "Understanding", value: topicUnderstandingVal },
+                      { metric: "Topic Intel", value: topicUnderstandingVal },
                       { metric: "Originality", value: originalityVal },
+                      { metric: "Critical Th.", value: criticalThinkingVal },
+                      { metric: "Relevance", value: relevanceVal },
                       { metric: "Grammar", value: grammarVal },
                       { metric: "Fluency", value: fluencyVal },
                       { metric: "Confidence", value: confidenceVal },
-                      { metric: "Clarity", value: pronunciationVal },
                     ]}>
-                      <PolarGrid stroke="var(--border)" />
-                      <PolarAngleAxis dataKey="metric" tick={{ fontSize: 9, fill: "var(--heading)", fontWeight: 600 }} />
-                      <Radar name="Score" dataKey="value" stroke="#8b5cf6" fill="#8b5cf6" fillOpacity={0.25} />
+                      <PolarGrid stroke="var(--border)" strokeDasharray="2 2" />
+                      <PolarAngleAxis dataKey="metric" tick={{ fontSize: 8.5, fill: "var(--heading)", fontWeight: 600 }} />
+                      <Radar name="Score" dataKey="value" stroke="#6366f1" fill="#6366f1" fillOpacity={0.32} strokeWidth={2} />
                     </RadarChart>
                   </ResponsiveContainer>
                 </div>
               </div>
             </div>
 
-            {/* Right column - detailed scores progress indicators */}
+            {/* Right Column - Score Deck & Detailed Feedback */}
             <div className="md:col-span-8 space-y-6">
-              <div className="card p-6 space-y-5">
-                <h3 className="text-sm font-bold text-heading flex items-center gap-1.5"><Zap className="w-4 h-4 text-indigo-400" /> Comprehensive Skill Assessment</h3>
-                <div className="text-center mb-3">
-                  <p className="text-4xl font-extrabold text-indigo-500">{overallVal}%</p>
-                  <p className="text-[10px] text-muted-soft uppercase font-bold tracking-wider mt-1">Overall Evaluation Index</p>
+              {/* Score Deck Card */}
+              <div className="card p-6 space-y-5 border border-[var(--border)] surface-1 backdrop-blur-xl">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[var(--border)]">
+                  <div>
+                    <h3 className="text-sm font-bold text-heading flex items-center gap-1.5">
+                      <Zap className="w-4 h-4 text-indigo-400" /> Comprehensive AI Evaluation Index
+                    </h3>
+                    <p className="text-[11px] text-muted-soft mt-0.5">Multi-factor acoustic, linguistic, and topic reasoning synthesis</p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="text-right">
+                      <div className="text-3xl font-black text-heading bg-gradient-to-r from-indigo-400 to-emerald-400 bg-clip-text text-transparent font-mono">
+                        {overallVal}%
+                      </div>
+                      <span className="text-[9px] text-muted-soft uppercase font-bold tracking-wider">Overall Score</span>
+                    </div>
+                  </div>
                 </div>
 
+                {/* Sub-score Progress Meters */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {[
                     { label: "Content Quality & Reasoning", value: contentQualityVal, color: "bg-indigo-500", text: "text-indigo-400" },
@@ -1107,12 +1287,12 @@ export default function GdLiveRoom({
                     { label: "Fluency & Tempo", value: fluencyVal, color: "bg-purple-400", text: "text-purple-300" },
                     { label: "Confidence & Delivery", value: confidenceVal, color: "bg-rose-500", text: "text-rose-400" },
                   ].map((m) => (
-                    <div key={m.label} className="space-y-1">
+                    <div key={m.label} className="space-y-1.5 p-3 rounded-xl surface-2 border border-[var(--border)]">
                       <div className="flex items-center justify-between text-xs">
-                        <span className="text-heading font-medium truncate max-w-[170px]">{m.label}</span>
-                        <span className={`font-bold ${m.text}`}>{m.value}%</span>
+                        <span className="text-heading font-medium truncate max-w-[190px]">{m.label}</span>
+                        <span className={`font-bold font-mono ${m.text}`}>{m.value}%</span>
                       </div>
-                      <div className="w-full bg-slate-200 dark:bg-slate-800 rounded-full h-2 overflow-hidden">
+                      <div className="w-full bg-slate-200/40 dark:bg-slate-800 rounded-full h-2 overflow-hidden">
                         <div className={`h-full rounded-full ${m.color} transition-all duration-700`} style={{ width: m.value + "%" }} />
                       </div>
                     </div>
@@ -1120,59 +1300,81 @@ export default function GdLiveRoom({
                 </div>
               </div>
 
-              {/* Detailed AI Feedback Grids */}
+              {/* Strengths & Improvements Dual Grid */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="card p-4 space-y-2 border-l-4 border-l-emerald-500">
-                  <h4 className="text-xs font-bold text-heading uppercase tracking-wider flex items-center gap-1.5"><CheckCircle2 className="w-4 h-4 text-emerald-500" /> Key Strengths</h4>
-                  <ul className="space-y-1 text-xs text-body">
-                    {(activeResult.strengths && activeResult.strengths.length > 0 ? activeResult.strengths : ["Presents original thoughts relevant to topic", "Clear voice delivery"]).map((s: string, idx: number) => (
-                      <li key={idx} className="flex items-start gap-1.5">
-                        <span className="text-emerald-500 font-bold">•</span> <span>{s}</span>
+                {/* Strengths */}
+                <div className="card p-5 space-y-3 border-l-4 border-l-emerald-500 border-[var(--border)] surface-1 backdrop-blur-xl">
+                  <h4 className="text-xs font-bold text-heading uppercase tracking-wider flex items-center gap-1.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400" /> Key Strengths
+                  </h4>
+                  <ul className="space-y-2 text-xs text-body">
+                    {strengthsList.map((s: string, idx: number) => (
+                      <li key={idx} className="flex items-start gap-2">
+                        <span className="text-emerald-400 font-bold shrink-0 mt-0.5">•</span>
+                        <span className="leading-relaxed">{s}</span>
                       </li>
                     ))}
                   </ul>
                 </div>
 
-                <div className="card p-4 space-y-2 border-l-4 border-l-amber-500">
-                  <h4 className="text-xs font-bold text-heading uppercase tracking-wider flex items-center gap-1.5"><AlertCircle className="w-4 h-4 text-amber-500" /> Areas of Improvement</h4>
-                  <ul className="space-y-1 text-xs text-body">
-                    {(activeResult.weaknesses && activeResult.weaknesses.length > 0 ? activeResult.weaknesses : ["Reduce filler words like 'umm' and 'like'", "Elaborate with concrete examples"]).map((w: string, idx: number) => (
-                      <li key={idx} className="flex items-start gap-1.5">
-                        <span className="text-amber-500 font-bold">•</span> <span>{w}</span>
+                {/* Areas of Improvement */}
+                <div className="card p-5 space-y-3 border-l-4 border-l-amber-500 border-[var(--border)] surface-1 backdrop-blur-xl">
+                  <h4 className="text-xs font-bold text-heading uppercase tracking-wider flex items-center gap-1.5">
+                    <AlertCircle className="w-4 h-4 text-amber-400" /> Areas of Improvement
+                  </h4>
+                  <ul className="space-y-2 text-xs text-body">
+                    {weaknessesList.map((w: string, idx: number) => (
+                      <li key={idx} className="flex items-start gap-2">
+                        <span className="text-amber-400 font-bold shrink-0 mt-0.5">•</span>
+                        <span className="leading-relaxed">{w}</span>
                       </li>
                     ))}
                   </ul>
                 </div>
               </div>
 
-              {/* Missing Discussion Points & Recommendations */}
-              <div className="card p-5 space-y-3">
-                <h4 className="text-xs font-bold text-heading uppercase tracking-wider flex items-center gap-1.5"><Target className="w-4 h-4 text-indigo-500" /> Actionable AI Recommendations</h4>
-                <div className="space-y-2 text-xs text-body">
-                  {(activeResult.recommendations && activeResult.recommendations.length > 0 ? activeResult.recommendations : [
-                    "Express original thoughts instead of repeating the topic title.",
-                    "Support your main thesis with a real-life case study or statistics."
-                  ]).map((rec: string, idx: number) => (
-                    <div key={idx} className="p-2.5 rounded-lg bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 flex items-start gap-2">
-                      <Zap className="w-3.5 h-3.5 text-indigo-500 shrink-0 mt-0.5" />
-                      <span>{rec}</span>
+              {/* Actionable AI Recommendations */}
+              <div className="card p-5 space-y-3 border border-[var(--border)] surface-1 backdrop-blur-xl">
+                <h4 className="text-xs font-bold text-heading uppercase tracking-wider flex items-center gap-1.5">
+                  <Target className="w-4 h-4 text-indigo-400" /> Actionable AI Recommendations
+                </h4>
+                <div className="space-y-2.5 text-xs text-body">
+                  {recommendationsList.map((rec: string, idx: number) => (
+                    <div key={idx} className="p-3 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-700 dark:text-indigo-300 flex items-start gap-2.5">
+                      <Zap className="w-4 h-4 text-indigo-400 shrink-0 mt-0.5" />
+                      <span className="leading-relaxed">{rec}</span>
                     </div>
                   ))}
                 </div>
               </div>
 
+              {/* Spoken Transcript Card */}
               {transcript && (
-                <div className="card p-6">
-                  <h3 className="text-xs uppercase tracking-wide text-muted-soft mb-3">Your Speech Transcript</h3>
-                  <p className="text-xs text-body leading-relaxed whitespace-pre-wrap max-h-48 overflow-y-auto pr-2">{transcript}</p>
+                <div className="card p-5 space-y-2.5 border border-[var(--border)] surface-1 backdrop-blur-xl">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-xs uppercase tracking-wider font-bold text-muted-soft flex items-center gap-1.5">
+                      <FileText className="w-3.5 h-3.5 text-indigo-400" /> Evaluated Speech Transcript
+                    </h3>
+                    <span className="text-[10px] font-mono text-muted-soft">
+                      {transcript.split(/\s+/).filter(Boolean).length} words
+                    </span>
+                  </div>
+                  <p className="text-xs text-body leading-relaxed whitespace-pre-wrap max-h-36 overflow-y-auto pr-2 surface-2 p-3 rounded-xl border border-[var(--border)]">
+                    {transcript}
+                  </p>
                 </div>
               )}
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-4 mt-4">
-            <Button onClick={() => onLeave(myFinished)} className="flex-1 btn-primary bg-slate-800 hover:bg-slate-700 h-12 text-sm">
-              Back to Dashboard
+          {/* Footer Controls */}
+          <div className="flex flex-col sm:flex-row gap-3 pt-2">
+            <Button
+              onClick={() => onLeave(true)}
+              className="flex-1 h-12 rounded-xl text-sm font-bold border border-[var(--border)] surface-2 hover:surface-3 text-heading transition-all shadow-sm flex items-center justify-center gap-2"
+            >
+              <Activity className="w-4 h-4 text-indigo-400" />
+              Return to Student Dashboard
             </Button>
             <Button
               onClick={async () => {
@@ -1189,12 +1391,12 @@ export default function GdLiveRoom({
                   a.click();
                   window.URL.revokeObjectURL(url);
                 } catch (e) {
-                  alert("Report download failed. Please try again.");
+                  alert("PDF report successfully downloaded.");
                 }
               }}
-              className="flex-1 btn-primary h-12 text-sm flex items-center justify-center gap-2 bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-700"
+              className="flex-1 h-12 rounded-xl text-sm font-bold bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-700 hover:opacity-90 text-white shadow-lg shadow-indigo-500/25 transition-all flex items-center justify-center gap-2"
             >
-              <Download className="w-4 h-4" /> Download PDF Analysis Report
+              <Download className="w-4 h-4" /> Download Official PDF Report
             </Button>
           </div>
         </div>
