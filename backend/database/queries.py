@@ -46,10 +46,13 @@ def get_user_by_email(connection: MySQLConnection, email: str) -> dict[str, Any]
 
 
 def get_user_by_register_number(connection: MySQLConnection, register_number: str) -> dict[str, Any] | None:
+    rn = (register_number or "").strip()
     return fetch_one(
         connection,
-        "SELECT id, name, email, register_number, password_hash, role FROM users WHERE register_number = %s",
-        (register_number,),
+        "SELECT u.id, u.name, u.email, u.register_number, u.password_hash, u.role "
+        "FROM users u LEFT JOIN student_profile sp ON u.id = sp.user_id "
+        "WHERE TRIM(u.register_number) = %s OR TRIM(COALESCE(sp.spr_no, '')) = %s",
+        (rn, rn),
     )
 
 

@@ -55,7 +55,8 @@ class IPFilterMiddleware(BaseHTTPMiddleware):
         return await call_next(request)
 
 
-app.add_middleware(IPFilterMiddleware)
+if settings.network_restriction_enabled.strip().lower() == "true":
+    app.add_middleware(IPFilterMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
@@ -69,6 +70,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 
