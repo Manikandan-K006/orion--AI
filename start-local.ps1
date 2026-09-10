@@ -81,6 +81,18 @@ if (-not (Test-Path $uvicornExe)) { throw "uvicorn not found at $uvicornExe. Run
 # ────────────────────────────────────────────────────────────
 $port3000 = Test-PortInUse -Port 3000
 $port8000 = Test-PortInUse -Port 8000
+$port3306 = Test-PortInUse -Port 3306
+
+if (-not $port3306) {
+    Write-Host "MySQL on port 3306 is not active. Starting MySQL..." -ForegroundColor Yellow
+    $mysqldPath = "C:\Program Files\MySQL\MySQL Server 8.4\bin\mysqld.exe"
+    $dataDir = Join-Path $ScriptRoot "database\data"
+    $initFile = Join-Path $ScriptRoot "init.txt"
+    if (Test-Path $mysqldPath) {
+        Start-ProcessWindow -Title "SpeakSense MySQL Database" -Command "& '$mysqldPath' --datadir='$dataDir' --init-file='$initFile'"
+        Start-Sleep -Seconds 3
+    }
+}
 
 if ($port3000) {
     Write-Host "Port 3000 in use - killing old frontend process..." -ForegroundColor Yellow
@@ -102,8 +114,8 @@ $lanIp = Get-LanIPv4
 # Students accessing via LAN IP get the host rewritten at runtime in config.ts.
 $envLocalFile = Join-Path $FrontendDir ".env.local"
 $envProdFile  = Join-Path $FrontendDir ".env.production"
-"NEXT_PUBLIC_API_URL=http://localhost:8000" | Out-File -FilePath $envLocalFile -Encoding utf8 -Force
-"NEXT_PUBLIC_API_URL=http://localhost:8000" | Out-File -FilePath $envProdFile  -Encoding utf8 -Force
+"NEXT_PUBLIC_API_URL=http://127.0.0.1:8000" | Out-File -FilePath $envLocalFile -Encoding utf8 -Force
+"NEXT_PUBLIC_API_URL=http://127.0.0.1:8000" | Out-File -FilePath $envProdFile  -Encoding utf8 -Force
 
 Write-Header
 Write-Host "  Host PC:" -ForegroundColor Green

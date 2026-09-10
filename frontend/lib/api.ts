@@ -10,7 +10,29 @@ export type User = {
   register_number?: string;
   department?: string;
   year?: string | number;
+  section?: string;
 };
+
+export type PageView =
+  | "login"
+  | "dashboard"
+  | "profile"
+  | "gd-leaderboard"
+  | "solo-practice"
+  | "solo-session"
+  | "solo-result"
+  | "gd-live"
+  | "gd-live-session"
+  | "gd-live-results"
+  | "gd-live-admin"
+  | "gd-live-admin-view"
+  | "gd-live-room"
+  | "gd-live-monitor"
+  | "reports"
+  | "certificates"
+  | "achievements"
+  | "notifications"
+  | "settings";
 
 export type Question = {
   id: number;

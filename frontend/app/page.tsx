@@ -1,14 +1,20 @@
 "use client";
 
-import { AlertCircle, Award, Clock, LogOut, MessageSquare, Mic, MicOff, Trophy, Users, User as UserIcon, Lock, Zap, Loader2, Copy, Check, Target, TrendingUp, ArrowUp, ArrowDown, Sparkles, Menu, X, Shield, Sun, Moon, RefreshCw, Video, VideoOff, Hand, MessageCircle, Maximize, PhoneOff, Radio, CheckCircle2, Mail, Phone, Globe, Eye, EyeOff, VolumeX, Volume2, Bell, Settings, Search, BookOpen, ShieldAlert, Calendar, Upload } from "lucide-react";
+import { AlertCircle, Award, Clock, LogOut, MessageSquare, Mic, MicOff, Trophy, Users, User as UserIcon, Lock, Zap, Loader2, Copy, Check, Target, TrendingUp, ArrowUp, ArrowDown, Sparkles, Menu, X, Shield, Sun, Moon, RefreshCw, Video, VideoOff, Hand, MessageCircle, Maximize, PhoneOff, Radio, CheckCircle2, Mail, Phone, Globe, Eye, EyeOff, VolumeX, Volume2, Bell, Settings, Search, BookOpen, ShieldAlert, Calendar, Upload, ArrowLeft, ArrowRight, ChevronRight, Play, ShieldCheck, ChevronDown, Star, Activity, Cpu, Lightbulb, FileText, CheckCircle, MapPin } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { Bar, BarChart, CartesianGrid, Cell, Legend, PolarAngleAxis, PolarGrid, Radar, RadarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, Cell, Legend, PolarAngleAxis, PolarGrid, PolarRadiusAxis, Radar, RadarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import GdLiveRoom from "@/components/GdLiveRoom";
 import GdLiveAdminMonitor from "@/components/GdLiveAdminMonitor";
+import StudentDashboard from "@/components/dashboard/StudentDashboard";
+import AdminDashboard from "@/components/dashboard/AdminDashboard";
+import ProfileView from "@/components/profile/ProfileView";
+import LeaderboardView from "@/components/leaderboard/LeaderboardView";
+import AchievementsView from "@/components/achievements/AchievementsView";
+import ReportsView from "@/components/reports/ReportsView";
 import { useGdLiveWs, GDLiveWsMessage } from "@/lib/useGdLiveWs";
 import { useVoiceAnnouncement } from "@/services/voice/useVoiceAnnouncement";
 import { AllTimeAchiever, ComprehensiveLeaderboard, GDLiveLeaderboardEntry, LeaderboardRanking, LeaderboardStats, Progress, SoloQuote, SoloStartResponse, SoloSubmitResponse, User, apiRequest, hostGdLiveMeeting, endGdLiveMeeting, getGdLiveState, changePassword, getApiUrl, downloadGdLivePdfReport, downloadGdLiveExcelReport, exportGdLiveAttendance, downloadOverallPdfReport } from "@/lib/api";
@@ -260,6 +266,11 @@ export default function Home() {
   const [adminRegisterNumber, setAdminRegisterNumber] = useState("");
   const [adminPassword, setAdminPassword] = useState("");
   const [loginTab, setLoginTab] = useState<"student" | "admin">("student");
+  const [loginRoleTab, setLoginRoleTab] = useState<"student" | "admin" | "principal" | "coordinator">("student");
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+  const [pendingGdRedirect, setPendingGdRedirect] = useState(false);
+  const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(0);
+  const [activeTopicCategory, setActiveTopicCategory] = useState<"all" | "tech" | "placement" | "society">("all");
   const [theme, setTheme] = useState<"light" | "dark">("dark");
   const [mounted, setMounted] = useState(false);
   const [notifications, setNotifications] = useState<Array<{ id: string | number; time: string; icon: string; title: string; desc: string; read: boolean }>>([
@@ -267,6 +278,34 @@ export default function Home() {
     { id: 2, time: "12 hours ago", icon: "Target", title: "Daily Practice Goal Reminder", desc: "Build consistency by completing a 2-minute solo AI speaking session on public speech fundamentals.", read: true },
     { id: 3, time: "1 day ago", icon: "Sparkles", title: "AI Skill Analysis Complete", desc: "A new skill analysis radar matrix is available based on your latest solo practice performance topic.", read: true },
   ]);
+
+  const [activeNav, setActiveNav] = useState<string>("home");
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const sections = ["contact", "faqs", "features", "how-it-works", "home"];
+      const scrollPos = window.scrollY + 140;
+      for (const s of sections) {
+        const el = document.getElementById(s);
+        if (el && el.offsetTop <= scrollPos) {
+          setActiveNav(s);
+          break;
+        }
+      }
+    };
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  const scrollToSection = (id: string) => {
+    setActiveNav(id);
+    const element = document.getElementById(id);
+    if (element) {
+      const yOffset = -70;
+      const y = element.getBoundingClientRect().top + window.pageYOffset + yOffset;
+      window.scrollTo({ top: y, behavior: "smooth" });
+    }
+  };
 
   useEffect(() => {
     setMounted(true);
@@ -658,10 +697,11 @@ export default function Home() {
     loginLockRef.current = true;
     console.time("Login-Total");
 
-    const rn = loginTab === "student" ? studentRegisterNumber : adminRegisterNumber;
-    const pw = loginTab === "student" ? (studentPassword || "Password123") : adminPassword;
-    if (!rn.trim()) {
-      setMessage("Enter your register number / SPR number");
+    const isStudent = loginRoleTab === "student" || loginTab === "student";
+    const rn = (isStudent ? studentRegisterNumber : adminRegisterNumber).trim();
+    const pw = isStudent ? (studentPassword || "Password123") : adminPassword;
+    if (!rn) {
+      setMessage(`Enter your ${isStudent ? "register number" : "SPR / Faculty ID"}`);
       loginLockRef.current = false;
       return;
     }
@@ -671,15 +711,25 @@ export default function Home() {
       console.time("Login-API-Request");
       const res = await apiRequest<{ access_token: string; user: User }>("/login/register-number", {
         method: "POST",
-        body: JSON.stringify({ register_number: rn, password: loginTab === "student" ? (pw || "Password123") : pw })
+        body: JSON.stringify({ register_number: rn, password: isStudent ? (pw || "Password123") : pw })
       });
       console.timeEnd("Login-API-Request");
 
       localStorage.setItem("mzgd_token", res.access_token);
       setToken(res.access_token);
       setUser(res.user);
-      setView("dashboard");
+      setIsLoginModalOpen(false);
       voice.announceLogin();
+
+      if (pendingGdRedirect && gdLiveCode.trim()) {
+        setPendingGdRedirect(false);
+        setView("gd-live");
+        setTimeout(() => {
+          joinGdLive();
+        }, 300);
+      } else {
+        setView("dashboard");
+      }
 
       // Lazy load dashboard data in the background
       loadDashboardData(res.access_token, res.user);
@@ -1639,115 +1689,803 @@ export default function Home() {
 
   if (!user) {
     return (
-      <div className={`min-h-screen flex items-center justify-center relative overflow-hidden ${theme === "dark" ? "dark" : ""}`}>
-        {/* Theme-based animated background */}
-        <div className="fixed inset-0 z-0">
-          <img
-            src={theme === "dark" ? "/login_dark_bg.jpeg" : "/new_light_BG.jpeg"}
-            alt=""
-            className="w-full h-full object-cover"
+      <div className={`min-h-screen relative overflow-x-hidden ${theme === "dark" ? "dark" : ""}`}>
+        {/* ─── Premium Aurora Mesh & Subtle Vignette Grid Background (Replaces Dot Pattern) ─── */}
+        <div className="fixed inset-0 z-0 bg-[#f8fafc] dark:bg-[#070b12] transition-colors pointer-events-none overflow-hidden">
+          {/* Subtle Modern Linear Grid with Soft Radial Mask Fade */}
+          <div
+            className="absolute inset-0 opacity-40 dark:opacity-20"
+            style={{
+              backgroundImage:
+                theme === "dark"
+                  ? "linear-gradient(to right, rgba(148, 163, 184, 0.08) 1px, transparent 1px), linear-gradient(to bottom, rgba(148, 163, 184, 0.08) 1px, transparent 1px)"
+                  : "linear-gradient(to right, rgba(100, 116, 139, 0.12) 1px, transparent 1px), linear-gradient(to bottom, rgba(100, 116, 139, 0.12) 1px, transparent 1px)",
+              backgroundSize: "48px 48px",
+              maskImage: "radial-gradient(ellipse 80% 60% at 50% 25%, black 40%, transparent 90%)",
+              WebkitMaskImage: "radial-gradient(ellipse 80% 60% at 50% 25%, black 40%, transparent 90%)"
+            }}
           />
-          <div className="absolute inset-0 backdrop-blur-[2px]" style={{ background: theme === "dark" ? "rgba(15,23,42,0.45)" : "rgba(248,250,252,0.35)" }} />
+
+          {/* Ambient Radiant Aurora Glow Orbs */}
+          <div className="absolute -top-[20%] left-1/2 -translate-x-1/2 w-[1000px] h-[600px] bg-gradient-to-b from-indigo-500/15 via-blue-500/10 to-transparent blur-[140px] rounded-full pointer-events-none" />
+          <div className="absolute top-[10%] -left-[10%] w-[500px] h-[500px] bg-gradient-to-tr from-sky-400/12 to-transparent blur-[120px] rounded-full pointer-events-none" />
+          <div className="absolute top-[15%] -right-[10%] w-[550px] h-[550px] bg-gradient-to-tl from-purple-500/12 to-transparent blur-[130px] rounded-full pointer-events-none" />
+          <div className="absolute top-[65%] left-1/2 -translate-x-1/2 w-[800px] h-[450px] bg-gradient-to-t from-blue-600/8 via-indigo-600/5 to-transparent blur-[140px] rounded-full pointer-events-none" />
         </div>
 
-        {/* Theme toggle */}
-        <button onClick={toggleTheme} className="fixed top-4 right-4 z-20 p-2.5 rounded-xl btn-secondary" suppressHydrationWarning>
-          {theme === "dark" ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-        </button>
-        <div className="relative z-10 w-full max-w-sm md:max-w-md mx-3 md:mx-4 animate-fade-up">
-          <div className="text-center mb-6 md:mb-10">
-            <div className="icon-badge icon-purple mx-auto mb-3 md:mb-5" style={{ width: "72px", height: "72px" }}>
-              <img src="/MZ_logo_DB.webp" alt="Mount Zion Logo" className="w-12 h-12 rounded-xl object-cover" />
+        {/* ─── Top Sticky Navbar (Screenshot 1) ─── */}
+        <header className="sticky top-0 z-40 w-full border-b border-slate-200/80 dark:border-slate-800/80 bg-white/85 dark:bg-slate-950/85 backdrop-blur-md transition-colors">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            {/* Logo + Brand (Without plus symbol) */}
+            <div className="flex items-center gap-2.5">
+              <img
+                src="/MZ_logo_DB.webp"
+                alt="Mount Zion Logo"
+                className="w-9 h-9 rounded-lg object-cover shadow-sm"
+              />
+              <span className="font-extrabold text-xl tracking-tight text-slate-900 dark:text-white">
+                MZ ThinkCircle
+              </span>
             </div>
-            <h1 className="text-2xl md:text-4xl font-bold mb-1 md:mb-2 text-heading">MZ ThinkCircle</h1>
-            <p className="text-xs md:text-base text-muted-soft">AI Group Discussion Platform</p>
+
+            {/* Navigation links (ONLY 5 items matching user request: Home, How It Works, Features, FAQs, Contact) */}
+            <nav className="hidden md:flex items-center gap-8 text-sm font-medium">
+              {[
+                { id: "home", label: "Home" },
+                { id: "how-it-works", label: "How It Works" },
+                { id: "features", label: "Features" },
+                { id: "faqs", label: "FAQs" },
+                { id: "contact", label: "Contact" }
+              ].map((item) => {
+                const isActive = activeNav === item.id;
+                return (
+                  <a
+                    key={item.id}
+                    href={`#${item.id}`}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      scrollToSection(item.id);
+                    }}
+                    className={`transition-all duration-200 cursor-pointer ${
+                      isActive
+                        ? "text-blue-600 dark:text-blue-400 font-bold"
+                        : "text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
+                    }`}
+                  >
+                    {item.label}
+                  </a>
+                );
+              })}
+            </nav>
+
+            {/* Right Controls */}
+            <div className="flex items-center gap-3">
+              <button
+                onClick={toggleTheme}
+                className="w-10 h-10 rounded-xl border border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 text-slate-700 dark:text-slate-200 flex items-center justify-center hover:scale-105 transition-transform shadow-sm"
+                title="Toggle light/dark theme"
+              >
+                {theme === "dark" ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-indigo-600" />}
+              </button>
+              <button
+                onClick={() => {
+                  setIsLoginModalOpen(true);
+                  setMessage("");
+                }}
+                className="h-10 px-5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm shadow-md shadow-blue-500/20 transition-all flex items-center gap-1.5"
+              >
+                <span>Login</span>
+              </button>
+            </div>
           </div>
-          <div className="card">
-            {/* Login tabs */}
-            <div className="flex mb-6 rounded-xl p-1 surface-2">
-              <button
-                onClick={() => { setLoginTab("student"); setMessage(""); }}
-                className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium rounded-lg transition-all duration-300 ${loginTab === "student" ? "btn-primary" : "text-muted-soft hover:text-heading"
-                  }`}
-              >
-                <Users className="w-4 h-4" /> Student Login
-              </button>
-              <button
-                onClick={() => { setLoginTab("admin"); setMessage(""); }}
-                className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium rounded-lg transition-all duration-300 ${loginTab === "admin" ? "btn-primary" : "text-muted-soft hover:text-heading"
-                  }`}
-              >
-                <Shield className="w-4 h-4" /> Admin Login
-              </button>
+        </header>
+
+        {/* ─── Full-Viewport Hero Section ─── */}
+        <section
+          id="home"
+          className="relative z-10 min-h-[calc(100vh-4rem)] flex flex-col justify-center items-center py-6 px-4 sm:px-6 lg:px-8 max-w-6xl mx-auto text-center scroll-mt-16"
+        >
+          {/* Ambient Glow Aura */}
+          <div className="pointer-events-none absolute -top-12 left-1/2 -translate-x-1/2 w-[700px] h-[360px] bg-gradient-to-tr from-blue-500/15 via-indigo-500/20 to-purple-500/15 blur-[130px] rounded-full" />
+
+          <div className="w-full space-y-6 sm:space-y-7 flex flex-col items-center my-auto">
+            {/* Institutional Pill Badge */}
+            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold bg-blue-50/90 dark:bg-blue-950/60 border border-blue-200/90 dark:border-blue-800/80 text-blue-700 dark:text-blue-300 shadow-sm animate-fade-in">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span>AI Group Discussion & Speech Intelligence — Mount Zion College</span>
             </div>
-            <div className="space-y-4 md:space-y-5">
-              <div>
-                <label className="block text-xs md:text-sm font-medium mb-1 md:mb-1.5 text-heading">
-                  {loginTab === "student" ? "Register Number" : "SPR Number"}
-                </label>
-                <Input
-                  placeholder={loginTab === "student" ? "911724205001" : "12345"}
-                  value={loginTab === "student" ? studentRegisterNumber : adminRegisterNumber}
-                  onChange={(e) => loginTab === "student" ? setStudentRegisterNumber(e.target.value) : setAdminRegisterNumber(e.target.value)}
-                  className="inp w-full"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1.5 text-heading">Password</label>
-                <Input
-                  type="password"
-                  placeholder={loginTab === "student" ? "Default: Password123" : "Mzorator@admin"}
-                  value={loginTab === "student" ? studentPassword : adminPassword}
-                  onChange={(e) => loginTab === "student" ? setStudentPassword(e.target.value) : setAdminPassword(e.target.value)}
-                  className="inp w-full"
-                />
-              </div>
-              {loginTab === "admin" && (
-                <div className="rounded-lg p-3 surface-2 border border-amber-500/30">
-                  <p className="text-xs text-amber-600 dark:text-amber-400">
-                    <Shield className="w-3 h-3 inline mr-1" />
-                    Admin demo: SPR <code className="text-heading font-mono">12345</code> / Password <code className="text-heading font-mono">Mzorator@admin</code>
-                  </p>
-                </div>
-              )}
-              <Button
-                className="group relative w-full btn-primary h-12 text-lg font-semibold"
-                onClick={handleLogin}
-                disabled={loading}
+
+            {/* Subtitle & Title */}
+            <div className="space-y-2.5 max-w-4xl">
+              <p className="text-xs sm:text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">
+                Mount Zion College of Engineering And Technology
+              </p>
+              <h1 className="text-3xl sm:text-5xl md:text-6xl font-extrabold tracking-tight text-slate-900 dark:text-white leading-[1.12]">
+                <span className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 bg-clip-text text-transparent">
+                  Master Campus Group Discussions
+                </span>
+                <br />
+                <span className="text-slate-900 dark:text-white">With Real-Time Speech AI</span>
+              </h1>
+            </div>
+
+            <p className="text-sm sm:text-base text-slate-600 dark:text-slate-300 max-w-3xl mx-auto font-medium leading-relaxed">
+              Articulate with confidence, master turn-taking dynamics, and receive instantaneous 8-pillar acoustic feedback. Engineered for campus recruitment and Tier-1 placement rounds.
+            </p>
+
+            {/* Primary Action Buttons */}
+            <div className="flex flex-wrap items-center justify-center gap-3.5 pt-1">
+              <button
+                onClick={() => {
+                  setIsLoginModalOpen(true);
+                  setMessage("");
+                }}
+                className="h-12 px-8 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm sm:text-base shadow-xl shadow-blue-600/25 transition-all flex items-center gap-2 hover:-translate-y-0.5 cursor-pointer"
               >
-                {loading ? (
-                  <Loader2 className="h-5 w-5 animate-spin mx-auto" />
-                ) : (
-                  <span className="flex items-center justify-center gap-2">
-                    <Sparkles className="w-5 h-5" />
-                    <span>Enter GD Portal</span>
+                <span>🚀 Enter Live GD Arena</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+              <a
+                href="#how-it-works"
+                onClick={(e) => {
+                  e.preventDefault();
+                  scrollToSection("how-it-works");
+                }}
+                className="h-12 px-7 rounded-xl bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold text-sm sm:text-base border border-slate-200 dark:border-slate-800 shadow-sm transition-all flex items-center gap-2 cursor-pointer"
+              >
+                <span>See How It Works</span>
+              </a>
+            </div>
+
+            {/* ─── 4-Card Placement Telemetry Stats Row ─── */}
+            <div className="pt-4 w-full max-w-5xl mx-auto">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+                {[
+                  { number: "50+", label: "Campus GD Topics", sub: "TCS, Zoho, Infosys prompts", icon: BookOpen, color: "text-blue-600" },
+                  { number: "8", label: "Speech AI Pillars", sub: "Real-time acoustic radar", icon: Cpu, color: "text-indigo-600" },
+                  { number: "<100ms", label: "Ultra Low Latency", sub: "Multi-peer WebRTC audio", icon: Radio, color: "text-purple-600" },
+                  { number: "94.2%", label: "Placement Success", sub: "Tier-1 offer conversions", icon: Trophy, color: "text-emerald-600" }
+                ].map((stat, i) => (
+                  <div key={i} className="p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white/85 dark:bg-slate-900/70 backdrop-blur-xl text-left shadow-sm space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className={`text-2xl sm:text-3xl font-black font-mono ${stat.color}`}>{stat.number}</span>
+                      <stat.icon className="w-5 h-5 text-slate-400" />
+                    </div>
+                    <div className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white">{stat.label}</div>
+                    <div className="text-[11px] text-slate-500 dark:text-slate-400">{stat.sub}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ─── How It Works Section ─── */}
+        <section id="how-it-works" className="scroll-mt-20 py-8 px-4 sm:px-6 lg:px-8 max-w-6xl mx-auto space-y-6">
+          <div className="text-center max-w-2xl mx-auto space-y-1.5">
+            <span className="text-xs font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
+              Campus Placement Pipeline
+            </span>
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white">
+              How It Works: 4 Steps to Placement Mastery
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
+              Simulates authentic corporate placement rounds with AI-guided preparation, live debate, and diagnostic scoring.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            {[
+              {
+                step: "01",
+                title: "Room Entry & Brief",
+                desc: "Enter a 4-digit room code or select from 50+ campus recruitment topics. Receive 2 minutes of prep with suggested thesis points.",
+                tag: "Matchmaking & Prep"
+              },
+              {
+                step: "02",
+                title: "Live Audio Debate",
+                desc: "Take turns speaking with peers over crystal-clear WebRTC audio. Automated AI timekeeper prevents interruptions and ensures balance.",
+                tag: "Spatial WebRTC"
+              },
+              {
+                step: "03",
+                title: "Neural AI Evaluation",
+                desc: "Speech intelligence engine listens to voiceprints, evaluating grammar, articulation, vocabulary, and relevance in real time.",
+                tag: "8-Pillar Scoring"
+              },
+              {
+                step: "04",
+                title: "Dossier & Rankings",
+                desc: "Gain Elo credits, climb department leaderboards across CSE/IT/AIDS/ECE, and download official placement PDF reports.",
+                tag: "Verified Analytics"
+              }
+            ].map((item) => (
+              <div
+                key={item.step}
+                className="p-6 rounded-3xl border border-slate-200/80 dark:border-slate-800 bg-white/85 dark:bg-slate-900/60 backdrop-blur-xl space-y-3 shadow-sm hover:shadow-lg transition-all hover:-translate-y-1"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="font-mono text-xs font-black px-2.5 py-1 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800">
+                    STAGE {item.step}
                   </span>
-                )}
-              </Button>
-              {message && (
-                <div className="flex items-center gap-2 rounded-lg p-3 text-sm bg-red-500/10 text-red-600 dark:text-red-300 border border-red-500/30">
-                  <AlertCircle className="h-4 w-4 shrink-0" /> {message}
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{item.tag}</span>
                 </div>
-              )}
+                <h3 className="text-base font-bold text-slate-900 dark:text-white pt-1">{item.title}</h3>
+                <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">{item.desc}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* ─── Features Section ─── */}
+        <section id="features" className="scroll-mt-20 py-8 px-4 sm:px-6 lg:px-8 max-w-6xl mx-auto space-y-6">
+          <div className="text-center max-w-2xl mx-auto space-y-1.5">
+            <span className="text-xs font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
+              State-of-the-Art Architecture
+            </span>
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white">
+              Engineered for Campus GD Excellence
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
+              Purpose-built tools for Mount Zion students and placement coordinators to accelerate oral proficiency.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            {[
+              {
+                icon: Cpu,
+                title: "8-Pillar Acoustic Intelligence",
+                desc: "Calculates scores for grammar accuracy, voice confidence, fluency cadence, pronunciation, topic relevance, reasoning, vocabulary, and delivery.",
+                badge: "Core AI Engine"
+              },
+              {
+                icon: Zap,
+                title: "Autonomous AI Moderator",
+                desc: "Interjects intelligently when discussions stall, introduces provocative counter-arguments, and guarantees equitable candidate speaking distribution.",
+                badge: "Dynamic Moderation"
+              },
+              {
+                icon: Target,
+                title: "Solo AI Practice Simulator",
+                desc: "Practice solo drills 24/7. Get random campus debate prompts, record responses, and receive instantaneous radar calibration and improvement critiques.",
+                badge: "Anytime Drills"
+              },
+              {
+                icon: Trophy,
+                title: "Department & Year Leaderboards",
+                desc: "Competitive ranking across CSE, IT, AIDS, and ECE cohorts. Earn Elo rating points, climb tiers, and showcase verified placement readiness badges.",
+                badge: "Gamified Growth"
+              },
+              {
+                icon: Radio,
+                title: "Low-Latency WebRTC Arena",
+                desc: "Spatial peer-to-peer audio pipeline optimized for Indian college networks with adaptive bitrate, zero echo, and active speaker glow detection.",
+                badge: "Sub-100ms Voice"
+              },
+              {
+                icon: FileText,
+                title: "Institutional Placement Reports",
+                desc: "One-click download of official Anna University and corporate recruitment assessment reports in PDF and Excel formats with student voiceprints.",
+                badge: "Audit & PDF Dossiers"
+              }
+            ].map((f, i) => (
+              <div
+                key={i}
+                className="p-5 rounded-3xl border border-slate-200/80 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 backdrop-blur-xl space-y-3 shadow-sm hover:border-blue-500/40 transition-all hover:-translate-y-0.5"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-blue-50 to-indigo-50 dark:from-blue-950/80 dark:to-indigo-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold shadow-sm">
+                    <f.icon className="w-4 h-4" />
+                  </div>
+                  <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                    {f.badge}
+                  </span>
+                </div>
+                <h3 className="text-base font-bold text-slate-900 dark:text-white">{f.title}</h3>
+                <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 leading-relaxed">{f.desc}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* ─── Trending Campus GD Topics Section ─── */}
+        <section className="scroll-mt-20 py-8 px-4 sm:px-6 lg:px-8 max-w-6xl mx-auto space-y-6">
+          <div className="text-center max-w-2xl mx-auto space-y-1.5">
+            <span className="text-xs font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
+              Campus Placement Practice Library
+            </span>
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white">
+              Trending Campus Recruitment GD Topics
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
+              Curated from recent campus recruitment interview rounds at TCS, Zoho, Cognizant, and Infosys.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {[
+              {
+                title: "Artificial Intelligence in Healthcare: Ethical Frontiers vs Diagnostic Speed",
+                category: "Tech & AI",
+                difficulty: "Advanced",
+                rounds: 42,
+                desc: "Examines ethical dilemmas of algorithmic diagnosis, doctor accountability, and medical data confidentiality."
+              },
+              {
+                title: "Remote vs Hybrid Engineering: Impact on Innovation and Team Cohesion",
+                category: "Workplace",
+                difficulty: "Intermediate",
+                rounds: 58,
+                desc: "Discusses productivity metrics, spontaneous ideation, and junior developer mentoring in distributed tech teams."
+              },
+              {
+                title: "Green Hydrogen & Sustainable Mobility: India's Path to Net Zero by 2070",
+                category: "Socio-Tech",
+                difficulty: "Placement Favorite",
+                rounds: 37,
+                desc: "Evaluates electric vehicles versus hydrogen fuel cells, grid infrastructure, and manufacturing economics."
+              }
+            ].map((topic, i) => (
+              <div
+                key={i}
+                className="p-5 rounded-3xl border border-slate-200/80 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 backdrop-blur-xl shadow-sm hover:shadow-md transition-all flex flex-col justify-between space-y-3.5"
+              >
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300">
+                      {topic.category}
+                    </span>
+                    <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400">
+                      ★ {topic.difficulty}
+                    </span>
+                  </div>
+                  <h3 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white leading-snug">{topic.title}</h3>
+                  <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">{topic.desc}</p>
+                </div>
+
+                <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                  <span className="text-[11px] font-semibold text-slate-500">{topic.rounds} debate rounds</span>
+                  <button
+                    onClick={() => {
+                      setIsLoginModalOpen(true);
+                      setMessage("");
+                    }}
+                    className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
+                  >
+                    <span>Practice Topic</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* ─── Interactive FAQs Accordion Section ─── */}
+        <section id="faqs" className="scroll-mt-20 py-8 px-4 sm:px-6 lg:px-8 max-w-4xl mx-auto space-y-6">
+          <div className="text-center max-w-xl mx-auto space-y-1.5">
+            <span className="text-xs font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
+              Clear Answers
+            </span>
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white">
+              Frequently Asked Questions
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
+              Everything you need to know about the MZ ThinkCircle Group Discussion platform.
+            </p>
+          </div>
+
+          <div className="space-y-2.5">
+            {[
+              {
+                q: "What is Speaksense AI ThinkCircle?",
+                a: "MZ ThinkCircle is an institutional AI speech evaluation platform engineered specifically for Mount Zion College of Engineering and Technology students to master Group Discussions, public speaking, and campus placement interview rounds."
+              },
+              {
+                q: "How does real-time AI evaluation work during a Group Discussion?",
+                a: "Our speech AI listens via WebRTC audio stream, transcribes each participant's turn, and evaluates 8 speech pillars in real-time: Grammar, Fluency, Pronunciation, Confidence, Topic Relevance, Critical Thinking, Originality, and Content Quality."
+              },
+              {
+                q: "Can I practice alone before joining a peer live debate?",
+                a: "Yes! Solo AI Practice Drills allow you to pick or receive a random topic, record your response, and receive instantaneous radar feedback with detailed improvement tips."
+              },
+              {
+                q: "How do I enter an active live GD session?",
+                a: "Click 'Login' or 'Enter Live GD Arena', log in with your college Register Number (default password: Password123), and enter the 4-digit session code provided by your faculty or session host."
+              },
+              {
+                q: "How are the department and college leaderboards calculated?",
+                a: "Every concluded discussion awards Elo performance credits based on your speaking turn ratings, vocabulary richness, consensus building, and articulation scores."
+              },
+              {
+                q: "Can faculty and coordinators download official assessment reports?",
+                a: "Yes, administrators and faculty can export comprehensive student speech analytics, attendance rosters, and radar charts as official PDF and Excel reports."
+              }
+            ].map((faq, idx) => {
+              const isOpen = openFaqIndex === idx;
+              return (
+                <div
+                  key={idx}
+                  className="rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white/85 dark:bg-slate-900/60 backdrop-blur-xl shadow-sm overflow-hidden transition-all"
+                >
+                  <button
+                    type="button"
+                    onClick={() => setOpenFaqIndex(isOpen ? null : idx)}
+                    className="w-full p-4 text-left flex items-center justify-between gap-4 cursor-pointer hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors"
+                  >
+                    <span className="text-sm sm:text-base font-bold text-slate-900 dark:text-white flex items-center gap-2.5">
+                      <span className="w-5 h-5 rounded-md bg-blue-50 dark:bg-blue-950/80 text-blue-600 dark:text-blue-400 flex items-center justify-center text-xs font-bold shrink-0">
+                        {idx + 1}
+                      </span>
+                      {faq.q}
+                    </span>
+                    <ChevronDown className={`w-4 h-4 text-slate-400 shrink-0 transition-transform duration-200 ${isOpen ? "rotate-180 text-blue-600" : ""}`} />
+                  </button>
+                  {isOpen && (
+                    <div className="px-4 pb-4 pt-1 text-xs sm:text-sm text-slate-600 dark:text-slate-400 pl-12 leading-relaxed border-t border-slate-100 dark:border-slate-800/50">
+                      {faq.a}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </section>
+
+        {/* ─── High-Impact Placement Call-to-Action (CTA) Pre-Footer Banner ─── */}
+        <section className="py-6 px-4 sm:px-6 lg:px-8 max-w-5xl mx-auto">
+          <div className="rounded-3xl bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 p-6 sm:p-8 text-center text-white shadow-xl space-y-4 relative overflow-hidden">
+            <div className="pointer-events-none absolute -top-24 -right-24 w-72 h-72 bg-white/10 rounded-full blur-2xl" />
+            <span className="inline-block px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-white/15 backdrop-blur-md">
+              Mount Zion Placement Training 2026
+            </span>
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight">
+              Ready to Ace Your Next Placement GD?
+            </h2>
+            <p className="text-xs sm:text-sm text-blue-100 max-w-2xl mx-auto leading-relaxed">
+              Join 1,200+ Mount Zion engineering students accelerating their speaking confidence and securing dream corporate job offers.
+            </p>
+            <div className="flex flex-wrap items-center justify-center gap-3 pt-1">
+              <button
+                onClick={() => {
+                  setIsLoginModalOpen(true);
+                  setMessage("");
+                }}
+                className="h-11 px-7 rounded-xl bg-white text-blue-600 hover:bg-slate-100 font-extrabold text-sm shadow-xl transition-all hover:scale-105"
+              >
+                🚀 Launch Live GD Arena
+              </button>
+              <button
+                onClick={() => {
+                  setIsLoginModalOpen(true);
+                  setMessage("");
+                }}
+                className="h-11 px-6 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-sm border border-white/20 backdrop-blur-md transition-all"
+              >
+                Start Solo Practice Drill
+              </button>
             </div>
           </div>
+        </section>
 
-          {/* College contact footer */}
-          <div className="mt-6 text-center text-xs text-muted-soft space-y-1">
-            <p className="font-medium text-heading">Mount Zion College of Engineering and Technology</p>
-            <p>
-              <span className="inline-flex items-center gap-1"><Mail className="w-3.5 h-3.5" /> info@mzcet.in</span>
-              {"  ·  "}
-              <span className="inline-flex items-center gap-1"><Phone className="w-3.5 h-3.5" /> 04333 294400</span>
-              {"  ·  "}
-              <span className="inline-flex items-center gap-1"><Phone className="w-3.5 h-3.5" /> 73733 44444</span>
+        {/* ─── Official Institutional Footer Section ─── */}
+        <footer id="contact" className="scroll-mt-20 border-t border-slate-200/80 dark:border-slate-800 bg-white/95 dark:bg-slate-950/95 backdrop-blur-xl relative z-10 transition-colors">
+          {/* Subtle Top Accent Gradient Line */}
+          <div className="h-1 w-full bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600" />
 
-            </p>
-            <p>
-              <span className="inline-flex items-center gap-1"><Globe className="w-3.5 h-3.5" /> www.mzcet.in</span>
-            </p>
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-12 pb-8">
+            {/* Top Multi-Column Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-8 lg:gap-10 pb-10 border-b border-slate-200/80 dark:border-slate-800/80">
+              {/* Column 1: Brand & College Info (4 cols on lg) */}
+              <div className="lg:col-span-4 space-y-4 text-left">
+                <div className="flex items-center gap-3">
+                  <img
+                    src="/MZ_logo_DB.webp"
+                    alt="Mount Zion College of Engineering and Technology"
+                    className="w-10 h-10 rounded-xl object-cover shadow-md ring-2 ring-blue-500/20"
+                  />
+                  <div>
+                    <span className="text-lg font-black tracking-tight">
+                      <span className="text-blue-600 dark:text-blue-400">MZ Think</span>
+                      <span className="text-emerald-500">Circle</span>
+                    </span>
+                    <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400">Speech & GD AI Colosseum</p>
+                  </div>
+                </div>
+
+                <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed max-w-sm">
+                  The institutional group discussion training and speech intelligence platform for <strong>Mount Zion College of Engineering & Technology</strong>. Engineered to accelerate student verbal fluency, debate argumentation, and corporate placement offer conversions.
+                </p>
+
+                {/* Accreditation & Institutional Badges */}
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200/80 dark:border-blue-800/80 text-[10px] font-bold">
+                    <ShieldCheck className="w-3.5 h-3.5 text-blue-600" />
+                    NAAC 'A' Grade
+                  </span>
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800/80 text-[10px] font-bold">
+                    <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
+                    Anna University Affiliated
+                  </span>
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-200/80 dark:border-purple-800/80 text-[10px] font-bold">
+                    <Award className="w-3.5 h-3.5 text-purple-600" />
+                    AICTE Approved
+                  </span>
+                </div>
+              </div>
+
+              {/* Column 2: Quick Links (2 cols on lg) */}
+              <div className="lg:col-span-2 space-y-3 text-left">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-white">Quick Navigation</h4>
+                <ul className="space-y-2 text-xs">
+                  {[
+                    { id: "home", label: "Home" },
+                    { id: "how-it-works", label: "How It Works" },
+                    { id: "features", label: "Features" },
+                    { id: "faqs", label: "FAQs" },
+                    { id: "contact", label: "Contact Us" }
+                  ].map((item) => (
+                    <li key={item.id}>
+                      <a
+                        href={`#${item.id}`}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          scrollToSection(item.id);
+                        }}
+                        className="text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors flex items-center gap-1.5 cursor-pointer font-medium"
+                      >
+                        <ChevronRight className="w-3 h-3 text-slate-400" />
+                        <span>{item.label}</span>
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              {/* Column 3: Platform Features (3 cols on lg) */}
+              <div className="lg:col-span-3 space-y-3 text-left">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-white">Placement Intelligence</h4>
+                <ul className="space-y-2 text-xs text-slate-600 dark:text-slate-400">
+                  <li className="flex items-center gap-1.5">
+                    <Cpu className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                    <span>8-Pillar Acoustic Intelligence</span>
+                  </li>
+                  <li className="flex items-center gap-1.5">
+                    <Zap className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                    <span>Autonomous AI Turn Moderator</span>
+                  </li>
+                  <li className="flex items-center gap-1.5">
+                    <Target className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+                    <span>24/7 Solo Speech Practice Drills</span>
+                  </li>
+                  <li className="flex items-center gap-1.5">
+                    <Trophy className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                    <span>Department & Cohort Leaderboards</span>
+                  </li>
+                  <li className="flex items-center gap-1.5">
+                    <Radio className="w-3.5 h-3.5 text-purple-500 shrink-0" />
+                    <span>Low-Latency Spatial WebRTC Audio</span>
+                  </li>
+                  <li className="flex items-center gap-1.5">
+                    <FileText className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                    <span>Official Audit PDF & Excel Dossiers</span>
+                  </li>
+                </ul>
+              </div>
+
+              {/* Column 4: Official Contact & Campus Location (3 cols on lg) */}
+              <div className="lg:col-span-3 space-y-3 text-left">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-white">Campus Location & Contact</h4>
+                <div className="space-y-2 text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                  <div className="flex items-start gap-2">
+                    <MapPin className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                    <span>
+                      Lena Vilakku, Pilivalam P.O, Pudukkottai District, Tamil Nadu — 622 507
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Phone className="w-4 h-4 text-blue-600 shrink-0" />
+                    <span>+91 4333 294400 / +91 73733 44444</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Mail className="w-4 h-4 text-blue-600 shrink-0" />
+                    <a href="mailto:info@mzcet.in" className="hover:text-blue-600 transition-colors">info@mzcet.in</a>
+                    <span>·</span>
+                    <a href="mailto:placements@mzcet.in" className="hover:text-blue-600 transition-colors">placements@mzcet.in</a>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Globe className="w-4 h-4 text-blue-600 shrink-0" />
+                    <a href="https://www.mzcet.in" target="_blank" rel="noopener noreferrer" className="hover:text-blue-600 transition-colors font-medium">www.mzcet.in</a>
+                  </div>
+                </div>
+
+                <div className="pt-2">
+                  <button
+                    onClick={() => {
+                      setIsLoginModalOpen(true);
+                      setMessage("");
+                    }}
+                    className="w-full py-2 px-3 rounded-xl bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 font-bold text-xs hover:bg-blue-100 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <span>🚀 Launch Student & Faculty Portal</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Bottom Sub-Footer Bar */}
+            <div className="pt-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500 dark:text-slate-400">
+              <div className="flex items-center gap-2 text-center sm:text-left">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span>All Speech AI Systems Operational · Server Latency: 42ms</span>
+              </div>
+
+              <div className="text-center">
+                <span>© 2026 Mount Zion College of Engineering and Technology. All rights reserved.</span>
+              </div>
+
+              <button
+                onClick={() => scrollToSection("home")}
+                className="inline-flex items-center gap-1 text-xs font-bold text-slate-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer group"
+              >
+                <span>Back to Top</span>
+                <ArrowUp className="w-3.5 h-3.5 group-hover:-translate-y-0.5 transition-transform" />
+              </button>
+            </div>
           </div>
-        </div>
+        </footer>
+
+        {/* ──────────────────────────────────────────────────────────── */}
+        {/* LOGIN MODAL (SCREENSHOT 2 - NO PLUS SYMBOL) */}
+        {/* ──────────────────────────────────────────────────────────── */}
+        {isLoginModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+            <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl p-7 sm:p-8 shadow-2xl border border-slate-100 dark:border-slate-800 relative animate-scale-up space-y-6">
+              {/* Back button */}
+              <div className="flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsLoginModalOpen(false);
+                    setMessage("");
+                  }}
+                  className="w-9 h-9 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors"
+                  title="Go back"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                </button>
+                <div className="text-right">
+                  <span className="text-[10px] uppercase font-bold text-slate-400">Mount Zion GD</span>
+                </div>
+              </div>
+
+              {/* Title & Branding (No plus symbol) */}
+              <div className="text-center space-y-1">
+                <h2 className="text-xl font-bold tracking-tight">
+                  <span className="text-blue-600 font-extrabold">MZ Think</span>
+                  <span className="text-emerald-500 font-black">Circle</span>
+                </h2>
+                <h3 className="text-2xl font-black text-slate-900 dark:text-white">Welcome Back</h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">Login to your GD account to continue</p>
+              </div>
+
+              {/* Role Navigation Tabs: Student, Admin, Principal, Coordinator (Screenshot 2) */}
+              <div className="flex border-b border-slate-200 dark:border-slate-800 justify-between px-1">
+                {[
+                  { id: "student", label: "Student" },
+                  { id: "admin", label: "Admin" },
+                  { id: "principal", label: "Principal" },
+                  { id: "coordinator", label: "Coordinator" }
+                ].map((tab) => {
+                  const isActive = loginRoleTab === tab.id;
+                  return (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => {
+                        setLoginRoleTab(tab.id as any);
+                        setLoginTab(tab.id === "student" ? "student" : "admin");
+                        setMessage("");
+                      }}
+                      className={`pb-2.5 text-xs sm:text-sm font-semibold transition-all relative ${
+                        isActive
+                          ? "text-blue-600 dark:text-blue-400 font-bold"
+                          : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                      }`}
+                    >
+                      {tab.label}
+                      {isActive && (
+                        <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 dark:bg-blue-400 rounded-full" />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Form Inputs (Screenshot 2) */}
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
+                    {loginRoleTab === "student" ? "REGISTER NUMBER" : "SPR / FACULTY ID"}
+                  </label>
+                  <Input
+                    placeholder={loginRoleTab === "student" ? "e.g., 911724205001" : "e.g., 12345"}
+                    value={loginRoleTab === "student" ? studentRegisterNumber : adminRegisterNumber}
+                    onChange={(e) =>
+                      loginRoleTab === "student"
+                        ? setStudentRegisterNumber(e.target.value)
+                        : setAdminRegisterNumber(e.target.value)
+                    }
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleLogin();
+                    }}
+                    className="w-full h-12 rounded-xl bg-slate-50/90 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-sm font-mono px-4 text-slate-900 dark:text-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-1.5">
+                    PASSWORD
+                  </label>
+                  <Input
+                    type="password"
+                    placeholder="Enter your password"
+                    value={loginRoleTab === "student" ? studentPassword : adminPassword}
+                    onChange={(e) =>
+                      loginRoleTab === "student"
+                        ? setStudentPassword(e.target.value)
+                        : setAdminPassword(e.target.value)
+                    }
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleLogin();
+                    }}
+                    className="w-full h-12 rounded-xl bg-slate-50/90 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-sm px-4 text-slate-900 dark:text-white"
+                  />
+                </div>
+
+                {/* Quick Auto-fill Demo Helpers & Forgot Password */}
+                <div className="flex items-center justify-between text-xs pt-0.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (loginRoleTab === "student") {
+                        setStudentRegisterNumber("911724205001");
+                        setStudentPassword("Password123");
+                      } else {
+                        setAdminRegisterNumber("12345");
+                        setAdminPassword("Mzorator@admin");
+                      }
+                    }}
+                    className="text-blue-600 dark:text-blue-400 hover:underline font-semibold text-[11px]"
+                  >
+                    Auto-fill demo {loginRoleTab === "student" ? "(911724205001)" : "(12345)"}
+                  </button>
+
+                  <span className="text-blue-600 dark:text-blue-400 hover:underline font-semibold cursor-pointer text-[11px]">
+                    Forgot password?
+                  </span>
+                </div>
+
+                {message && (
+                  <div className="flex items-center gap-2 rounded-xl p-3 text-xs bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/25">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>{message}</span>
+                  </div>
+                )}
+
+                <Button
+                  onClick={handleLogin}
+                  disabled={loading}
+                  className="w-full h-12 bg-blue-600 hover:bg-blue-500 text-white font-bold text-base rounded-xl shadow-lg shadow-blue-600/25 border-0 transition-all"
+                >
+                  {loading ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : "Login"}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -1988,432 +2726,47 @@ export default function Home() {
 
           {/* Profile View */}
           {view === "profile" && user && (
-            <div className="max-w-5xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8 pb-12 animate-in slide-in-from-bottom-4 fade-in duration-500">
-              {/* Left Column - Profile Card */}
-              <div className="bg-[var(--surface)] border border-[var(--border)] rounded-3xl p-8 shadow-sm relative overflow-hidden flex flex-col items-center text-center">
-                {/* Decorative gradients */}
-                <div className="absolute -top-12 -left-12 w-32 h-32 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none" />
-                <div className="absolute -bottom-12 -right-12 w-32 h-32 bg-purple-500/10 rounded-full blur-2xl pointer-events-none" />
-
-                {/* Avatar Initial Bubble */}
-                <div className="relative w-24 h-24 rounded-full flex items-center justify-center bg-gradient-to-tr from-indigo-500 via-purple-500 to-pink-500 p-0.5 mb-4 group shadow-md hover:scale-105 transition-transform duration-300">
-                  <div className="w-full h-full bg-[var(--surface)] rounded-full flex items-center justify-center text-heading font-black text-2xl tracking-tight select-none">
-                    {user.name ? user.name.split(/\s+/).filter(Boolean).map(n => n[0]).join("").toUpperCase().slice(0, 2) : "US"}
-                  </div>
-                  <div className="absolute inset-0 rounded-full border border-indigo-500/30 animate-ping opacity-20 pointer-events-none" />
-                </div>
-
-                <h3 className="text-xl font-bold text-heading tracking-tight mb-1">{user.name}</h3>
-
-                {user.role === "admin" ? (
-                  <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-500/10 text-red-500 border border-red-500/20 shadow-sm flex items-center gap-1 mb-6 select-none">
-                    <Shield className="w-3 h-3" />
-                    Administrator
-                  </span>
-                ) : (
-                  <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-500/10 text-indigo-500 border border-indigo-500/20 shadow-sm flex items-center gap-1 mb-6 select-none">
-                    <Sparkles className="w-3 h-3" />
-                    Student
-                  </span>
-                )}
-
-                {/* Details Grid */}
-                <div className="w-full space-y-3 text-left border-t border-[var(--border)] pt-6 mt-1">
-                  <div className="flex items-center gap-3 p-3 rounded-2xl bg-[var(--bg)] border border-[var(--border)] hover:border-indigo-500/30 transition-all duration-200">
-                    <div className="w-9 h-9 rounded-xl bg-indigo-500/10 text-indigo-500 flex items-center justify-center shrink-0">
-                      <Mail className="w-4 h-4" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[10px] font-bold text-muted uppercase tracking-wider">Email Address</p>
-                      <p className="text-xs font-semibold text-heading truncate">{user.email}</p>
-                    </div>
-                  </div>
-
-                  {user.register_number && (
-                    <div className="flex items-center gap-3 p-3 rounded-2xl bg-[var(--bg)] border border-[var(--border)] hover:border-indigo-500/30 transition-all duration-200">
-                      <div className="w-9 h-9 rounded-xl bg-purple-500/10 text-purple-500 flex items-center justify-center shrink-0">
-                        <Award className="w-4 h-4" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-[10px] font-bold text-muted uppercase tracking-wider">Register Number</p>
-                        <p className="text-xs font-semibold text-heading truncate font-mono">{user.register_number}</p>
-                      </div>
-                    </div>
-                  )}
-
-                  {user.department && (
-                    <div className="flex items-center gap-3 p-3 rounded-2xl bg-[var(--bg)] border border-[var(--border)] hover:border-indigo-500/30 transition-all duration-200">
-                      <div className="w-9 h-9 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center shrink-0">
-                        <Shield className="w-4 h-4" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-[10px] font-bold text-muted uppercase tracking-wider">Department</p>
-                        <p className="text-xs font-semibold text-heading truncate">{user.department}</p>
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="flex items-center gap-3 p-3 rounded-2xl bg-[var(--bg)] border border-[var(--border)] hover:border-indigo-500/30 transition-all duration-200">
-                    <div className="w-9 h-9 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center shrink-0">
-                      <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[10px] font-bold text-muted uppercase tracking-wider">Account Status</p>
-                      <p className="text-xs font-semibold text-heading">Active / Verified</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Right Column - Security & Password Form */}
-              <div className="lg:col-span-2 bg-[var(--surface)] border border-[var(--border)] rounded-3xl p-8 shadow-sm relative overflow-hidden flex flex-col justify-between">
-                <div className="absolute -top-12 -right-12 w-48 h-48 bg-indigo-500/5 rounded-full blur-3xl pointer-events-none" />
-
-                <div>
-                  <div className="mb-6 border-b border-[var(--border)] pb-5">
-                    <h3 className="text-xl font-bold text-heading tracking-tight mb-1 flex items-center gap-2">
-                      <Lock className="w-5 h-5 text-indigo-500" />
-                      Security Settings
-                    </h3>
-                    <p className="text-sm text-muted">Update your password to keep your account secure.</p>
-                  </div>
-
-                  <form onSubmit={async (e) => {
-                    e.preventDefault();
-                    if (newPassword.length < 8) return alert("New password must be at least 8 characters");
-                    if (newPassword !== confirmPassword) return alert("Passwords do not match");
-                    try {
-                      setLoading(true);
-                      const res = await changePassword({ current_password: currentPassword, new_password: newPassword }, token!);
-                      alert(res.message || "Password updated successfully");
-                      setCurrentPassword("");
-                      setNewPassword("");
-                      setConfirmPassword("");
-                    } catch (err: any) {
-                      alert(err.message || "Failed to change password");
-                    } finally {
-                      setLoading(false);
-                    }
-                  }} className="space-y-5">
-                    <div>
-                      <label className="text-xs font-semibold text-heading mb-1.5 block">Current Password</label>
-                      <div className="relative flex items-center">
-                        <Lock className="w-4 h-4 text-muted absolute left-4 pointer-events-none" />
-                        <Input
-                          type={showCurrent ? "text" : "password"}
-                          value={currentPassword}
-                          onChange={e => setCurrentPassword(e.target.value)}
-                          required
-                          placeholder="••••••••"
-                          className="w-full pl-11 pr-11 bg-[var(--bg)] border-[var(--border)] focus:border-indigo-500/50 focus:ring-2 focus:ring-indigo-500/10 rounded-2xl h-12"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowCurrent(!showCurrent)}
-                          className="absolute right-4 text-muted hover:text-heading transition-colors focus:outline-none"
-                        >
-                          {showCurrent ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                        </button>
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="text-xs font-semibold text-heading mb-1.5 block">New Password</label>
-                      <div className="relative flex items-center">
-                        <Lock className="w-4 h-4 text-muted absolute left-4 pointer-events-none" />
-                        <Input
-                          type={showNew ? "text" : "password"}
-                          value={newPassword}
-                          onChange={e => setNewPassword(e.target.value)}
-                          required
-                          minLength={8}
-                          placeholder="••••••••"
-                          className="w-full pl-11 pr-11 bg-[var(--bg)] border-[var(--border)] focus:border-indigo-500/50 focus:ring-2 focus:ring-indigo-500/10 rounded-2xl h-12"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowNew(!showNew)}
-                          className="absolute right-4 text-muted hover:text-heading transition-colors focus:outline-none"
-                        >
-                          {showNew ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                        </button>
-                      </div>
-                      <p className="text-[10px] text-muted mt-1.5 pl-1">Must be at least 8 characters long</p>
-                    </div>
-
-                    <div>
-                      <label className="text-xs font-semibold text-heading mb-1.5 block">Confirm New Password</label>
-                      <div className="relative flex items-center">
-                        <Lock className="w-4 h-4 text-muted absolute left-4 pointer-events-none" />
-                        <Input
-                          type={showConfirm ? "text" : "password"}
-                          value={confirmPassword}
-                          onChange={e => setConfirmPassword(e.target.value)}
-                          required
-                          minLength={8}
-                          placeholder="••••••••"
-                          className="w-full pl-11 pr-11 bg-[var(--bg)] border-[var(--border)] focus:border-indigo-500/50 focus:ring-2 focus:ring-indigo-500/10 rounded-2xl h-12"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowConfirm(!showConfirm)}
-                          className="absolute right-4 text-muted hover:text-heading transition-colors focus:outline-none"
-                        >
-                          {showConfirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                        </button>
-                      </div>
-                    </div>
-
-                    <Button
-                      type="submit"
-                      disabled={loading}
-                      className="w-full h-12 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-semibold rounded-2xl shadow-lg hover:shadow-indigo-500/20 transition-all duration-200 mt-2 flex items-center justify-center gap-2 border-0"
-                    >
-                      {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Lock className="w-4 h-4" />}
-                      Save Password
-                    </Button>
-                  </form>
-                </div>
-              </div>
-            </div>
+            <ProfileView
+              user={user}
+              token={token}
+              progress={progress}
+              setSuccess={setSuccess}
+              setMessage={setMessage}
+            />
           )}
 
           {/* Reports View */}
           {view === "reports" && user && (
-            <div className="space-y-6 pb-12 animate-fade-up">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="card p-6 md:col-span-2 relative overflow-hidden flex flex-col justify-between border-l-4 border-l-indigo-600">
-                  <div>
-                    <h3 className="text-base font-bold text-heading flex items-center gap-2">
-                      <TrendingUp className="w-5 h-5 text-indigo-500" /> Overall Progress Metrics
-                    </h3>
-                    <p className="text-xs text-muted-soft mt-1">Detailed analysis of group discussions and solo metrics.</p>
-                  </div>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
-                    <div className="p-3 bg-slate-100/50 dark:bg-slate-950/40 border border-slate-200/40 dark:border-slate-800/40 rounded-2xl">
-                      <span className="text-[10px] text-muted-soft uppercase font-bold tracking-wider">Avg Score</span>
-                      <p className="text-xl font-extrabold text-heading mt-1">{progress && progress.average_score != null ? `${Number(progress.average_score).toFixed(1)}%` : "0.0%"}</p>
-                    </div>
-                    <div className="p-3 bg-slate-100/50 dark:bg-slate-950/40 border border-slate-200/40 dark:border-slate-800/40 rounded-2xl">
-                      <span className="text-[10px] text-muted-soft uppercase font-bold tracking-wider">Total Credits</span>
-                      <p className="text-xl font-extrabold text-heading mt-1">{progress && progress.total_credits != null ? Math.round(progress.total_credits) : 0}</p>
-                    </div>
-                    <div className="p-3 bg-slate-100/50 dark:bg-slate-950/40 border border-slate-200/40 dark:border-slate-800/40 rounded-2xl">
-                      <span className="text-[10px] text-muted-soft uppercase font-bold tracking-wider">GD Sessions</span>
-                      <p className="text-xl font-extrabold text-heading mt-1">{gdLiveSessions.filter(s => s.status === "completed").length}</p>
-                    </div>
-                    <div className="p-3 bg-slate-100/50 dark:bg-slate-950/40 border border-slate-200/40 dark:border-slate-800/40 rounded-2xl">
-                      <span className="text-[10px] text-muted-soft uppercase font-bold tracking-wider">Solo AI Tries</span>
-                      <p className="text-xl font-extrabold text-heading mt-1">{soloHistory.length}</p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="card p-6 flex flex-col justify-between border-l-4 border-l-cyan-500">
-                  <div>
-                    <h3 className="text-base font-bold text-heading flex items-center gap-2">
-                      <BookOpen className="w-5 h-5 text-cyan-500" /> Export PDF Report
-                    </h3>
-                    <p className="text-xs text-muted-soft mt-1">Export official Mount Zion communication analysis certificate and report summary.</p>
-                  </div>
-                  <Button
-                    onClick={async () => {
-                      setPdfLoading(true);
-                      setMessage("");
-                      try {
-                        await downloadOverallPdfReport(token);
-                        setSuccess("Overall Report PDF downloaded successfully!");
-                      } catch (err: any) {
-                        setMessage(err.message || "Failed to download PDF report. Please try again.");
-                      } finally {
-                        setPdfLoading(false);
-                      }
-                    }}
-                    disabled={pdfLoading}
-                    className="w-full btn-primary h-11 text-xs mt-6"
-                  >
-                    {pdfLoading && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
-                    {pdfLoading ? "Generating PDF..." : "Download Official PDF"}
-                  </Button>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="card p-6">
-                  <h4 className="text-sm font-bold text-heading mb-4">Metric Score Balance</h4>
-                  {soloHistory && soloHistory.length > 0 ? (
-                    <div className="h-64 flex items-center justify-center">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <RadarChart data={[
-                          { metric: "Grammar", value: soloHistory[0]?.grammar_score || 0 },
-                          { metric: "Fluency", value: soloHistory[0]?.fluency_score || 0 },
-                          { metric: "Pronunciation", value: soloHistory[0]?.accent_score || 0 },
-                          { metric: "Confidence", value: soloHistory[0]?.delivery_score || 0 },
-                        ]}>
-                          <PolarGrid stroke="var(--border)" />
-                          <PolarAngleAxis dataKey="metric" tick={{ fontSize: 10, fill: "var(--heading)", fontWeight: 600 }} />
-                          <Radar name="Score" dataKey="value" stroke="#8b5cf6" fill="#8b5cf6" fillOpacity={0.25} />
-                        </RadarChart>
-                      </ResponsiveContainer>
-                    </div>
-                  ) : (
-                    <div className="text-xs text-muted-soft py-12 text-center">No recent practice history. Use Solo Practice to analyze metric balance.</div>
-                  )}
-                </div>
-
-                <div className="card p-6">
-                  <h4 className="text-sm font-bold text-heading mb-4">Historical Performance Trend</h4>
-                  {soloHistory && soloHistory.length > 0 ? (
-                    <div className="h-64 flex items-center justify-center">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={soloHistory.slice().reverse().map((h, i) => ({ name: `P${i + 1}`, score: h?.overall_score || 0 }))}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                          <XAxis dataKey="name" stroke="var(--muted)" fontSize={10} />
-                          <YAxis stroke="var(--muted)" fontSize={10} domain={[0, 100]} />
-                          <Tooltip contentStyle={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "12px", color: "var(--heading)" }} />
-                          <Bar dataKey="score" fill="#6366f1" radius={[4, 4, 0, 0]} />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
-                  ) : (
-                    <div className="text-xs text-muted-soft py-12 text-center">No recent practice history to show historical trend.</div>
-                  )}
-                </div>
-              </div>
-
-              <div className="card p-6">
-                <h4 className="text-sm font-bold text-heading mb-4 flex items-center gap-2">
-                  <Sparkles className="w-5 h-5 text-indigo-400" /> AI-Generated Skill Suggestions
-                </h4>
-                <div className="space-y-4 text-xs">
-                  <div className="p-4 rounded-2xl bg-indigo-500/5 border border-indigo-500/10">
-                    <h5 className="font-bold text-heading text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5">🚀 Delivery & Pitch Modulation</h5>
-                    <p className="text-muted-soft mt-1 leading-relaxed">Your pitch delivery displays strong speaker authority. Try to reduce speed pauses between sentences by 5-10% to achieve maximum conversational fluency scores.</p>
-                  </div>
-                  <div className="p-4 rounded-2xl bg-emerald-500/5 border border-emerald-500/10">
-                    <h5 className="font-bold text-heading text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">🗣️ Accent Clarity & Pronunciation</h5>
-                    <p className="text-muted-soft mt-1 leading-relaxed">Pronunciation of complex consonant grids is highly accurate. Focus on matching standard vowel lengths to align perfectly with AI assessment markers.</p>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <ReportsView
+              user={user}
+              progress={progress}
+              gdLiveSessions={gdLiveSessions}
+              soloHistory={soloHistory}
+              token={token}
+              pdfLoading={pdfLoading}
+              setPdfLoading={setPdfLoading}
+              setSuccess={setSuccess}
+              setMessage={setMessage}
+              setView={setView}
+              startSoloPractice={startSoloPractice}
+            />
           )}
 
           {/* Achievements View */}
           {view === "achievements" && user && (
-            <div className="space-y-6 pb-12 animate-fade-up">
-              {(() => {
-                const creditPoints = progress && typeof progress.total_credits === "number" ? Math.round(progress.total_credits) : 0;
-                const xpPoints = creditPoints * 1000;
-                let levelTitle = "Novice Speaker";
-                let levelNum = 1;
-                let nextLevelPoints = 100000;
-                let prevLevelPoints = 0;
-                if (xpPoints >= 500000) { levelTitle = "Grandmaster Orator"; levelNum = 4; nextLevelPoints = 1000000; prevLevelPoints = 500000; }
-                else if (xpPoints >= 250000) { levelTitle = "Eloquent Orator"; levelNum = 3; nextLevelPoints = 500000; prevLevelPoints = 250000; }
-                else if (xpPoints >= 100000) { levelTitle = "Confident Communicator"; levelNum = 2; nextLevelPoints = 250000; prevLevelPoints = 100000; }
-                const levelProgress = Math.min(100, Math.max(0, ((xpPoints - prevLevelPoints) / (nextLevelPoints - prevLevelPoints)) * 100));
-
-                return (
-                  <div className="card p-6 bg-gradient-to-r from-indigo-500/5 to-purple-500/5 border-l-4 border-l-purple-500 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-                    <div className="flex items-center gap-4">
-                      <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center text-white shadow-md">
-                        <Trophy className="w-7 h-7" />
-                      </div>
-                      <div>
-                        <p className="text-[10px] text-muted-soft uppercase font-bold tracking-wider">Current Orator rank</p>
-                        <h3 className="text-lg font-black text-heading flex items-center gap-2 mt-0.5">
-                          {levelTitle} <span className="text-[10px] bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 font-extrabold px-2 py-0.5 rounded-md border border-indigo-500/25">Lvl {levelNum}</span>
-                        </h3>
-                      </div>
-                    </div>
-
-                    <div className="flex-1 w-full max-w-sm">
-                      <div className="flex justify-between items-center text-xs mb-1">
-                        <span className="text-muted-soft font-semibold">Rank Progress</span>
-                        <span className="font-bold text-heading">{xpPoints.toLocaleString()} / {nextLevelPoints.toLocaleString()} XP</span>
-                      </div>
-                      <div className="w-full bg-slate-200 dark:bg-slate-800 rounded-full h-2.5 overflow-hidden">
-                        <div className="bg-gradient-to-r from-indigo-500 to-purple-500 h-2.5 rounded-full transition-all duration-700" style={{ width: `${levelProgress}%` }} />
-                      </div>
-                    </div>
-                  </div>
-                );
-              })()}
-
-              <div className="card p-6">
-                <h4 className="text-sm font-bold text-heading mb-6 flex items-center gap-2">
-                  <Award className="w-5 h-5 text-indigo-500" /> Unlocked Speaking Badges
-                </h4>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                  {[
-                    { title: "First GD Attended", desc: "Completed 1 group discussion", unlocked: gdLiveSessions.filter(s => s.status === "completed").length >= 1, color: "icon-purple", icon: <Users className="w-5 h-5" /> },
-                    { title: "Communicator Pro", desc: "Average speaking score > 80%", unlocked: progress && progress.average_score != null && progress.average_score >= 80, color: "icon-amber", icon: <Trophy className="w-5 h-5" /> },
-                    { title: "Streak Master", desc: "Speak daily for 5 sessions", unlocked: soloHistory.length >= 5, color: "icon-green", icon: <Sparkles className="w-5 h-5" /> },
-                    { title: "GD Grandmaster", desc: "Reach Level 4 Rank", unlocked: progress && progress.total_credits != null && progress.total_credits >= 500, color: "icon-cyan", icon: <Zap className="w-5 h-5" /> },
-                  ].map((badge, idx) => (
-                    <div key={idx} className={`p-5 rounded-3xl border ${badge.unlocked ? "border-slate-200/50 dark:border-slate-800 bg-white/40 dark:bg-slate-900/40" : "border-dashed border-slate-200/30 dark:border-slate-800/20 bg-slate-100/10 dark:[background:var(--surface)] opacity-55"} flex flex-col items-center text-center transition-all duration-300`}>
-                      <div className={`icon-badge ${badge.color} mb-3`}>{badge.icon}</div>
-                      <p className="text-xs font-bold text-heading leading-tight">{badge.title}</p>
-                      <p className="text-[10px] text-muted-soft mt-1 leading-snug">{badge.desc}</p>
-                      <span className={`text-[9px] font-extrabold uppercase mt-3.5 px-2.5 py-0.5 rounded-full ${badge.unlocked ? "bg-emerald-500/10 text-emerald-500" : "bg-slate-500/10 text-muted"}`}>
-                        {badge.unlocked ? "Unlocked" : "Locked"}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="card p-6 border-l-4 border-l-cyan-500">
-                <h4 className="text-sm font-bold text-heading mb-6 flex items-center gap-2">
-                  <CheckCircle2 className="w-5 h-5 text-indigo-500" /> Completed AI Certifications
-                </h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {[
-                    { title: "Speech Competency Certificate", type: "AI Speech Clarity", minScore: 75, minCredits: 20, completed: progress && progress.average_score != null && progress.average_score >= 75 && progress.total_credits != null && progress.total_credits >= 20 },
-                    { title: "Advanced Group Discussion Certificate", type: "Live GD Competency", minScore: 85, minCredits: 30, completed: progress && progress.average_score != null && progress.average_score >= 85 && progress.total_credits != null && progress.total_credits >= 30 }
-                  ].map((cert, idx) => (
-                    <div key={idx} className="p-5 rounded-3xl border border-slate-200/50 dark:border-slate-800 bg-white/40 dark:bg-slate-900/40 flex flex-col justify-between relative overflow-hidden">
-                      <div>
-                        <div className="flex justify-between items-start mb-4">
-                          <span className="text-[10px] uppercase font-bold tracking-wider text-muted-soft">{cert.type}</span>
-                          <span className={`text-[9px] font-extrabold uppercase px-2.5 py-0.5 rounded-full ${cert.completed ? "bg-indigo-500/10 text-indigo-500" : "bg-slate-500/10 text-muted-soft"}`}>
-                            {cert.completed ? "Verified" : "Requirements Pending"}
-                          </span>
-                        </div>
-                        <h4 className="text-sm font-extrabold text-heading">{cert.title}</h4>
-                        <p className="text-xs text-muted-soft mt-1.5 font-medium">
-                          Required: <span className="font-semibold text-heading">{cert.minScore}% Avg Score</span> & <span className="font-semibold text-heading">{cert.minCredits} Credits</span>
-                        </p>
-                        <p className="text-xs text-muted-soft mt-1 font-medium">
-                          Current: <span className="font-semibold text-heading">{progress && progress.average_score != null ? `${Number(progress.average_score).toFixed(1)}%` : "0.0%"}</span> & <span className="font-semibold text-heading">{progress && progress.total_credits != null ? Math.round(progress.total_credits) : 0} credits</span>
-                        </p>
-                      </div>
-                      {(() => {
-                        const downloading = idx === 0 ? cert1Downloading : cert2Downloading;
-                        const setDownloading = idx === 0 ? setCert1Downloading : setCert2Downloading;
-                        return (
-                          <Button
-                            onClick={() => {
-                              setDownloading(true);
-                              setTimeout(() => {
-                                setDownloading(false);
-                                setSuccess(`Certificate "${cert.title}" downloaded successfully!`);
-                              }, 1800);
-                            }}
-                            disabled={!cert.completed || downloading}
-                            className={`w-full mt-6 h-10 text-xs font-semibold ${cert.completed ? "btn-primary" : "btn-secondary cursor-not-allowed opacity-50"}`}
-                          >
-                            {downloading && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
-                            {downloading ? "Preparing download..." : "Download Official Certificate"}
-                          </Button>
-                        );
-                      })()}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
+            <AchievementsView
+              user={user}
+              progress={progress}
+              gdLiveSessions={gdLiveSessions}
+              soloHistory={soloHistory}
+              cert1Downloading={cert1Downloading}
+              setCert1Downloading={setCert1Downloading}
+              cert2Downloading={cert2Downloading}
+              setCert2Downloading={setCert2Downloading}
+              setSuccess={setSuccess}
+              setView={setView}
+              startSoloPractice={startSoloPractice}
+            />
           )}
 
           {/* Notifications View */}
@@ -2537,786 +2890,51 @@ export default function Home() {
 
           {/* Dashboard View */}
           {view === "dashboard" && user && (
-            <div className="space-y-6">
-              {/* Welcome Banner */}
-              {(() => {
-                const creditPoints = progress && typeof progress.total_credits === "number" ? Math.round(progress.total_credits) : 0;
-                const xpPoints = creditPoints * 1000;
-                let levelTitle = "Novice Speaker";
-                let badgeColor = "bg-slate-500/10 text-slate-400 border-slate-500/20 dark:text-slate-300 dark:border-slate-800";
-                if (xpPoints >= 500000) {
-                  levelTitle = "Grandmaster Orator";
-                  badgeColor = "bg-gradient-to-r from-cyan-500/15 to-indigo-500/15 text-indigo-600 dark:text-cyan-400 border-indigo-500/20";
-                } else if (xpPoints >= 250000) {
-                  levelTitle = "Eloquent Orator";
-                  badgeColor = "bg-gradient-to-r from-amber-500/10 to-orange-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20";
-                } else if (xpPoints >= 100000) {
-                  levelTitle = "Confident Communicator";
-                  badgeColor = "bg-gradient-to-r from-purple-500/10 to-indigo-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20";
-                }
-
-                return (
-                  <div className="relative overflow-hidden rounded-3xl border border-slate-200/50 dark:border-slate-800/80 p-6 md:p-8 shadow-lg bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl transition-all duration-300">
-                    <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl -z-10 pointer-events-none" />
-                    <div className="absolute bottom-0 left-0 w-64 h-64 bg-purple-500/10 rounded-full blur-3xl -z-10 pointer-events-none" />
-                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-                      <div>
-                        <div className="flex flex-wrap items-center gap-2 mb-2">
-                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/10 text-indigo-600 dark:text-indigo-300 border border-indigo-500/20 uppercase tracking-wider">
-                            {user.role === "admin" ? "Admin Portal" : "Student Dashboard"}
-                          </span>
-                          {user.role === "student" && user.department && (
-                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-purple-500/10 text-purple-600 dark:text-purple-300 border border-purple-500/20 uppercase tracking-wider">
-                              {user.department}
-                            </span>
-                          )}
-                          {user.role === "student" && (
-                            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border uppercase tracking-wider ${badgeColor}`}>
-                              {levelTitle}
-                            </span>
-                          )}
-                        </div>
-                        <h2 className="text-2xl md:text-3xl font-extrabold text-heading tracking-tight flex items-center gap-2">
-                          Welcome back, <span className="bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-500 dark:from-white dark:via-indigo-200 dark:to-indigo-400 bg-clip-text text-transparent">{user.name}</span>!
-                        </h2>
-                        <p className="text-sm text-body mt-1.5 max-w-xl">
-                          {user.role === "admin"
-                            ? "Manage group discussions, review student rankings, and monitor active sessions in real-time."
-                            : "Track your communication progress, join live discussions, and build your confidence with AI feedback."}
-                        </p>
-                      </div>
-                      {user.role === "student" && (
-                        <div className="flex flex-wrap gap-2 text-xs bg-slate-100/50 dark:bg-slate-950/40 backdrop-blur-md border border-slate-200/50 dark:border-slate-800 p-4 rounded-2xl shrink-0">
-                          <div>
-                            <p className="font-bold text-heading mb-1 uppercase tracking-wider text-[10px]">Registration Info</p>
-                            <p className="text-body">Reg No: <span className="font-mono text-heading font-semibold">{user.register_number}</span></p>
-                            <p className="text-body">Year: <span className="text-heading font-semibold">{user.year || "3rd Year"}</span></p>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })()}
-
-              {user.role === "student" ? (
-                <>
-                  {/* Pending speech finish card */}
-                  {gdLivePendingFinish && (
-                    <div className="card p-5 border-l-4 border-l-rose-500 bg-gradient-to-r from-rose-500/10 to-amber-500/5 shadow-lg">
-                      <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-                        <div className="w-12 h-12 rounded-2xl bg-rose-500/15 text-rose-500 flex items-center justify-center shrink-0">
-                          <Mic className="w-6 h-6" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <h3 className="text-sm font-bold text-heading flex items-center gap-2">
-                            Your speech isn't finished yet
-                            <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-rose-500/15 text-rose-400 border border-rose-500/30 uppercase tracking-wider">Action Needed</span>
-                          </h3>
-                          <p className="text-xs text-muted-soft mt-1">
-                            You left the discussion "{gdLivePendingFinish.topic || "GD session"}" mid-turn.
-                            Finish your speech to evaluate your points and see your overall result.
-                          </p>
-                        </div>
-                        <div className="flex gap-2 shrink-0">
-                          <Button onClick={() => setView("gd-live-room")} variant="secondary" className="h-10 text-xs">
-                            Back to Room
-                          </Button>
-                          <Button onClick={finishGdLiveSpeech} disabled={gdLiveFinishing} className="btn-primary h-10 text-xs bg-rose-600 hover:bg-rose-500 border-0 font-bold">
-                            {gdLiveFinishing ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                            {gdLiveFinishing ? "Finishing..." : "Finish the Speech"}
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Metrics Grid */}
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="card p-5 card-hover relative overflow-hidden group border-l-4 border-l-purple-500 shadow-sm">
-                      <div className="absolute top-0 right-0 w-20 h-20 bg-purple-500/5 rounded-full blur-xl pointer-events-none group-hover:bg-purple-500/10 transition-colors" />
-                      <div className="flex items-center justify-between mb-3">
-                        <span className="text-[10px] font-bold text-muted-soft uppercase tracking-wider">Average Score</span>
-                        <div className="icon-badge icon-purple group-hover:scale-110 transition-transform duration-200"><Trophy className="w-4 h-4" /></div>
-                      </div>
-                      <p className="text-3xl font-black text-heading">
-                        {progress && progress.average_score != null ? `${Number(progress.average_score).toFixed(1)}%` : "0.0%"}
-                      </p>
-                      <div className="w-full bg-slate-200 dark:bg-slate-800 rounded-full h-1.5 mt-3.5 overflow-hidden">
-                        <div
-                          className="bg-purple-500 h-1.5 rounded-full transition-all duration-500"
-                          style={{ width: `${progress ? progress.average_score : 0}%` }}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="card p-5 card-hover relative overflow-hidden group border-l-4 border-l-amber-500 shadow-sm">
-                      <div className="absolute top-0 right-0 w-20 h-20 bg-amber-500/5 rounded-full blur-xl pointer-events-none group-hover:bg-amber-500/10 transition-colors" />
-                      <div className="flex items-center justify-between mb-3">
-                        <span className="text-[10px] font-bold text-muted-soft uppercase tracking-wider">Credit Points</span>
-                        <div className="icon-badge icon-amber group-hover:scale-110 transition-transform duration-200"><Award className="w-4 h-4" /></div>
-                      </div>
-                      <p className="text-3xl font-black text-heading">
-                        {progress && typeof progress.total_credits === "number" ? Math.round(progress.total_credits) : 0} <span className="text-xs text-muted-soft font-normal">pts</span>
-                      </p>
-                      <p className="text-[10px] text-muted mt-3.5">Overall GD credit score</p>
-                    </div>
-
-                    <div className="card p-5 card-hover relative overflow-hidden group border-l-4 border-l-emerald-500 shadow-sm">
-                      <div className="absolute top-0 right-0 w-20 h-20 bg-emerald-500/5 rounded-full blur-xl pointer-events-none group-hover:bg-emerald-500/10 transition-colors" />
-                      <div className="flex items-center justify-between mb-3">
-                        <span className="text-[10px] font-bold text-muted-soft uppercase tracking-wider">GD Sessions</span>
-                        <div className="icon-badge icon-green group-hover:scale-110 transition-transform duration-200"><Users className="w-4 h-4" /></div>
-                      </div>
-                      <p className="text-3xl font-black text-heading">
-                        {gdLiveSessions.filter(s => s.status === "completed").length}
-                      </p>
-                      <p className="text-[10px] text-muted mt-3.5">Group discussions completed</p>
-                    </div>
-
-                    <div className="card p-5 card-hover relative overflow-hidden group border-l-4 border-l-cyan-500 shadow-sm">
-                      <div className="absolute top-0 right-0 w-20 h-20 bg-cyan-500/5 rounded-full blur-xl pointer-events-none group-hover:bg-cyan-500/10 transition-colors" />
-                      <div className="flex items-center justify-between mb-3">
-                        <span className="text-[10px] font-bold text-muted-soft uppercase tracking-wider">Solo Practice</span>
-                        <div className="icon-badge icon-cyan group-hover:scale-110 transition-transform duration-200"><Target className="w-4 h-4" /></div>
-                      </div>
-                      <p className="text-3xl font-black text-heading">
-                        {soloHistory.length}
-                      </p>
-                      <p className="text-[10px] text-muted mt-3.5">Solo AI practices completed</p>
-                    </div>
-                  </div>
-
-                  {/* Main Grid: Actions & Chart */}
-                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                    {/* Left Actions column */}
-                    <div className="lg:col-span-5 space-y-6">
-                      {/* Join GD Session Form */}
-                      <div className="card p-6 border border-indigo-500/15 bg-gradient-to-tr from-indigo-500/5 via-transparent to-transparent relative overflow-hidden">
-                        <div className="absolute top-3 right-3 flex items-center gap-1.5">
-                          <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse shadow-[0_0_8px_#ef4444]" />
-                          <span className="text-[9px] font-extrabold text-red-500 dark:text-red-400 uppercase tracking-widest">Live Room</span>
-                        </div>
-                        <div className="absolute -top-12 -right-12 w-28 h-28 bg-indigo-500/10 rounded-full blur-xl pointer-events-none" />
-                        <h3 className="text-base font-bold text-heading mb-1.5 flex items-center gap-2">
-                          <Zap className="w-4 h-4 text-indigo-500 animate-bounce" /> Join GD Live Session
-                        </h3>
-                        <p className="text-xs text-muted-soft mb-4">Enter the 4-digit code provided by your administrator to join the live session.</p>
-                        <div className="flex gap-2">
-                          <Input
-                            placeholder="e.g. 4589"
-                            maxLength={4}
-                            value={gdLiveCode}
-                            onChange={(e) => setGdLiveCode(e.target.value)}
-                            className="inp flex-1 font-mono uppercase tracking-wider h-11 text-center text-lg focus:ring-indigo-500/20 focus:border-indigo-500/50"
-                          />
-                          <Button
-                            onClick={joinGdLive}
-                            disabled={loading}
-                            className="btn-primary px-5 h-11 text-sm font-semibold shrink-0 bg-gradient-to-r from-indigo-600 to-violet-600 border-0"
-                          >
-                            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Join"}
-                          </Button>
-                        </div>
-                      </div>
-
-                      {/* Gamified Speaker Tier Card */}
-                      {(() => {
-                        const creditPoints = progress && typeof progress.total_credits === "number" ? Math.round(progress.total_credits) : 0;
-                        const xpPoints = creditPoints * 1000;
-                        let levelTitle = "Novice Speaker";
-                        let levelNum = 1;
-                        let nextLevelPoints = 100000;
-                        let prevLevelPoints = 0;
-                        let badgeIcon = <Award className="w-5 h-5 text-slate-400" />;
-
-                        if (xpPoints >= 500000) {
-                          levelTitle = "Grandmaster Orator";
-                          levelNum = 4;
-                          nextLevelPoints = 1000000;
-                          prevLevelPoints = 500000;
-                          badgeIcon = <Trophy className="w-5 h-5 text-cyan-400 animate-pulse" />;
-                        } else if (xpPoints >= 250000) {
-                          levelTitle = "Eloquent Orator";
-                          levelNum = 3;
-                          nextLevelPoints = 500000;
-                          prevLevelPoints = 250000;
-                          badgeIcon = <Sparkles className="w-5 h-5 text-amber-400" />;
-                        } else if (xpPoints >= 100000) {
-                          levelTitle = "Confident Communicator";
-                          levelNum = 2;
-                          nextLevelPoints = 250000;
-                          prevLevelPoints = 100000;
-                          badgeIcon = <Zap className="w-5 h-5 text-purple-400" />;
-                        }
-
-                        const levelProgress = Math.min(100, Math.max(0, ((xpPoints - prevLevelPoints) / (nextLevelPoints - prevLevelPoints)) * 100));
-
-                        return (
-                          <div className="card p-5 relative overflow-hidden border border-purple-500/10">
-                            <div className="absolute -top-12 -left-12 w-32 h-32 bg-purple-500/5 rounded-full blur-2xl pointer-events-none" />
-                            <div className="flex items-center gap-3.5 mb-4">
-                              <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center text-white shrink-0 shadow-md">
-                                {badgeIcon}
-                              </div>
-                              <div className="min-w-0">
-                                <p className="text-[10px] font-bold text-muted uppercase tracking-wider">Current Tier</p>
-                                <h4 className="text-sm font-bold text-heading truncate flex items-center gap-1.5">
-                                  {levelTitle} <span className="text-[10px] font-extrabold bg-indigo-500/10 text-indigo-400 px-1.5 py-0.5 rounded border border-indigo-500/25">Lvl {levelNum}</span>
-                                </h4>
-                              </div>
-                            </div>
-
-                            <div className="space-y-1.5">
-                              <div className="flex justify-between items-center text-xs">
-                                <span className="text-muted font-medium">Rank Progress</span>
-                                <span className="font-bold text-heading">{xpPoints.toLocaleString()} / {nextLevelPoints.toLocaleString()} XP</span>
-                              </div>
-                              <div className="w-full bg-slate-200 dark:bg-slate-800 rounded-full h-2 overflow-hidden">
-                                <div
-                                  className="bg-gradient-to-r from-indigo-500 to-purple-500 h-2 rounded-full transition-all duration-700"
-                                  style={{ width: `${levelProgress}%` }}
-                                />
-                              </div>
-                              {xpPoints < 500000 ? (
-                                <p className="text-[10px] text-muted-soft text-right italic mt-1">
-                                  Need {(nextLevelPoints - xpPoints).toLocaleString()} more XP to reach the next tier!
-                                </p>
-                              ) : (
-                                <p className="text-[10px] text-muted-soft text-right italic mt-1">
-                                  You are at the peak tier! Keep it up!
-                                </p>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })()}
-
-                      {/* Quick Launch Cards */}
-                      <div className="grid grid-cols-2 gap-4">
-                        <button
-                          onClick={startSoloPractice}
-                          className="flex flex-col justify-between p-4 rounded-3xl border border-cyan-500/10 hover:border-cyan-500/30 bg-gradient-to-br from-cyan-500/5 via-transparent to-transparent hover:from-cyan-500/10 hover:shadow-[0_8px_30px_rgba(6,182,212,0.15)] group relative overflow-hidden h-36 transition-all duration-300 hover:-translate-y-1 text-left"
-                        >
-                          <div className="icon-badge icon-cyan mb-2 group-hover:scale-110 transition-transform duration-200"><Target className="w-5 h-5" /></div>
-                          <div>
-                            <p className="text-sm font-bold text-heading group-hover:text-cyan-400 transition-colors">Solo Practice</p>
-                            <p className="text-[10px] text-muted-soft mt-1 leading-snug">Practice speaking solo with instant AI scores & feedback.</p>
-                          </div>
-                        </button>
-
-                        <button
-                          onClick={() => loadLeaderboard("ALL", "ALL", "all")}
-                          className="flex flex-col justify-between p-4 rounded-3xl border border-amber-500/10 hover:border-amber-500/30 bg-gradient-to-br from-amber-500/5 via-transparent to-transparent hover:from-amber-500/10 hover:shadow-[0_8px_30px_rgba(245,158,11,0.15)] group relative overflow-hidden h-36 transition-all duration-300 hover:-translate-y-1 text-left"
-                        >
-                          <div className="icon-badge icon-amber mb-2 group-hover:scale-110 transition-transform duration-200"><Trophy className="w-5 h-5" /></div>
-                          <div>
-                            <p className="text-sm font-bold text-heading group-hover:text-amber-400 transition-colors">Leaderboard</p>
-                            <p className="text-[10px] text-muted-soft mt-1 leading-snug">Check your ranking among all students and departments.</p>
-                          </div>
-                        </button>
-                      </div>
-
-                      {/* Motivational Quote */}
-                      {soloQuote && (
-                        <div className="card p-5 bg-indigo-500/5 dark:bg-indigo-500/10 border border-indigo-500/20 italic relative overflow-hidden group hover:border-indigo-500/40 transition-colors shadow-sm">
-                          <div className="absolute -right-6 -bottom-6 w-20 h-20 bg-indigo-500/5 rounded-full blur-xl pointer-events-none" />
-                          <div className="absolute top-2 left-3 text-4xl text-slate-700/40 dark:text-slate-500/20 select-none font-serif">“</div>
-                          <p className="text-xs text-body leading-relaxed pl-4 pr-2 font-medium z-10 relative">
-                            {soloQuote.quote}
-                          </p>
-                          <p className="text-right text-[10px] font-bold text-muted-soft mt-2 tracking-wide uppercase">
-                            — {soloQuote.author}
-                          </p>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Right Chart/Breakdown column */}
-                    <div className="lg:col-span-7 flex flex-col">
-                      <div className="card p-6 flex-1 flex flex-col justify-between relative overflow-hidden shadow-sm">
-                        <div className="absolute -top-24 -right-24 w-48 h-48 bg-indigo-500/5 rounded-full blur-3xl pointer-events-none" />
-                        <div>
-                          <h3 className="text-base font-bold text-heading mb-1.5 flex items-center gap-2">
-                            <TrendingUp className="w-5 h-5 text-indigo-400" /> Communication Skills Analysis
-                          </h3>
-                          <p className="text-xs text-muted-soft mb-6">
-                            RPG-style breakdown and detail analytics from your most recent Solo Practice session.
-                          </p>
-                        </div>
-
-                        {soloHistory && soloHistory.length > 0 ? (
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center flex-1">
-                            {/* Radar Chart Panel */}
-                            <div className="h-56 relative flex items-center justify-center">
-                              <ResponsiveContainer width="100%" height="100%">
-                                <RadarChart data={[
-                                  { metric: "Grammar", value: soloHistory[0]?.grammar_score || 0 },
-                                  { metric: "Fluency", value: soloHistory[0]?.fluency_score || 0 },
-                                  { metric: "Pronunciation", value: soloHistory[0]?.accent_score || 0 },
-                                  { metric: "Confidence", value: soloHistory[0]?.delivery_score || 0 },
-                                ]}>
-                                  <defs>
-                                    <radialGradient id="radarGlow" cx="50%" cy="50%" r="50%">
-                                      <stop offset="0%" stopColor="#a78bfa" stopOpacity={0.5} />
-                                      <stop offset="100%" stopColor="#818cf8" stopOpacity={0.1} />
-                                    </radialGradient>
-                                  </defs>
-                                  <PolarGrid stroke="var(--border)" />
-                                  <PolarAngleAxis dataKey="metric" tick={{ fontSize: 10, fill: "var(--heading)", fontWeight: 600 }} />
-                                  <Radar name="Score" dataKey="value" stroke="#8b5cf6" fill="url(#radarGlow)" fillOpacity={1} dot={{ r: 4.5, fill: "#8b5cf6", stroke: "#ffffff", strokeWidth: 1.5 }} />
-                                  <Tooltip contentStyle={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "12px", color: "var(--heading)" }} />
-                                </RadarChart>
-                              </ResponsiveContainer>
-                            </div>
-
-                            {/* Skills progress lines */}
-                            <div className="space-y-4">
-                              <div className="rounded-xl p-3.5 bg-[var(--bg)] border border-[var(--border)] text-xs mb-1">
-                                <p className="text-muted-soft font-bold text-[9px] uppercase tracking-wider">LATEST TOPIC</p>
-                                <p className="text-heading font-bold mt-1 line-clamp-2">{soloHistory[0]?.topic}</p>
-                              </div>
-
-                              {[
-                                { label: "Grammar & Structure", val: soloHistory[0]?.grammar_score, icon: "📝", color: "bg-indigo-500", text: "text-indigo-400" },
-                                { label: "Fluency & Speech Rate", val: soloHistory[0]?.fluency_score, icon: "⚡", color: "bg-purple-500", text: "text-purple-400" },
-                                { label: "Pronunciation & Clarity", val: soloHistory[0]?.accent_score, icon: "🗣️", color: "bg-cyan-500", text: "text-cyan-400" },
-                                { label: "Confidence & Delivery", val: soloHistory[0]?.delivery_score, icon: "🚀", color: "bg-emerald-500", text: "text-emerald-400" },
-                              ].map((skill) => (
-                                <div key={skill.label} className="space-y-1.5">
-                                  <div className="flex items-center justify-between text-[11px]">
-                                    <span className="font-semibold text-heading flex items-center gap-1.5">
-                                      <span>{skill.icon}</span> {skill.label}
-                                    </span>
-                                    <span className={`font-extrabold ${skill.text}`}>{skill.val != null ? `${Number(skill.val).toFixed(0)}/100` : "N/A"}</span>
-                                  </div>
-                                  <div className="w-full bg-slate-200 dark:bg-slate-800 rounded-full h-1.5 overflow-hidden border border-slate-300/10 dark:border-slate-700/10">
-                                    <div
-                                      className={`${skill.color} h-1.5 rounded-full transition-all duration-700`}
-                                      style={{ width: `${skill.val || 0}%` }}
-                                    />
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="flex flex-col items-center justify-center py-10 text-center flex-1 border border-dashed rounded-2xl border-slate-800 bg-slate-950/20">
-                            <Target className="w-10 h-10 text-slate-600 mb-2.5" />
-                            <p className="text-sm font-semibold text-heading">No practice history found</p>
-                            <p className="text-xs text-muted-soft max-w-[240px] mt-1 leading-normal">Start your first solo practice session to visualize your communication breakdown here.</p>
-                            <Button onClick={startSoloPractice} className="btn-primary text-xs h-9 px-4 mt-3">Start Now</Button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* History Feeds Section */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* GD Session History */}
-                    <div className="card p-6 flex flex-col justify-between relative overflow-hidden group shadow-sm">
-                      <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/5 rounded-full blur-xl pointer-events-none" />
-                      <div>
-                        <h3 className="text-base font-bold text-heading mb-4 flex items-center gap-2">
-                          <Users className="w-5 h-5 text-indigo-400" /> Attended GD History
-                        </h3>
-
-                        {gdLiveSessions.filter(s => s.status === "completed").length === 0 ? (
-                          <div className="flex flex-col items-center justify-center py-10 text-center border border-dashed rounded-2xl border-slate-800 bg-slate-950/20 flex-1 min-h-[220px]">
-                            <Users className="w-8 h-8 text-slate-600 mb-2" />
-                            <p className="text-xs font-semibold text-heading">No GD sessions attended yet</p>
-                          </div>
-                        ) : (
-                          <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
-                            {gdLiveSessions.filter((s: any) => s.status === "completed").slice(0, 5).map((s: any) => (
-                              <div key={s.session_code} className="flex items-center justify-between p-3.5 rounded-xl bg-[var(--bg)] border border-[var(--border)] hover:border-indigo-500/30 hover:shadow-sm transition-all duration-200">
-                                <div>
-                                  <div className="flex items-center gap-1.5">
-                                    <p className="text-xs font-bold text-heading">Session Code:</p>
-                                    <code className="text-[11px] font-mono font-bold bg-slate-950 text-indigo-300 px-2.5 py-0.5 rounded border border-indigo-950">{s.session_code}</code>
-                                  </div>
-                                  <p className="text-[10px] text-muted-soft mt-1.5 flex items-center gap-1">
-                                    <Clock className="w-3 h-3" />
-                                    {new Date(s.created_at || Date.now()).toLocaleDateString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
-                                  </p>
-                                </div>
-                                <span className="text-[9px] font-extrabold px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 uppercase tracking-wider">
-                                  Attended
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Solo Session History */}
-                    <div className="card p-6 flex flex-col justify-between relative overflow-hidden group shadow-sm">
-                      <div className="absolute top-0 right-0 w-24 h-24 bg-purple-500/5 rounded-full blur-xl pointer-events-none" />
-                      <div>
-                        <h3 className="text-base font-bold text-heading mb-4 flex items-center gap-2">
-                          <Target className="w-5 h-5 text-indigo-400" /> Solo Practice History
-                        </h3>
-
-                        {soloHistory.length === 0 ? (
-                          <div className="flex flex-col items-center justify-center py-10 text-center border border-dashed rounded-2xl border-slate-800 bg-slate-950/20 flex-1 min-h-[220px]">
-                            <Target className="w-8 h-8 text-slate-600 mb-2" />
-                            <p className="text-xs font-semibold text-heading">No solo practices completed yet</p>
-                          </div>
-                        ) : (
-                          <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
-                            {soloHistory.slice(0, 5).map((s: any) => (
-                              <div key={s.id} className="p-3.5 rounded-xl bg-[var(--bg)] border border-[var(--border)] hover:border-indigo-500/30 hover:shadow-sm transition-all duration-200">
-                                <div className="flex justify-between items-start gap-2">
-                                  <p className="text-xs font-bold text-heading line-clamp-1 flex-1">{s.topic}</p>
-                                  <span className="text-xs font-extrabold text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
-                                    {(s.overall_score != null ? Number(s.overall_score) : 0).toFixed(1)}
-                                  </span>
-                                </div>
-                                {s.weaknesses && (
-                                  <p className="text-[10px] text-muted-soft mt-2 line-clamp-1 bg-[var(--surface)] border border-[var(--border)] p-1.5 rounded flex items-center gap-1">
-                                    <Sparkles className="w-3 h-3 text-cyan-400 shrink-0" />
-                                    <span>Feedback: {s.weaknesses.split(";")[0]}</span>
-                                  </p>
-                                )}
-                                <div className="flex justify-between items-center text-[10px] text-muted-soft mt-2 pt-2 border-t border-[var(--border)]">
-                                  <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> {new Date(s.created_at || Date.now()).toLocaleDateString()}</span>
-                                  <span>Session #{s.session_number}</span>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </>
-              ) : (
-                /* Admin Dashboard */
-                <>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="card p-5 card-hover">
-                      <div className="flex items-center justify-between mb-3">
-                        <span className="text-xs font-semibold text-muted-soft uppercase tracking-wider font-bold">Total GD Live Sessions</span>
-                        <div className="icon-badge icon-purple"><Users className="w-5 h-5" /></div>
-                      </div>
-                      <p className="text-3xl font-extrabold text-heading">
-                        {gdLiveSessions.length}
-                      </p>
-                      <p className="text-xs text-muted-soft mt-3">All sessions created</p>
-                    </div>
-
-                    <div className="card p-5 card-hover">
-                      <div className="flex items-center justify-between mb-3">
-                        <span className="text-xs font-semibold text-muted-soft uppercase tracking-wider font-bold">Active Sessions</span>
-                        <div className="icon-badge icon-green"><Radio className="w-5 h-5 text-emerald-400" /></div>
-                      </div>
-                      <p className="text-3xl font-extrabold text-heading">
-                        {gdLiveSessions.filter(s => s.status !== "completed").length}
-                      </p>
-                      <p className="text-xs text-muted-soft mt-3">Sessions in progress/waiting</p>
-                    </div>
-
-                    <div className="card p-5 card-hover">
-                      <div className="flex items-center justify-between mb-3">
-                        <span className="text-xs font-semibold text-muted-soft uppercase tracking-wider font-bold">Completed Sessions</span>
-                        <div className="icon-badge icon-cyan"><CheckCircle2 className="w-5 h-5" /></div>
-                      </div>
-                      <p className="text-3xl font-extrabold text-heading">
-                        {gdLiveSessions.filter(s => s.status === "completed").length}
-                      </p>
-                      <p className="text-xs text-muted-soft mt-3">Sessions successfully finished</p>
-                    </div>
-                  </div>
-
-                  {/* Admin Actions Panel */}
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    <div className="card p-6 border border-indigo-500/20 bg-indigo-500/5 dark:bg-indigo-950/10 flex flex-col justify-between min-h-60">
-                      <div>
-                        <h3 className="text-base font-bold text-heading mb-1.5 flex items-center gap-2">
-                          <Sparkles className="w-5 h-5 text-indigo-400" /> Quick Session Launcher
-                        </h3>
-                        <p className="text-xs text-muted-soft mb-6 leading-normal">
-                          Create and host a live Group Discussion. This will instantly generate a new 4-digit code for students.
-                        </p>
-                      </div>
-                      <Button
-                        onClick={createGdLiveSession}
-                        disabled={loading}
-                        className="btn-primary w-full h-11 font-semibold flex items-center justify-center gap-2"
-                      >
-                        {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : (
-                          <>
-                            <Users className="w-4 h-4" />
-                            <span>Create Live GD Session</span>
-                          </>
-                        )}
-                      </Button>
-                    </div>
-
-                    <div className="card p-6 flex flex-col justify-between min-h-60">
-                      <div>
-                        <h3 className="text-base font-bold text-heading mb-1.5 flex items-center gap-2">
-                          <Trophy className="w-5 h-5 text-amber-400" /> Comprehensive Rankings
-                        </h3>
-                        <p className="text-xs text-muted-soft mb-6 leading-normal">
-                          Analyze students' performance across departments, semesters, and overall scores.
-                        </p>
-                      </div>
-                      <Button
-                        onClick={() => loadLeaderboard()}
-                        className="btn-secondary w-full h-11 font-semibold flex items-center justify-center gap-2"
-                      >
-                        <Trophy className="w-4 h-4" />
-                        <span>Open Leaderboard</span>
-                      </Button>
-                    </div>
-
-                    <div className="card p-6 flex flex-col justify-between min-h-60">
-                      <div>
-                        <h3 className="text-base font-bold text-heading mb-1.5 flex items-center gap-2">
-                          <Shield className="w-5 h-5 text-purple-400" /> GD Admin Dashboard
-                        </h3>
-                        <p className="text-xs text-muted-soft mb-6 leading-normal">
-                          View details of active sessions, delete sessions, or monitor active teams in progress.
-                        </p>
-                      </div>
-                      <Button
-                        onClick={() => setView("gd-live-admin")}
-                        className="btn-secondary w-full h-11 font-semibold flex items-center justify-center gap-2"
-                      >
-                        <Shield className="w-4 h-4" />
-                        <span>Manage Live Sessions</span>
-                      </Button>
-                    </div>
-                  </div>
-
-                  {/* Admin: List of Active/Recent Sessions */}
-                  <div className="card p-6">
-                    <h3 className="text-base font-bold text-heading mb-4 flex items-center gap-2">
-                      <Users className="w-5 h-5 text-indigo-400" /> Active and Recent GD Sessions
-                    </h3>
-
-                    {gdLiveSessions.length === 0 ? (
-                      <p className="text-muted-soft text-sm py-4 text-center">No sessions hosted yet.</p>
-                    ) : (
-                      <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
-                        {gdLiveSessions.slice(0, 8).map((s: any) => (
-                          <div key={s.session_code} className="flex items-center justify-between p-4 rounded-xl surface-2 border border-[var(--border)] hover:border-slate-300 dark:hover:border-slate-700 transition">
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <span className="text-sm font-bold text-heading">Code:</span>
-                                <code className="text-xs font-mono font-bold bg-[var(--surface-2)] text-indigo-500 dark:text-indigo-300 px-2 py-0.5 rounded border border-[var(--border)]">{s.session_code}</code>
-                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide border ${s.status === "completed"
-                                  ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-                                  : "bg-amber-500/10 text-amber-400 border-amber-500/20"
-                                  }`}>
-                                  {s.status}
-                                </span>
-                              </div>
-                              <p className="text-xs text-muted-soft mt-1">
-                                {s.participant_count || 0} participants joined · {s.team_count || 0} teams active
-                              </p>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              {s.status !== "completed" ? (
-                                <Button
-                                  onClick={() => { setGdLiveAdminViewCode(s.session_code); setView("gd-live-admin-view"); loadGdLiveParticipants(s.session_code); }}
-                                  className="btn-primary text-xs h-8 px-3"
-                                >
-                                  Manage
-                                </Button>
-                              ) : (
-                                <Button
-                                  onClick={() => loadGdLiveLeaderboard(s.session_code)}
-                                  className="btn-secondary text-xs h-8 px-3"
-                                >
-                                  Leaderboard
-                                </Button>
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </>
-              )}
-            </div>
+            user.role === "admin" ? (
+              <AdminDashboard
+                user={user}
+                gdLiveSessions={gdLiveSessions}
+                loading={loading}
+                createGdLiveSession={createGdLiveSession}
+                setGdLiveAdminViewCode={setGdLiveAdminViewCode}
+                loadGdLiveParticipants={loadGdLiveParticipants}
+                loadGdLiveLeaderboard={loadGdLiveLeaderboard}
+                loadLeaderboard={loadLeaderboard}
+                setView={setView}
+                gdLiveCreatedCode={gdLiveCreatedCode}
+              />
+            ) : (
+              <StudentDashboard
+                user={user}
+                progress={progress}
+                gdLiveSessions={gdLiveSessions}
+                soloHistory={soloHistory}
+                soloQuote={soloQuote}
+                gdLiveCode={gdLiveCode}
+                setGdLiveCode={setGdLiveCode}
+                joinGdLive={joinGdLive}
+                loading={loading}
+                gdLivePendingFinish={gdLivePendingFinish}
+                finishGdLiveSpeech={finishGdLiveSpeech}
+                gdLiveFinishing={gdLiveFinishing}
+                setView={setView}
+                startSoloPractice={startSoloPractice}
+                loadLeaderboard={loadLeaderboard}
+              />
+            )
           )}
           {/* Leaderboard View */}
           {view === "gd-leaderboard" && (
-            <div className="space-y-6 pb-12 animate-fade-up">
-              {/* Header */}
-              <div className="card p-6">
-                <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
-                  <div className="flex items-center gap-3">
-                    <h2 className="text-base font-bold text-heading flex items-center gap-2"><Trophy className="w-5 h-5 text-amber-500" /> Leaderboard</h2>
-                    <span className="flex items-center gap-1.5 text-[10px] font-bold text-emerald-500 bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20 shadow-sm">
-                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-                      LIVE REAL-TIME {lbLastUpdated ? `• ${lbLastUpdated}` : ""}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button onClick={() => loadLeaderboard(lbDepartment, lbYear, lbTimeframe, true)} variant="secondary" className="text-xs h-8 flex items-center gap-1.5">
-                      <RefreshCw className="w-3.5 h-3.5" /> Refresh
-                    </Button>
-                    <Button onClick={() => setView("dashboard")} variant="secondary" className="text-xs h-8">Back</Button>
-                  </div>
-                </div>
-                {/* Filter Pills */}
-                <div className="space-y-3">
-                  <div className="flex flex-wrap gap-2">
-                    <span className="text-xs text-muted-soft mr-1 self-center font-semibold">Department:</span>
-                    {(lbData?.departments || ["ALL"]).map(d => (
-                      <button key={d} onClick={() => loadLeaderboard(d, lbYear, lbTimeframe)}
-                        className={`text-xs px-3.5 py-1.5 rounded-full border transition ${lbDepartment === d ? "bg-amber-500/10 dark:bg-amber-500/20 border-amber-500/40 text-amber-700 dark:text-amber-200 font-bold" : "surface-2 border text-body hover:bg-slate-500/10"}`}>{d}</button>
-                    ))}
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <span className="text-xs text-muted-soft mr-1 self-center font-semibold">Year:</span>
-                    {(lbData?.years || ["ALL"]).map(y => (
-                      <button key={y} onClick={() => loadLeaderboard(lbDepartment, y, lbTimeframe)}
-                        className={`text-xs px-3.5 py-1.5 rounded-full border transition ${lbYear === y ? "bg-amber-500/10 dark:bg-amber-500/20 border-amber-500/40 text-amber-700 dark:text-amber-200 font-bold" : "surface-2 border text-body hover:bg-slate-500/10"}`}>{y}</button>
-                    ))}
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <span className="text-xs text-muted-soft mr-1 self-center font-semibold">Timeframe:</span>
-                    {[{ v: "all", l: "All Time" }, { v: "this_month", l: "This Month" }, { v: "past_month", l: "Past Month" }].map(t => (
-                      <button key={t.v} onClick={() => loadLeaderboard(lbDepartment, lbYear, t.v)}
-                        className={`text-xs px-3.5 py-1.5 rounded-full border transition ${lbTimeframe === t.v ? "bg-amber-500/10 dark:bg-amber-500/20 border-amber-500/40 text-amber-700 dark:text-amber-200 font-bold" : "surface-2 border text-body hover:bg-slate-500/10"}`}>{t.l}</button>
-                    ))}
-                    <span className="text-xs text-muted-soft ml-auto self-center">Overall Score by Credit Points</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Stats Cards */}
-              {lbData && (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  {[
-                    { label: "Top Score", value: lbData.stats.top_score, icon: <Trophy className="w-4 h-4" />, color: "text-amber-500" },
-                    { label: "Active Speakers", value: lbData.stats.active_participants, icon: <Users className="w-4 h-4" />, color: "text-emerald-500" },
-                    { label: "Average Score", value: lbData.stats.average_score, icon: <TrendingUp className="w-4 h-4" />, color: "text-purple-500" },
-                    { label: "GD Interviews", value: lbData.stats.total_interviews, icon: <MessageSquare className="w-4 h-4" />, color: "text-cyan-500" },
-                  ].map(c => (
-                    <div key={c.label} className="card p-4 border-l-4 border-l-slate-400">
-                      <div className="flex items-center gap-2 text-muted-soft text-xs mb-2">{c.icon} {c.label}</div>
-                      <p className={`text-2xl font-black ${c.color}`}>{typeof c.value === "number" && c.label !== "Active Speakers" && c.label !== "GD Interviews" ? Number(c.value).toFixed(1) : c.value}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Speaker Podium block */}
-              {lbData && lbData.rankings && lbData.rankings.length >= 3 && (
-                <div className="grid grid-cols-3 gap-4 items-end max-w-xl mx-auto my-8 select-none">
-                  {/* 2nd Place */}
-                  <div className="flex flex-col items-center">
-                    <div className="w-12 h-12 rounded-xl bg-slate-300 dark:bg-slate-700 flex items-center justify-center font-bold text-heading text-sm shadow border border-slate-400/35 relative">
-                      {lbData.rankings[1].name ? lbData.rankings[1].name[0].toUpperCase() : "U"}
-                      <span className="absolute -top-2.5 bg-slate-400 text-slate-950 text-[9px] px-1.5 py-0.5 rounded-full font-black">2nd</span>
-                    </div>
-                    <p className="text-xs font-bold text-heading mt-2 truncate max-w-[90px]">{lbData.rankings[1].name}</p>
-                    <p className="text-[10px] text-muted-soft font-semibold">{lbData.rankings[1].total_credits} pts</p>
-                    <div className="w-full h-24 bg-gradient-to-t from-slate-400/20 to-slate-400/5 dark:from-slate-700/25 dark:to-slate-700/5 border border-slate-300/40 dark:border-slate-800/40 rounded-t-2xl mt-3 flex items-center justify-center font-black text-slate-400/50 text-2xl">II</div>
-                  </div>
-
-                  {/* 1st Place */}
-                  <div className="flex flex-col items-center">
-                    <div className="w-16 h-16 rounded-xl bg-amber-100 dark:bg-amber-950 flex items-center justify-center font-bold text-heading text-base shadow border-2 border-amber-400 relative">
-                      {lbData.rankings[0].name ? lbData.rankings[0].name[0].toUpperCase() : "U"}
-                      <Trophy className="absolute -top-5 text-amber-500 w-6 h-6 animate-bounce" />
-                    </div>
-                    <p className="text-xs font-extrabold text-heading mt-2 truncate max-w-[100px]">{lbData.rankings[0].name}</p>
-                    <p className="text-[10px] text-amber-500 font-bold">{lbData.rankings[0].total_credits} pts</p>
-                    <div className="w-full h-32 bg-gradient-to-t from-amber-500/20 to-amber-500/5 dark:from-amber-500/10 dark:to-amber-500/5 border border-amber-400/40 rounded-t-2xl mt-3 flex flex-col items-center justify-center font-black text-amber-500/50 text-3xl">
-                      <span>I</span>
-                    </div>
-                  </div>
-
-                  {/* 3rd Place */}
-                  <div className="flex flex-col items-center">
-                    <div className="w-12 h-12 rounded-xl bg-orange-100 dark:bg-orange-950/60 flex items-center justify-center font-bold text-heading text-sm shadow border border-orange-500/35 relative">
-                      {lbData.rankings[2].name ? lbData.rankings[2].name[0].toUpperCase() : "U"}
-                      <span className="absolute -top-2.5 bg-orange-500 text-orange-950 text-[9px] px-1.5 py-0.5 rounded-full font-black">3rd</span>
-                    </div>
-                    <p className="text-xs font-bold text-heading mt-2 truncate max-w-[90px]">{lbData.rankings[2].name}</p>
-                    <p className="text-[10px] text-muted-soft font-semibold">{lbData.rankings[2].total_credits} pts</p>
-                    <div className="w-full h-20 bg-gradient-to-t from-orange-500/20 to-orange-500/5 dark:from-orange-500/15 dark:to-orange-500/5 border border-orange-500/40 rounded-t-2xl mt-3 flex items-center justify-center font-black text-orange-500/50 text-2xl">III</div>
-                  </div>
-                </div>
-              )}
-
-              {/* Ranking Table */}
-              {lbData && lbData.rankings.length > 0 && (
-                <div className="card p-4 md:p-5 overflow-x-auto">
-                  <h3 className="text-sm font-semibold text-heading mb-4 flex items-center gap-2"><Award className="w-4 h-4 text-amber-500" /> Rankings</h3>
-                  <table className="ent-table min-w-[600px]">
-                    <thead>
-                      <tr>
-                        <th className="pb-2 pr-2">Rank</th>
-                        <th className="pb-2 pr-2">Name</th>
-                        <th className="pb-2 pr-2 hidden md:table-cell">Department</th>
-                        <th className="pb-2 pr-2 hidden md:table-cell">Year</th>
-                        <th className="pb-2 pr-2">Score</th>
-                        <th className="pb-2 pr-2">Grammar</th>
-                        <th className="pb-2 pr-2">Fluency</th>
-                        <th className="pb-2 pr-2 hidden md:table-cell">Confidence</th>
-                        <th className="pb-2 pr-2 hidden md:table-cell">Activity</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {lbData.rankings.map((r) => (
-                        <tr key={r.id} className={`${r.rank <= 3 ? "bg-amber-500/5 dark:bg-amber-500/10" : ""}`}>
-                          <td className="py-3 pr-2">
-                            <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold ${r.rank === 1 ? "bg-amber-500 text-slate-950" : r.rank === 2 ? "bg-slate-400 text-slate-950" : r.rank === 3 ? "bg-orange-500 text-slate-950" : "surface-2 text-body"}`}>{r.rank}</span>
-                          </td>
-                          <td className="py-3 pr-2 text-heading font-semibold whitespace-nowrap text-xs md:text-sm">{r.name}</td>
-                          <td className="py-3 pr-2 text-body text-xs md:text-sm hidden md:table-cell">{r.department}</td>
-                          <td className="py-3 pr-2 text-body text-xs md:text-sm hidden md:table-cell">{r.year}</td>
-                          <td className="py-3 pr-2 text-amber-500 font-bold text-xs md:text-sm">{r.total_credits}</td>
-                          <td className="py-3 pr-2 text-indigo-400 text-xs md:text-sm">{(r.grammar != null ? Number(r.grammar) : 0).toFixed(1)}</td>
-                          <td className="py-3 pr-2 text-purple-400 text-xs md:text-sm">{(r.fluency != null ? Number(r.fluency) : 0).toFixed(1)}</td>
-                          <td className="py-3 pr-2 text-cyan-400 text-xs md:text-sm hidden md:table-cell">{(r.relevance != null ? Number(r.relevance) : 0).toFixed(1)}</td>
-                          <td className="py-3 pr-2 text-body text-xs md:text-sm hidden md:table-cell">{r.sessions_completed}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-
-              {lbData && lbData.rankings.length === 0 && (
-                <div className="card p-8 text-center border-dashed">
-                  <Trophy className="w-8 h-8 mx-auto text-slate-600 mb-2" />
-                  <p className="text-muted-soft text-xs">No evaluations found for the selected filters.</p>
-                </div>
-              )}
-
-              {/* All Time Achievers */}
-              {lbData && lbData.all_time_achievers.length > 0 && (
-                <div className="card p-5">
-                  <h3 className="text-sm font-semibold text-heading mb-4 flex items-center gap-2"><Award className="w-4 h-4 text-amber-500" /> All Time Achievers</h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {lbData.all_time_achievers.map((a) => (
-                      <div key={a.id} className={`flex items-center gap-3 p-3 rounded-xl border ${a.rank === 1 ? "bg-gradient-to-r from-amber-500/10 to-orange-500/10 border-amber-500/30" : "surface-2 border"}`}>
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${a.rank === 1 ? "bg-amber-500 text-slate-950" : a.rank === 2 ? "bg-slate-400 text-slate-950" : a.rank === 3 ? "bg-orange-500 text-slate-950" : "surface-2 text-body"}`}>{a.rank}</div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-bold text-heading truncate">{a.name}</p>
-                          <p className="text-[10px] text-muted-soft">{a.department} · {a.year}</p>
-                        </div>
-                        <div className="text-right shrink-0">
-                          <p className="text-xs font-bold text-emerald-500">{a.total_credits}</p>
-                          <p className="text-[9px] text-muted-soft">{a.sessions_completed} sessions</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
+            <LeaderboardView
+              lbData={lbData}
+              lbDepartment={lbDepartment}
+              lbYear={lbYear}
+              lbTimeframe={lbTimeframe}
+              lbLastUpdated={lbLastUpdated}
+              loadLeaderboard={loadLeaderboard}
+              setView={setView}
+              user={user}
+            />
           )}
 
           {/* ─── Solo Practice ─── */}
