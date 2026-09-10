@@ -118,6 +118,11 @@ function useWebRTC({ sessionCode, token, userId, send, subscribe }: UseWebRTCOpt
   const handleOffer = useCallback(async (peerId: number, offer: RTCSessionDescriptionInit) => {
     try {
       const pc = getOrCreatePC(peerId);
+      // Only accept an offer when in stable state; ignore duplicates
+      if (pc.signalingState !== "stable") {
+        console.warn("[WebRTC] handleOffer ignored — wrong state:", pc.signalingState, "for peer:", peerId);
+        return;
+      }
       await pc.setRemoteDescription(new RTCSessionDescription(offer));
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
@@ -130,7 +135,14 @@ function useWebRTC({ sessionCode, token, userId, send, subscribe }: UseWebRTCOpt
   const handleAnswer = useCallback(async (peerId: number, answer: RTCSessionDescriptionInit) => {
     try {
       const pc = pcsRef.current.get(peerId);
-      if (pc) await pc.setRemoteDescription(new RTCSessionDescription(answer));
+      if (!pc) return;
+      // Only apply the answer when we're waiting for one (have-local-offer)
+      // Ignore if already stable (duplicate answer) or in any other unexpected state
+      if (pc.signalingState !== "have-local-offer") {
+        console.warn("[WebRTC] handleAnswer ignored — wrong state:", pc.signalingState, "for peer:", peerId);
+        return;
+      }
+      await pc.setRemoteDescription(new RTCSessionDescription(answer));
     } catch (err) {
       console.error("[WebRTC] handleAnswer failed for peer:", peerId, err);
     }
