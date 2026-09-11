@@ -424,7 +424,7 @@ export default function GdLiveRoom({
   const joinedMembers = members.filter((m: any) => m.status !== "invited");
   const [finishedIds, setFinishedIds] = useState<Set<number>>(new Set());
   const [allFinished, setAllFinished] = useState(false);
-  const [timerSeconds, setTimerSeconds] = useState(60);
+  const [timerSeconds, setTimerSeconds] = useState(120);
   const [turnNumber, setTurnNumber] = useState(0);
   const [maxTurns, setMaxTurns] = useState(0);
   const [timerRunning, setTimerRunning] = useState(false);
@@ -515,7 +515,7 @@ export default function GdLiveRoom({
     return () => clearTimeout(id);
   }, [countdown, onCountdownDone]);
 
-  // Timer effect — always 60-second turns
+  // Timer effect — 120-second (2-minute) turns
   useEffect(() => {
     if (!timerRunning) { if (timerRef.current) clearInterval(timerRef.current); return; }
     timerRef.current = setInterval(() => {
@@ -922,7 +922,7 @@ export default function GdLiveRoom({
           if (speaking_order) setSpeakingOrder(speaking_order);
           if (turn_number !== undefined) setTurnNumber(turn_number);
           if (max_turns !== undefined) setMaxTurns(max_turns);
-          setTimerSeconds(60);
+          setTimerSeconds(120);
           setShowTurnSummary(false);
 
           if (current_speaker_id === userId) {
@@ -1616,13 +1616,13 @@ export default function GdLiveRoom({
             {/* Left Column: Timer + Current Speaker */}
             <div className="lg:col-span-4 space-y-4">
 
-              {/* 60-Second Timer */}
+              {/* 2-Minute (120s) Speaking Timer */}
               <div className="card p-6 bg-slate-900/80 backdrop-blur-lg border border-slate-800 flex flex-col items-center space-y-2">
-                <span className="text-[10px] font-bold text-heading uppercase tracking-wider">Turn Timer</span>
-                <CircularTimer seconds={timerSeconds} maxSeconds={60} />
+                <span className="text-[10px] font-bold text-heading uppercase tracking-wider">Speaking Time: 2:00</span>
+                <CircularTimer seconds={timerSeconds} maxSeconds={120} />
                 {timerRunning && (
-                  <span className={`text-[9px] font-bold ${timerSeconds <= 10 ? "text-rose-400 animate-pulse" : "text-muted-soft"}`}>
-                    {timerSeconds <= 10 ? "Time running out!" : `${timerSeconds}s remaining`}
+                  <span className={`text-[9px] font-bold ${timerSeconds <= 15 ? "text-rose-400 animate-pulse" : "text-muted-soft"}`}>
+                    {timerSeconds <= 15 ? "Time running out!" : `${Math.floor(timerSeconds / 60)}:${(timerSeconds % 60).toString().padStart(2, "0")} remaining`}
                   </span>
                 )}
               </div>
